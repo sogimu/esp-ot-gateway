@@ -99,13 +99,15 @@ idf.py -p /dev/ttyUSB0 flash monitor
 On success you'll see:
 
 ```
-I (xxx) main: WiFi connected. IP: 192.168.1.42
-I (xxx) main: Web interface: http://192.168.1.42
+I (xxx) main: WiFi connected. IP: <device-ip>
+I (xxx) main: Web interface: http://<device-ip>
 ```
+
+> The IP address is assigned by your WiFi router via DHCP and will vary depending on your network.
 
 ### 6. Open the web dashboard
 
-Navigate to the IP address shown in the monitor: `http://192.168.1.42`
+Navigate to the IP address shown in the monitor: `http://<device-ip>`
 
 ---
 
@@ -147,15 +149,15 @@ Controls available:
 
 ```bash
 # Get boiler state
-curl http://192.168.1.42/api/status
+curl http://<device-ip>/api/status
 
 # Control
-curl -X POST http://192.168.1.42/api/control \
+curl -X POST http://<device-ip>/api/control \
   -H "Content-Type: application/json" \
   -d '{"ch_enable":1,"ch_setpoint":65,"dhw_enable":1,"dhw_setpoint":55}'
 
 # Update schedule (24 values, one per hour)
-curl -X POST http://192.168.1.42/api/schedule \
+curl -X POST http://<device-ip>/api/schedule \
   -H "Content-Type: application/json" \
   -d '{"schedule":[20,20,20,20,20,20,22,22,22,22,22,22,22,22,22,22,22,22,22,22,20,20,20,20]}'
 ```
