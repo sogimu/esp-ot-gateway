@@ -28,26 +28,8 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 
 | Component | Detail |
 |-----------|--------|
-| Development board | [ESP32 development board](https://ozon.ru/t/91Jlr6E) |
+| Development board | [ESP32 development board](https://ozon.ru/t/91Jlr6E) — [user guide](docs/userguideSmartOT_01e.pdf) |
 | Boiler | [Baxi Duo-tec Compact 1.24](https://shop.baxi.ru/products/duo-tec-compact-1-24) |
-
-### OpenTherm Adapter Circuit
-
-The OpenTherm bus runs at 24 V and requires galvanic isolation from the ESP32's 3.3 V logic.
-
-```
-OT bus (+) ──[R1 470Ω]──┬── PC817 anode
-                         │
-                    PC817 cathode ──[R2 100Ω]── OT bus (−) = boiler GND
-
-PC817 collector ──[R3 10kΩ]── 3.3V
-PC817 collector ──────────────────── GPIO 16 (RX, INPUT_PULLUP)
-PC817 emitter   ── ESP32 GND
-
-GPIO 4 (TX) ──[R4 1kΩ]── NPN base (BC547 / 2N2222)
-                          NPN collector ──[R5 47Ω]── OT bus (+)
-                          NPN emitter   ── GND
-```
 
 ---
 
