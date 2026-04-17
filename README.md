@@ -12,7 +12,6 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 - **24-hour heating schedule** — Hourly CH setpoints driven by NTP time sync (configurable timezone)
 - **DHW priority logic** — Automatic 3-way valve control with hysteresis for indirect hot water tanks
 - **Fault monitoring** — ASF flags, OEM diagnostic codes, one-shot fault reset
-- **Mock server** — Python simulation server for development without hardware (`scripts/mock_server.py`)
 
 ---
 
@@ -110,16 +109,6 @@ Navigate to the IP address shown in the monitor: `http://192.168.1.42`
 
 ---
 
-## Testing Without Hardware
-
-```bash
-python3 scripts/mock_server.py
-# → http://localhost:8080
-```
-
-The mock server simulates boiler temperature dynamics, 3-way valve behaviour, and flame logic — the full API is identical to the real firmware.
-
----
 
 ## Web Dashboard
 
@@ -211,8 +200,7 @@ esp-ot-gateway/
 └── scripts/
     ├── setup.sh            # ESP-IDF installer
     ├── build.sh            # Build wrapper
-    ├── flash.sh            # Flash + monitor
-    └── mock_server.py      # Hardware-free test server
+    └── flash.sh            # Flash + monitor
 ```
 
 ---
