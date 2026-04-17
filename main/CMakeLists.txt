@@ -1,0 +1,17 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "opentherm.c"
+        "http_server.c"
+    INCLUDE_DIRS
+        "."
+    REQUIRES
+        esp_wifi
+        esp_http_server
+        nvs_flash
+        esp_netif
+        driver
+        esp_timer
+        esp_event
+        log
+)

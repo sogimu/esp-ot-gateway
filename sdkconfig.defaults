@@ -1,0 +1,25 @@
+# ESP32 конфигурация по умолчанию для gas_boiler
+
+# Частота CPU — максимальная производительность
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# Размер стека задач
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# WiFi
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=8
+
+# HTTP сервер — увеличить лимиты
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=512
+
+# esp_timer ISR dispatch (нужен для OpenTherm таймера с минимальной задержкой)
+CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD=y
+
+# Логирование
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Оптимизация Flash: сжатие и скорость
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
