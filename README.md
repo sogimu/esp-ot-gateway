@@ -113,24 +113,19 @@ The dashboard auto-refreshes every 2 seconds and features tabbed navigation:
 
 ### Status tab
 
-| Parameter | Description |
-|-----------|-------------|
-| Burner | Active / Off (+ modulation %) |
-| CH pump | Running / Stopped |
-| DHW pump / 3-way valve | Running / Stopped |
-| Fault | None / FAULT |
+| Card / Element | Description |
+|----------------|-------------|
 | CH supply temp | °C |
 | Return temp | °C |
-| DHW temp | °C |
-| Pressure | bar |
-| Modulation | % |
-| CH / DHW setpoints | °C (shown on boiler SVG diagram) |
-| 3-way valve SVG | Visual valve position: ↑CH / ↓DHW / →stopped |
+| DHW tank temp | °C |
+| Modulation | Burner modulation % |
+| 3-way valve | CH / DHW / stopped |
+| Boiler SVG | Visual diagram with burner (on/off), pump (spinning/stopped), valve position, CH & DHW setpoints |
 
 Controls:
 - **CH enable** toggle + setpoint slider (20–80 °C)
 - **DHW enable** toggle + setpoint slider (35–65 °C)
-- **Fault reset** button
+- **Fault reset** button (appears only on fault)
 - **Timezone offset** selector
 
 ### Log tab
@@ -260,6 +255,5 @@ idf.py -p /dev/ttyUSB0 flash
 - **DHW setpoint (ID=56)**: The Baxi Duo-tec Compact does NOT accept DHW setpoint writes — it returns `NO_RESP` and uses its own internal setpoint (~60°C). Control DHW firing via `DHW_ENABLE` (bit 1) in the Status flags instead, paired with hysteresis in firmware.
 - **CH2 enable**: Despite `SlaveConfig` reporting CH2=0, the Baxi requires `CH2_ENABLE` (bit 4) in the Status flags to switch the 3-way valve to the indirect DHW tank. Without CH2_ENABLE the valve stays on CH.
 - **Modulation floor**: When the burner is active at minimum output the boiler reports `0x0000` (0% modulation). The firmware converts this to 0.3% for accurate percentile calculations.
-- **Burner runtime tracking**: Uses `esp_timer_get_time()` (microseconds) — divide by 1000 for ms, then by 1000 for seconds. `time_t` on ESP32 is 8 bytes; do not cast `uint32_t*` to `time_t*`.
 - **Relay**: The SmartTherm board relay (GPIO 23, HF33F-005-ZS3) is set HIGH at boot, closing the NO contact. On power loss the coil de-energises and the contact opens automatically — no shutdown code needed.
 - **Build**: Always source the ESP-IDF environment first: `source ~/esp/esp-idf/export.sh && idf.py build`. Do not run `idf.py build` in the background (it may hang).
