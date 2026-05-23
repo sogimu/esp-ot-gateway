@@ -259,6 +259,17 @@ void OT_Init(void)
     gpio_install_isr_service(0);
     gpio_isr_handler_add(GPIO_OT_RX, ot_rx_isr, NULL);
 
+    /* Реле — выход, HIGH = замкнут (NO контакт) */
+    gpio_config_t relay_cfg = {
+        .pin_bit_mask = 1ULL << GPIO_RELAY,
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&relay_cfg);
+    gpio_set_level(GPIO_RELAY, 1);   /* замкнуть при старте */
+
     /* Семафор для ожидания завершения транзакции */
     ot_done_sem = xSemaphoreCreateBinary();
 

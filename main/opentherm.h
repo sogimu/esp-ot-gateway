@@ -20,6 +20,7 @@
  */
 #define GPIO_OT_TX   4
 #define GPIO_OT_RX   16
+#define GPIO_RELAY   23   /* реле SmartTherm (HF33F-005-ZS3, NO-контакт) */
 
 /* OpenTherm Data IDs */
 #define OT_ID_STATUS            0
