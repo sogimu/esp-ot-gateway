@@ -1,8 +1,11 @@
 #include "http_server.h"
 #include "web_page.h"
+#include "log.h"
+#include "stats.h"
 
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_timer.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -77,7 +80,10 @@ static esp_err_t handler_status(httpd_req_t *req)
         "\"slave_type\":%d,"
         "\"slave_ver\":%d,"
         "\"ot_ver\":%.1f,"
-        "\"tz_offset\":%d"
+        "\"tz_offset\":%d,"
+        "\"dhw_session_sec\":%d,"
+        "\"dhw_est_total_sec\":%d,"
+        "\"dhw_last_session_sec\":%d"
         "}",
         s->connected    ? 1 : 0,
         s->fault        ? 1 : 0,
@@ -107,7 +113,20 @@ static esp_err_t handler_status(httpd_req_t *req)
         s->slave_type,
         s->slave_version,
         (double)s->ot_version,
-        g_tz_offset
+        g_tz_offset,
+        /* dhw session */
+        (s->dhw_priority && s->dhw_session_start_ms)
+            ? (int)(((uint32_t)(esp_timer_get_time() / 1000) - s->dhw_session_start_ms) / 1000)
+            : -1,
+        /* оценка полной длительности сессии: всего прогрев / текущая скорость */
+        (s->dhw_priority && s->dhw_session_start_ms
+         && ((uint32_t)(esp_timer_get_time() / 1000) - s->dhw_session_start_ms) >= 10000
+         && (s->dhw_temp > s->dhw_session_min_temp)) ?
+            (int)((s->dhw_setpoint - s->dhw_session_min_temp) /
+                  ((s->dhw_temp - s->dhw_session_min_temp) /
+                   (float)(((uint32_t)(esp_timer_get_time() / 1000) - s->dhw_session_start_ms) / 1000)))
+            : -1,
+        s->dhw_last_session_sec
     );
 
     httpd_resp_set_type(req, "application/json");
@@ -129,6 +148,12 @@ static esp_err_t handler_control(httpd_req_t *req)
     OT_State *s = g_state;
     int   v;
     float f;
+
+    /* сохранить старые значения для лога */
+    bool  old_ch_en     = s->ch_enable;
+    bool  old_dhw_en    = s->dhw_enable;
+    float old_ch_sp     = s->ch_setpoint;
+    float old_dhw_sp    = s->dhw_setpoint;
 
     v = json_get_int(body, "\"ch_enable\"");
     if (v >= 0) s->ch_enable = (v != 0);
@@ -155,6 +180,20 @@ static esp_err_t handler_control(httpd_req_t *req)
 
     v = json_get_int(body, "\"tz_offset\"");
     if (v > -100) { g_tz_offset = v; apply_tz(); }
+
+    /* лог изменений */
+    if (s->ch_enable != old_ch_en)
+        log_event(LOG_CAT_USER, "CH: %s", s->ch_enable ? "вкл" : "выкл");
+    if (s->dhw_enable != old_dhw_en)
+        log_event(LOG_CAT_USER, "DHW: %s", s->dhw_enable ? "вкл" : "выкл");
+    if (s->ch_setpoint != old_ch_sp)
+        log_event(LOG_CAT_USER, "Уставка CH: %.0f°C → %.0f°C",
+                  (double)old_ch_sp, (double)s->ch_setpoint);
+    if (s->dhw_setpoint != old_dhw_sp)
+        log_event(LOG_CAT_USER, "Уставка DHW: %.0f°C → %.0f°C",
+                  (double)old_dhw_sp, (double)s->dhw_setpoint);
+    if (s->fault_reset)
+        log_event(LOG_CAT_USER, "Сброс аварии");
 
     ESP_LOGI(TAG, "Control: CH=%d sp=%.0f  DHW=%d sp=%.0f",
              s->ch_enable, (double)s->ch_setpoint,
@@ -197,7 +236,11 @@ static esp_err_t handler_schedule_post(httpd_req_t *req)
 
     /* enabled */
     int v = json_get_int(body, "\"enabled\"");
+    bool old_en = g_schedule.enabled;
     if (v >= 0) g_schedule.enabled = (v != 0);
+
+    if (g_schedule.enabled != old_en)
+        log_event(LOG_CAT_USER, "Расписание: %s", g_schedule.enabled ? "вкл" : "выкл");
 
     /* temps — парсим массив вручную */
     const char *p = strstr(body, "\"temps\"");
@@ -219,6 +262,26 @@ static esp_err_t handler_schedule_post(httpd_req_t *req)
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     return httpd_resp_sendstr(req, "{\"ok\":true}");
+}
+
+/* GET /api/log → JSON журнал событий */
+static esp_err_t handler_log_get(httpd_req_t *req)
+{
+    const char *json = log_to_json();
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    return httpd_resp_sendstr(req, json);
+}
+
+/* GET /api/stats → JSON статистика */
+static esp_err_t handler_stats_get(httpd_req_t *req)
+{
+    const char *json = stats_to_json();
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    return httpd_resp_sendstr(req, json);
 }
 
 /* ── Запуск сервера ─────────────────────────────────────────────────────────  */
@@ -244,9 +307,11 @@ httpd_handle_t HTTP_Server_Start(OT_State *state)
         { .uri = "/api/control",   .method = HTTP_POST, .handler = handler_control      },
         { .uri = "/api/schedule",  .method = HTTP_GET,  .handler = handler_schedule_get },
         { .uri = "/api/schedule",  .method = HTTP_POST, .handler = handler_schedule_post},
+        { .uri = "/api/log",       .method = HTTP_GET,  .handler = handler_log_get      },
+        { .uri = "/api/stats",     .method = HTTP_GET,  .handler = handler_stats_get    },
     };
 
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 7; i++) {
         httpd_register_uri_handler(server, &routes[i]);
     }
 
