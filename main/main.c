@@ -16,6 +16,7 @@
 
 #include "opentherm.h"
 #include "http_server.h"
+#include "log.h"
 #include "wifi_config.h"
 
 static const char *TAG = "main";
@@ -49,6 +50,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t base,
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)data;
         ESP_LOGI(TAG, "WiFi подключён. IP: " IPSTR, IP2STR(&event->ip_info.ip));
         ESP_LOGI(TAG, "Web интерфейс: http://" IPSTR, IP2STR(&event->ip_info.ip));
+        log_event(LOG_CAT_SYSTEM, "WiFi подключён, IP=" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_count = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
@@ -211,4 +213,5 @@ void app_main(void)
     xTaskCreate(boiler_task, "boiler", 4096, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "Система запущена");
+    log_event(LOG_CAT_SYSTEM, "Система запущена");
 }

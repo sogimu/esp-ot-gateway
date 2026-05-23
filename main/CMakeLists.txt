@@ -3,6 +3,8 @@ idf_component_register(
         "main.c"
         "opentherm.c"
         "http_server.c"
+        "log.c"
+        "stats.c"
     INCLUDE_DIRS
         "."
     REQUIRES
