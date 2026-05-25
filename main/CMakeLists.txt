@@ -5,6 +5,7 @@ idf_component_register(
         "http_server.c"
         "log.c"
         "stats.c"
+        "sensors.c"
     INCLUDE_DIRS
         "."
     REQUIRES
