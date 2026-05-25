@@ -130,6 +130,8 @@ typedef struct {
     float    return_temp;     /* обратка первичного контура */
     float    dhw_temp;        /* температура в баке БКН (датчик NTC) */
     float    outside_temp;
+    float    t1_temp;         /* DS18B20 на GPIO15 */
+    float    t2_temp;         /* DS18B20 на GPIO26 */
 
     /* Параметры работы */
     float    modulation;      /* % мощности горелки */

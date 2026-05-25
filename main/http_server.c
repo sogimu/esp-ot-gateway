@@ -49,7 +49,7 @@ static esp_err_t handler_status(httpd_req_t *req)
     OT_State *s = g_state;
     char timebuf[16];
     get_current_time_str(timebuf, sizeof(timebuf));
-    char buf[1024];
+    char buf[2048];
     int  len = snprintf(buf, sizeof(buf),
         "{"
         "\"connected\":%d,"
@@ -83,7 +83,9 @@ static esp_err_t handler_status(httpd_req_t *req)
         "\"tz_offset\":%d,"
         "\"dhw_session_sec\":%d,"
         "\"dhw_est_total_sec\":%d,"
-        "\"dhw_last_session_sec\":%d"
+        "\"dhw_last_session_sec\":%d,"
+        "\"t1_temp\":%.1f,"
+        "\"t2_temp\":%.1f"
         "}",
         s->connected    ? 1 : 0,
         s->fault        ? 1 : 0,
@@ -126,7 +128,9 @@ static esp_err_t handler_status(httpd_req_t *req)
                   ((s->dhw_temp - s->dhw_session_min_temp) /
                    (float)(((uint32_t)(esp_timer_get_time() / 1000) - s->dhw_session_start_ms) / 1000)))
             : -1,
-        s->dhw_last_session_sec
+        s->dhw_last_session_sec,
+        (double)s->t1_temp,
+        (double)s->t2_temp
     );
 
     httpd_resp_set_type(req, "application/json");
@@ -291,9 +295,12 @@ httpd_handle_t HTTP_Server_Start(OT_State *state)
     g_state = state;
 
     httpd_config_t config  = HTTPD_DEFAULT_CONFIG();
-    config.server_port     = 80;
-    config.max_uri_handlers = 8;
-    config.stack_size      = 8192;
+    config.server_port         = 80;
+    config.max_uri_handlers    = 8;
+    config.stack_size          = 16384;
+    config.lru_purge_enable    = true;
+    config.recv_wait_timeout   = 3000;
+    config.send_wait_timeout   = 3000;
 
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) != ESP_OK) {

@@ -17,6 +17,7 @@
 #include "opentherm.h"
 #include "http_server.h"
 #include "log.h"
+#include "sensors.h"
 #include "wifi_config.h"
 
 static const char *TAG = "main";
@@ -106,6 +107,8 @@ static OT_State boiler = {
     .ch_setpoint  = 30.0f,
     .dhw_setpoint = 55.0f,
     .connected    = false,
+    .t1_temp      = -127.0f,
+    .t2_temp      = -127.0f,
 };
 
 /* ── Расписание отопления (24 часа) ────────────────────────────────────────  */
@@ -180,6 +183,9 @@ static void boiler_task(void *arg)
         }
 
         OT_Poll(&boiler);
+        sensors_poll();
+        boiler.t1_temp = sensor1_temp;
+        boiler.t2_temp = sensor2_temp;
         vTaskDelay(pdMS_TO_TICKS(OT_POLL_INTERVAL_MS));
     }
 }
@@ -208,6 +214,9 @@ void app_main(void)
 
     /* HTTP сервер */
     HTTP_Server_Start(&boiler);
+
+    /* DS18B20 датчики */
+    sensors_init();
 
     /* Задача опроса котла (отдельный стек, нормальный приоритет) */
     xTaskCreate(boiler_task, "boiler", 4096, NULL, 5, NULL);
