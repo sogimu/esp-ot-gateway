@@ -217,6 +217,14 @@ void Controller::WebServerObserver::on_cmd_set_timezone(int offset)
     c_.log_service_.event(LOG_CAT_USER, "Часовой пояс: UTC%+d", offset);
 }
 
+void Controller::WebServerObserver::on_cmd_set_k_calib(float value)
+{
+    if (value < 0.1f) value = 0.1f;
+    if (value > 10.0f) value = 10.0f;
+    c_.model_.set_k_calib(value);
+    c_.log_service_.event(LOG_CAT_USER, "K_calib: %.3f", (double)value);
+}
+
 // ===== SensorsObserver =====
 
 void Controller::SensorsObserver::on_sensor_data(int sensor_id, float temperature)

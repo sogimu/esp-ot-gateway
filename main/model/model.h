@@ -42,6 +42,18 @@ struct StatsData {
     float p99  = 0;
 };
 
+struct GasData {
+    float instant_flow   = 0;  // м³/ч
+    float integral_m3    = 0;  // накопленный объём, м³
+    float avg_1h         = 0;  // средний за 1 час, м³/ч
+    float avg_3h         = 0;  // средний за 3 часа, м³/ч
+    float avg_12h        = 0;  // средний за 12 часов, м³/ч
+    float avg_24h        = 0;  // средний за сутки, м³/ч
+    float avg_7d         = 0;  // средний за неделю, м³/ч
+    float mod_filtered   = 0;  // модуляция после фильтра Калмана, %
+    float t_ret_filtered = 0;  // T_return после фильтра Калмана, °C
+};
+
 class Model {
 public:
     Model();
@@ -121,6 +133,14 @@ public:
 
     void set_stats(const StatsData& s);
     const StatsData& get_stats() const;
+    void set_gas_data(const GasData& d);
+    const GasData& get_gas_data() const;
+    void set_k_calib(float v);
+    float get_k_calib() const;
+    void set_p_max(float v);
+    float get_p_max() const;
+    void set_gas_calorific(float v);
+    float get_gas_calorific() const;
     std::string to_stats_json() const;
 
     void add_log_entry(uint32_t time_sec, uint8_t cat, const char* msg);
@@ -154,6 +174,10 @@ private:
     int      tz_offset_;
 
     StatsData stats_;
+    GasData   gas_data_;
+    float k_calib_ = 1.0f;
+    float p_max_ = 24.0f;
+    float gas_calorific_ = 9.5f;
     std::array<LogEntry, LOG_RING_SIZE> log_ring_;
     int log_head_ = 0;
     int log_count_ = 0;

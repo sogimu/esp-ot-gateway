@@ -2,7 +2,121 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cmath>
 #include "esp_timer.h"
+
+// --- GasFlowEstimator ---
+
+GasFlowEstimator::GasFlowEstimator()
+    : flow_max_(24.0f / 9.5f)
+    , k_calib_(1.0f)
+    , integral_m3_(0.0f)
+    , kalman_mod_(0.0f, 0.1f, 1.0f)
+    , kalman_ret_(0.0f, 0.05f, 0.3f)
+    , latest_flow_(0.0f)
+    , mod_filt_(0.0f)
+    , t_ret_filt_(0.0f)
+    , ring_idx_(0), ring_count_(0)
+    , ema_1h_(0.0f), ema_3h_(0.0f), ema_12h_(0.0f), ema_24h_(0.0f), ema_7d_(0.0f)
+    , ema_start_us_(0)
+{
+    std::memset(ring_, 0, sizeof(ring_));
+}
+
+void GasFlowEstimator::set_params(float p_max_kw, float gas_cal)
+{
+    flow_max_ = p_max_kw / gas_cal;
+}
+
+void GasFlowEstimator::set_k_calib(float v)
+{
+    k_calib_ = v;
+}
+
+float GasFlowEstimator::get_k_calib() const
+{
+    return k_calib_;
+}
+
+float GasFlowEstimator::eta_corr(float t_ret)
+{
+    if (t_ret <= 30.0f) return 1.076f;
+    if (t_ret >= 60.0f) return 0.976f;
+    return 1.076f - 0.003333f * (t_ret - 30.0f);
+}
+
+void GasFlowEstimator::update(float mod_raw, float t_ret_raw, uint32_t dt_ms)
+{
+    // Kalman filtering
+    mod_filt_ = kalman_mod_.update(mod_raw);
+    t_ret_filt_ = kalman_ret_.update(t_ret_raw);
+
+    // Instantaneous flow (m³/h)
+    latest_flow_ = k_calib_ * (mod_filt_ / 100.0f) * flow_max_ * eta_corr(t_ret_filt_);
+    if (latest_flow_ < 0.0f) latest_flow_ = 0.0f;
+
+    // Integration (dt_ms -> hours)
+    float dt_hour = (float)dt_ms / 3600000.0f;
+    integral_m3_ += latest_flow_ * dt_hour;
+
+    // Ring buffer fill
+    ring_[ring_idx_].flow = latest_flow_;
+    ring_idx_ = (ring_idx_ + 1) % GAS_RING_SIZE;
+    if (ring_count_ < GAS_RING_SIZE) ring_count_++;
+
+    // EMA update
+    float alpha = 1.0f - expf(-dt_hour * 3600.0f / 3600.0f); // 1h time constant
+    if (ema_start_us_ == 0) {
+        ema_1h_ = latest_flow_;
+        ema_3h_ = latest_flow_;
+        ema_12h_ = latest_flow_;
+        ema_24h_ = latest_flow_;
+        ema_7d_ = latest_flow_;
+        ema_start_us_ = esp_timer_get_time();
+    } else {
+        ema_1h_ += alpha * (latest_flow_ - ema_1h_);
+        float a3 = 1.0f - expf(-dt_hour * 3600.0f / (3.0f * 3600.0f));
+        ema_3h_ += a3 * (latest_flow_ - ema_3h_);
+        float a12 = 1.0f - expf(-dt_hour * 3600.0f / (12.0f * 3600.0f));
+        ema_12h_ += a12 * (latest_flow_ - ema_12h_);
+        float a24 = 1.0f - expf(-dt_hour * 3600.0f / (24.0f * 3600.0f));
+        ema_24h_ += a24 * (latest_flow_ - ema_24h_);
+        float a7 = 1.0f - expf(-dt_hour * 3600.0f / (7.0f * 24.0f * 3600.0f));
+        ema_7d_ += a7 * (latest_flow_ - ema_7d_);
+    }
+}
+
+void GasFlowEstimator::push_to_model(Model& model)
+{
+    GasData d;
+    d.instant_flow   = latest_flow_;
+    d.integral_m3    = integral_m3_;
+    d.avg_1h         = ema_1h_;
+    d.avg_3h         = ema_3h_;
+    d.avg_12h        = ema_12h_;
+    d.avg_24h        = ema_24h_;
+    d.avg_7d         = ema_7d_;
+
+    // Compute 1h sliding average from ring buffer (more accurate than EMA)
+    if (ring_count_ > 0) {
+        // How many samples fit in 1h (3600s / 10s = 360)
+        int want = ring_count_ < 360 ? ring_count_ : 360;
+        float sum = 0;
+        int idx = ring_idx_;
+        for (int i = 0; i < want; i++) {
+            idx = (idx - 1 + GAS_RING_SIZE) % GAS_RING_SIZE;
+            sum += ring_[idx].flow;
+        }
+        d.avg_1h = sum / (float)want;
+    }
+
+    d.mod_filtered   = mod_filt_;
+    d.t_ret_filtered = t_ret_filt_;
+
+    model.set_gas_data(d);
+}
+
+// --- StatsService ---
 
 StatsService::StatsService(Model& model, OpenthermEndpoint& ot)
     : model_(model), ot_(ot)
@@ -10,6 +124,7 @@ StatsService::StatsService(Model& model, OpenthermEndpoint& ot)
     , cycle_idx_(0), cycle_total_(0)
     , burner_sec_(0), cycle_cnt_(0)
     , flame_on_ms_(0), flame_off_ms_(0)
+    , gas_()
 {
     std::memset(hist_, 0, sizeof(hist_));
     std::memset(burn_dur_, 0, sizeof(burn_dur_));
@@ -38,6 +153,35 @@ void StatsService::on_modulation(float pct)
     if (bin >= HIST_BINS) bin = HIST_BINS - 1;
     hist_[bin]++;
     samples_++;
+
+    latest_mod_raw_ = pct;
+    try_gas_estimate();
+}
+
+void StatsService::on_return_temp(float value)
+{
+    latest_ret_raw_ = value;
+    try_gas_estimate();
+}
+
+void StatsService::try_gas_estimate()
+{
+    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    if (now - last_gas_ms_ < 10000) return;
+    if (last_gas_ms_ == 0) {
+        last_gas_ms_ = now;
+        return;
+    }
+
+    uint32_t dt_ms = now - last_gas_ms_;
+    last_gas_ms_ = now;
+
+    // Sync calibration coefficient from model
+    gas_.set_k_calib(model_.get_k_calib());
+    gas_.set_params(model_.get_p_max(), model_.get_gas_calorific());
+
+    gas_.update(latest_mod_raw_, latest_ret_raw_, dt_ms);
+    gas_.push_to_model(model_);
 }
 
 void StatsService::on_status_changed(bool fault, bool flame,
