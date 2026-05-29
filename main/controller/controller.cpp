@@ -9,8 +9,10 @@ static const char* TAG = "controller";
 
 Controller::Controller(Model& model,
                        Endpoints& endpoints,
-                       LogService& log_service)
+                       LogService& log_service,
+                       StatsService& stats_service)
     : model_(model), endpoints_(endpoints), log_service_(log_service)
+    , stats_service_(stats_service)
     , last_schedule_hour_(-1)
 {
 }
@@ -223,6 +225,63 @@ void Controller::WebServerObserver::on_cmd_set_k_calib(float value)
     if (value > 10.0f) value = 10.0f;
     c_.model_.set_k_calib(value);
     c_.log_service_.event(LOG_CAT_USER, "K_calib: %.3f", (double)value);
+}
+
+void Controller::WebServerObserver::on_cmd_set_gas_meter_base(float value)
+{
+    if (value < 0.0f) value = 0.0f;
+    c_.model_.set_gas_meter_base(value);
+    c_.model_.set_last_correction_refs(value, c_.model_.get_gas_data().integral_m3);
+    c_.log_service_.event(LOG_CAT_USER, "Нач. показ. счётчика: %.3f", (double)value);
+    c_.stats_service_.save_nvs_meter();
+}
+
+void Controller::WebServerObserver::on_cmd_add_gas_meter_correction(float reading)
+{
+    if (reading < c_.model_.get_gas_meter_base() && c_.model_.get_gas_meter_base() > 0) {
+        c_.log_service_.event(LOG_CAT_USER, "Ошибка: показ. < нач. знач.");
+        return;
+    }
+
+    float current_integral = c_.model_.get_gas_data().integral_m3;
+    float base = c_.model_.get_gas_meter_base();
+    float estimated_total = base + current_integral;
+    float difference = reading - estimated_total;
+
+    // Compute ratio-based correction coefficient
+    float prev_k = c_.model_.get_k_calib();
+    float new_k = prev_k;
+    float prev_actual = c_.model_.get_last_correction_actual();
+    float prev_integral = c_.model_.get_integral_at_last_correction();
+
+    if (prev_actual > 0 && prev_integral >= 0) {
+        float actual_delta = reading - prev_actual;
+        float integral_delta = current_integral - prev_integral;
+        if (actual_delta > 0.001f && integral_delta > 0.0001f) {
+            float ratio = actual_delta / integral_delta;
+            new_k = prev_k * ratio;
+            if (new_k < 0.1f) new_k = 0.1f;
+            if (new_k > 10.0f) new_k = 10.0f;
+        }
+    }
+
+    c_.model_.set_k_calib(new_k);
+    c_.model_.set_last_correction_refs(reading, current_integral);
+
+    CorrectionEntry entry;
+    entry.timestamp = (uint32_t)time(nullptr);
+    entry.actual_reading = reading;
+    entry.estimated_total = estimated_total;
+    entry.difference = difference;
+    entry.prev_k_calib = prev_k;
+    entry.new_k_calib = new_k;
+    c_.model_.add_correction(entry);
+
+    c_.log_service_.event(LOG_CAT_USER,
+        "Сверка: показ. %.3f, расх. %+.4f, K %.4f→%.4f",
+        (double)reading, (double)difference, (double)prev_k, (double)new_k);
+
+    c_.stats_service_.save_nvs_meter();
 }
 
 // ===== SensorsObserver =====

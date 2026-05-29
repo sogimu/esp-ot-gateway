@@ -84,10 +84,33 @@ float Model::get_p_max() const { return p_max_; }
 void Model::set_gas_calorific(float v) { gas_calorific_ = v; }
 float Model::get_gas_calorific() const { return gas_calorific_; }
 
+void Model::set_gas_meter_base(float v) { gas_meter_base_ = v; }
+float Model::get_gas_meter_base() const { return gas_meter_base_; }
+float Model::get_gas_meter_total() const { return gas_meter_base_ + gas_data_.integral_m3; }
+float Model::get_last_correction_actual() const { return last_correction_actual_; }
+float Model::get_integral_at_last_correction() const { return integral_at_last_correction_; }
+void Model::set_last_correction_refs(float actual, float integral) {
+    last_correction_actual_ = actual;
+    integral_at_last_correction_ = integral;
+}
+void Model::add_correction(const CorrectionEntry& e) {
+    int idx = corrections_head_;
+    corrections_head_ = (corrections_head_ + 1) % CORRECTION_LOG_SIZE;
+    if (corrections_count_ < CORRECTION_LOG_SIZE) corrections_count_++;
+    corrections_[idx] = e;
+}
+void Model::get_correction_by_index(int idx, CorrectionEntry& out) const {
+    int start = (corrections_count_ < CORRECTION_LOG_SIZE) ? 0 : corrections_head_;
+    int pos = (start + idx) % CORRECTION_LOG_SIZE;
+    out = corrections_[pos];
+}
+
 std::string Model::to_stats_json() const
 {
-    char buf[1536];
+    char buf[4096];
     float p10p50 = (stats_.p50 > 0) ? stats_.p10 / stats_.p50 : 0;
+    float meter_total = get_gas_meter_total();
+
     int len = snprintf(buf, sizeof(buf),
         "{"
         "\"samples\":%d,"
@@ -103,8 +126,10 @@ std::string Model::to_stats_json() const
         "\"avg_1h\":%.4f,\"avg_3h\":%.4f,\"avg_12h\":%.4f,"
         "\"avg_24h\":%.4f,\"avg_7d\":%.4f,"
         "\"mod_filt\":%.1f,\"t_ret_filt\":%.1f,"
-        "\"k_calib\":%.3f,\"p_max\":%.1f,\"gas_cal\":%.1f"
-        "}",
+        "\"k_calib\":%.3f,\"p_max\":%.1f,\"gas_cal\":%.1f,"
+        "\"gas_meter_base\":%.3f,"
+        "\"gas_meter_total\":%.3f,"
+        "\"corrections\":[",
         stats_.sample_count,
         (double)stats_.p1, (double)stats_.p10,
         (double)stats_.p25, (double)stats_.p50,
@@ -121,8 +146,35 @@ std::string Model::to_stats_json() const
         (double)gas_data_.avg_12h, (double)gas_data_.avg_24h,
         (double)gas_data_.avg_7d,
         (double)gas_data_.mod_filtered, (double)gas_data_.t_ret_filtered,
-        (double)k_calib_, (double)p_max_, (double)gas_calorific_
+        (double)k_calib_, (double)p_max_, (double)gas_calorific_,
+        (double)gas_meter_base_,
+        (double)meter_total
     );
+
+    int start = (corrections_count_ < CORRECTION_LOG_SIZE) ? 0 : corrections_head_;
+    int total = corrections_count_;
+    for (int i = 0; i < total && len < (int)sizeof(buf) - 128; i++) {
+        int idx = (start + i) % CORRECTION_LOG_SIZE;
+        const CorrectionEntry& e = corrections_[idx];
+
+        struct tm ti;
+        char tbuf[32] = "??:??:??";
+        if (e.timestamp > 0) {
+            time_t t = (time_t)e.timestamp;
+            localtime_r(&t, &ti);
+            snprintf(tbuf, sizeof(tbuf), "%02d:%02d %02d.%02d",
+                     ti.tm_hour, ti.tm_min, ti.tm_mday, ti.tm_mon + 1);
+        }
+
+        len += snprintf(buf + len, sizeof(buf) - len,
+            "%s{\"t\":\"%s\",\"ar\":%.3f,\"et\":%.3f,"
+            "\"diff\":%.3f,\"pk\":%.4f,\"nk\":%.4f}",
+            i ? "," : "", tbuf,
+            (double)e.actual_reading, (double)e.estimated_total,
+            (double)e.difference, (double)e.prev_k_calib, (double)e.new_k_calib);
+    }
+
+    len += snprintf(buf + len, sizeof(buf) - len, "]}");
     return std::string(buf, (size_t)len);
 }
 

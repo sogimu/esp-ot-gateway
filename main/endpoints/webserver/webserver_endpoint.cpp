@@ -123,6 +123,16 @@ void WebServerEndpoint::notify_cmd_set_k_calib(float value)
     for (auto* o : observers_) o->on_cmd_set_k_calib(value);
 }
 
+void WebServerEndpoint::notify_cmd_set_gas_meter_base(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_gas_meter_base(value);
+}
+
+void WebServerEndpoint::notify_cmd_add_gas_meter_correction(float reading)
+{
+    for (auto* o : observers_) o->on_cmd_add_gas_meter_correction(reading);
+}
+
 float WebServerEndpoint::json_get_float(const char* json, const char* key)
 {
     const char* p = strstr(json, key);
@@ -207,6 +217,12 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
 
     f = json_get_float(body, "\"k_calib\"");
     if (f > -1e37f) self->notify_cmd_set_k_calib(f);
+
+    f = json_get_float(body, "\"gas_meter_base\"");
+    if (f > -1e37f) self->notify_cmd_set_gas_meter_base(f);
+
+    f = json_get_float(body, "\"gas_meter_correct\"");
+    if (f > -1e37f) self->notify_cmd_add_gas_meter_correction(f);
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");

@@ -7,9 +7,13 @@
 #include "interfaces/isensors_observer.h"
 #include "log/log_service.h"
 
+class StatsService;
+
+#include "stats/stats_service.h"
+
 class Controller {
 public:
-    Controller(Model& model, Endpoints& endpoints, LogService& log_service);
+    Controller(Model& model, Endpoints& endpoints, LogService& log_service, StatsService& stats_service);
 
     void start();
 
@@ -17,6 +21,7 @@ private:
     Model&     model_;
     Endpoints& endpoints_;
     LogService& log_service_;
+    StatsService& stats_service_;
 
     int last_schedule_hour_;
 
@@ -53,6 +58,8 @@ private:
         void on_cmd_set_schedule(const CH_Schedule& schedule) override;
         void on_cmd_set_timezone(int offset) override;
         void on_cmd_set_k_calib(float value) override;
+        void on_cmd_set_gas_meter_base(float value) override;
+        void on_cmd_add_gas_meter_correction(float reading) override;
     };
 
     class SensorsObserver : public ISensorsObserver {

@@ -5,6 +5,8 @@
 #include "endpoints/opentherm/opentherm_endpoint.h"
 
 #include <cstdint>
+#include "nvs.h"
+#include "nvs_flash.h"
 
 #define HIST_BINS 1000
 #define CYCLE_RING 256
@@ -82,6 +84,8 @@ public:
     void stop();
 
     GasFlowEstimator& gas() { return gas_; }
+    void load_nvs_meter();
+    void save_nvs_meter();
 
     // IOpenthermObserver
     void on_connected() override {}

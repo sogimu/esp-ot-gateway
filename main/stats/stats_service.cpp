@@ -4,6 +4,8 @@
 #include <cstring>
 #include <cmath>
 #include "esp_timer.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 // --- GasFlowEstimator ---
 
@@ -134,6 +136,7 @@ StatsService::StatsService(Model& model, OpenthermEndpoint& ot)
 void StatsService::start()
 {
     if (started_) return;
+    load_nvs_meter();
     ot_.subscribe(this);
     started_ = true;
 }
@@ -297,4 +300,85 @@ void StatsService::push_stats()
     }
 
     model_.set_stats(d);
+}
+
+// --- NVS persistence for meter corrections ---
+
+struct __attribute__((packed)) NvsCorrLogEntry {
+    uint32_t timestamp;
+    float actual_reading;
+    float estimated_total;
+    float difference;
+    float prev_k_calib;
+    float new_k_calib;
+};
+
+struct __attribute__((packed)) NvsMeterBlob {
+    float base_reading;
+    float last_correction_actual;
+    float integral_at_last_correction;
+    int32_t corrections_head;
+    int32_t corrections_count;
+    NvsCorrLogEntry corrections[CORRECTION_LOG_SIZE];
+};
+
+void StatsService::load_nvs_meter()
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open("meter", NVS_READONLY, &h);
+    if (err != ESP_OK) return;
+
+    NvsMeterBlob* blob = new NvsMeterBlob;
+    size_t sz = sizeof(*blob);
+    if (nvs_get_blob(h, "data", blob, &sz) == ESP_OK) {
+        model_.set_gas_meter_base(blob->base_reading);
+        model_.set_last_correction_refs(blob->last_correction_actual,
+                                         blob->integral_at_last_correction);
+        int n = blob->corrections_count;
+        if (n > CORRECTION_LOG_SIZE) n = CORRECTION_LOG_SIZE;
+        for (int i = 0; i < n; i++) {
+            CorrectionEntry e;
+            e.timestamp       = blob->corrections[i].timestamp;
+            e.actual_reading  = blob->corrections[i].actual_reading;
+            e.estimated_total = blob->corrections[i].estimated_total;
+            e.difference      = blob->corrections[i].difference;
+            e.prev_k_calib    = blob->corrections[i].prev_k_calib;
+            e.new_k_calib     = blob->corrections[i].new_k_calib;
+            model_.add_correction(e);
+        }
+    }
+    delete blob;
+    nvs_close(h);
+}
+
+void StatsService::save_nvs_meter()
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open("meter", NVS_READWRITE, &h);
+    if (err != ESP_OK) return;
+
+    NvsMeterBlob* blob = new NvsMeterBlob;
+    memset(blob, 0, sizeof(*blob));
+    blob->base_reading      = model_.get_gas_meter_base();
+    blob->last_correction_actual     = model_.get_last_correction_actual();
+    blob->integral_at_last_correction = model_.get_integral_at_last_correction();
+    blob->corrections_count = model_.get_correction_count();
+    blob->corrections_head  = 0;
+
+    int total = model_.get_correction_count();
+    for (int i = 0; i < total && i < CORRECTION_LOG_SIZE; i++) {
+        CorrectionEntry src;
+        model_.get_correction_by_index(i, src);
+        blob->corrections[i].timestamp       = src.timestamp;
+        blob->corrections[i].actual_reading  = src.actual_reading;
+        blob->corrections[i].estimated_total = src.estimated_total;
+        blob->corrections[i].difference      = src.difference;
+        blob->corrections[i].prev_k_calib    = src.prev_k_calib;
+        blob->corrections[i].new_k_calib     = src.new_k_calib;
+    }
+
+    nvs_set_blob(h, "data", blob, sizeof(*blob));
+    nvs_commit(h);
+    nvs_close(h);
+    delete blob;
 }
