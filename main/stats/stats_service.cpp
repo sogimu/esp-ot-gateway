@@ -88,6 +88,20 @@ void GasFlowEstimator::update(float mod_raw, float t_ret_raw, uint32_t dt_ms)
     }
 }
 
+void GasFlowEstimator::reset_integral()
+{
+    integral_m3_ = 0.0f;
+    std::memset(ring_, 0, sizeof(ring_));
+    ring_idx_ = 0;
+    ring_count_ = 0;
+    ema_1h_ = 0.0f;
+    ema_3h_ = 0.0f;
+    ema_12h_ = 0.0f;
+    ema_24h_ = 0.0f;
+    ema_7d_ = 0.0f;
+    ema_start_us_ = 0;
+}
+
 void GasFlowEstimator::push_to_model(Model& model)
 {
     GasData d;
@@ -136,14 +150,48 @@ StatsService::StatsService(Model& model, OpenthermEndpoint& ot)
 void StatsService::start()
 {
     if (started_) return;
-    load_nvs_meter();
+load_nvs_meter();
+
+    load_nvs();
     ot_.subscribe(this);
     started_ = true;
+
+    // Handle initial flame state: if boiler already burning, record timestamp
+    if (flame_on_ms_ == 0 && model_.is_flame_on()) {
+        flame_on_ms_ = (uint32_t)(esp_timer_get_time() / 1000);
+    }
+
+    // Start periodic tick every 30 seconds
+    esp_timer_create_args_t timer_args = {};
+    timer_args.callback = &StatsService::tick_callback_static;
+    timer_args.arg = this;
+    timer_args.name = "stats_tick";
+    esp_timer_create(&timer_args, &tick_timer_);
+    esp_timer_start_periodic(tick_timer_, 30000000);
+
+    push_stats();
 }
 
 void StatsService::stop()
 {
     if (!started_) return;
+
+    if (tick_timer_) {
+        esp_timer_stop(tick_timer_);
+        esp_timer_delete(tick_timer_);
+        tick_timer_ = nullptr;
+    }
+
+    // Flush any remaining burner time
+    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    portENTER_CRITICAL(&stats_mux_);
+    if (flame_on_ms_ > 0 && now > flame_on_ms_) {
+        burner_sec_ += (now - flame_on_ms_) / 1000;
+        flame_on_ms_ = 0;
+    }
+    portEXIT_CRITICAL(&stats_mux_);
+
+    save_nvs();
     ot_.unsubscribe(this);
     started_ = false;
 }
@@ -200,19 +248,27 @@ void StatsService::on_status_changed(bool fault, bool flame,
                 pause_dur_[cycle_idx_] = (uint16_t)pause;
             }
         }
+        portENTER_CRITICAL(&stats_mux_);
         flame_on_ms_ = now;
+        portEXIT_CRITICAL(&stats_mux_);
     } else {
+        portENTER_CRITICAL(&stats_mux_);
         if (flame_on_ms_ > 0) {
             uint32_t dur = (now - flame_on_ms_) / 1000;
-            if (dur > 0 && dur <= 65535) {
-                burn_dur_[cycle_idx_] = (uint16_t)dur;
+            if (dur > 0) {
+                burner_sec_ += dur;
+                uint16_t dur_cap = (dur > 65535) ? 65535 : (uint16_t)dur;
+                burn_dur_[cycle_idx_] = dur_cap;
                 cycle_idx_ = (cycle_idx_ + 1) % CYCLE_RING;
                 if (cycle_total_ < CYCLE_RING) cycle_total_++;
-                burner_sec_ += dur;
                 cycle_cnt_++;
             }
+            flame_on_ms_ = 0;
         }
+        portEXIT_CRITICAL(&stats_mux_);
         flame_off_ms_ = now;
+
+        save_nvs();
     }
 
     push_stats();
@@ -272,7 +328,18 @@ void StatsService::push_stats()
         d.avg_pause = (float)sum / (float)cycle_total_;
     }
 
-    d.burner_hours = (float)burner_sec_ / 3600.0f;
+    // Include ongoing burn time
+    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+    uint32_t total_sec;
+
+    portENTER_CRITICAL(&stats_mux_);
+    total_sec = burner_sec_;
+    if (flame_on_ms_ > 0 && now > flame_on_ms_) {
+        total_sec += (now - flame_on_ms_) / 1000;
+    }
+    portEXIT_CRITICAL(&stats_mux_);
+
+    d.burner_hours = (float)total_sec / 3600.0f;
 
     if (samples_ > 0) {
         uint32_t targets[7] = {
@@ -381,4 +448,217 @@ void StatsService::save_nvs_meter()
     nvs_commit(h);
     nvs_close(h);
     delete blob;
+}
+
+// --- NVS blob structures ---
+
+struct __attribute__((packed)) NvsHistBlob {
+    uint32_t samples;
+    uint16_t hist[HIST_BINS];
+};
+
+struct __attribute__((packed)) NvsCycleBlob {
+    uint32_t burner_sec;
+    uint32_t cycle_cnt;
+    int32_t cycle_idx;
+    int32_t cycle_total;
+    uint16_t burn_dur[CYCLE_RING];
+    uint16_t pause_dur[CYCLE_RING];
+};
+
+struct __attribute__((packed)) NvsGasEmaBlob {
+    float ema_1h;
+    float ema_3h;
+    float ema_12h;
+    float ema_24h;
+    float ema_7d;
+    uint64_t ema_start_us;
+};
+
+struct __attribute__((packed)) NvsCalibBlob {
+    float k_calib;
+    float p_max;
+    float gas_calorific;
+};
+
+// --- NVS I/O ---
+
+void StatsService::load_nvs()
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open("stats", NVS_READONLY, &h);
+    if (err != ESP_OK) return;
+
+    uint32_t u32val = 0;
+    if (nvs_get_u32(h, "burn_sec", &u32val) == ESP_OK) {
+        burner_sec_ = u32val;
+    }
+
+    float fval = 0;
+    size_t sz = sizeof(fval);
+    if (nvs_get_blob(h, "integ_m3", &fval, &sz) == ESP_OK) {
+        gas_.set_integral_m3(fval);
+    }
+
+    NvsGasEmaBlob* ema = new NvsGasEmaBlob;
+    sz = sizeof(*ema);
+    if (nvs_get_blob(h, "gas_ema", ema, &sz) == ESP_OK) {
+        gas_.set_ema_1h(ema->ema_1h);
+        gas_.set_ema_3h(ema->ema_3h);
+        gas_.set_ema_12h(ema->ema_12h);
+        gas_.set_ema_24h(ema->ema_24h);
+        gas_.set_ema_7d(ema->ema_7d);
+        gas_.set_ema_start_us(ema->ema_start_us);
+    }
+    delete ema;
+
+    NvsHistBlob* hist = new NvsHistBlob;
+    sz = sizeof(*hist);
+    if (nvs_get_blob(h, "hist", hist, &sz) == ESP_OK) {
+        samples_ = hist->samples;
+        memcpy(hist_, hist->hist, sizeof(hist_));
+    }
+    delete hist;
+
+    NvsCycleBlob* cycles = new NvsCycleBlob;
+    sz = sizeof(*cycles);
+    if (nvs_get_blob(h, "cycles", cycles, &sz) == ESP_OK) {
+        burner_sec_ = cycles->burner_sec;
+        cycle_cnt_ = cycles->cycle_cnt;
+        cycle_idx_ = cycles->cycle_idx;
+        cycle_total_ = cycles->cycle_total;
+        memcpy(burn_dur_, cycles->burn_dur, sizeof(burn_dur_));
+        memcpy(pause_dur_, cycles->pause_dur, sizeof(pause_dur_));
+    }
+    delete cycles;
+
+    NvsCalibBlob* calib = new NvsCalibBlob;
+    sz = sizeof(*calib);
+    if (nvs_get_blob(h, "calib", calib, &sz) == ESP_OK) {
+        model_.set_k_calib(calib->k_calib);
+        model_.set_p_max(calib->p_max);
+        model_.set_gas_calorific(calib->gas_calorific);
+    }
+    delete calib;
+
+    nvs_close(h);
+}
+
+void StatsService::save_nvs()
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open("stats", NVS_READWRITE, &h);
+    if (err != ESP_OK) return;
+
+    nvs_set_u32(h, "burn_sec", burner_sec_);
+
+    float fval = gas_.get_integral_m3();
+    nvs_set_blob(h, "integ_m3", &fval, sizeof(fval));
+
+    NvsGasEmaBlob* ema = new NvsGasEmaBlob;
+    ema->ema_1h = gas_.get_ema_1h();
+    ema->ema_3h = gas_.get_ema_3h();
+    ema->ema_12h = gas_.get_ema_12h();
+    ema->ema_24h = gas_.get_ema_24h();
+    ema->ema_7d = gas_.get_ema_7d();
+    ema->ema_start_us = gas_.get_ema_start_us();
+    nvs_set_blob(h, "gas_ema", ema, sizeof(*ema));
+    delete ema;
+
+    NvsHistBlob* hist = new NvsHistBlob;
+    hist->samples = samples_;
+    memcpy(hist->hist, hist_, sizeof(hist_));
+    nvs_set_blob(h, "hist", hist, sizeof(*hist));
+    delete hist;
+
+    NvsCycleBlob* cycles = new NvsCycleBlob;
+    cycles->burner_sec = burner_sec_;
+    cycles->cycle_cnt = cycle_cnt_;
+    cycles->cycle_idx = cycle_idx_;
+    cycles->cycle_total = cycle_total_;
+    memcpy(cycles->burn_dur, burn_dur_, sizeof(burn_dur_));
+    memcpy(cycles->pause_dur, pause_dur_, sizeof(pause_dur_));
+    nvs_set_blob(h, "cycles", cycles, sizeof(*cycles));
+    delete cycles;
+
+    NvsCalibBlob* calib = new NvsCalibBlob;
+    calib->k_calib = model_.get_k_calib();
+    calib->p_max = model_.get_p_max();
+    calib->gas_calorific = model_.get_gas_calorific();
+    nvs_set_blob(h, "calib", calib, sizeof(*calib));
+    delete calib;
+
+    nvs_commit(h);
+    nvs_close(h);
+
+    last_nvs_save_sec_ = (uint32_t)(esp_timer_get_time() / 1000000);
+}
+
+// --- Periodic tick ---
+
+void StatsService::tick_callback_static(void* arg)
+{
+    static_cast<StatsService*>(arg)->periodic_tick();
+}
+
+void StatsService::periodic_tick()
+{
+    tick_count_++;
+
+    uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+
+    // Accumulate burner time while flame is on
+    portENTER_CRITICAL(&stats_mux_);
+    if (flame_on_ms_ > 0 && now > flame_on_ms_) {
+        uint32_t dur = (now - flame_on_ms_) / 1000;
+        if (dur > 0) {
+            burner_sec_ += dur;
+            flame_on_ms_ = now;
+        }
+    }
+    portEXIT_CRITICAL(&stats_mux_);
+
+    // Re-push stats to model so ongoing burner time is reflected
+    push_stats();
+
+    // Save to NVS every 10 minutes (20 ticks * 30s = 600s = 10min)
+    // Also save if enough time passed since last save
+    uint32_t now_sec = now / 1000;
+    if (now_sec - last_nvs_save_sec_ >= 600) {
+        save_nvs();
+    }
+}
+
+// --- Reset methods ---
+
+void StatsService::reset_modulation_stats()
+{
+    std::memset(hist_, 0, sizeof(hist_));
+    samples_ = 0;
+    save_nvs();
+    push_stats();
+}
+
+void StatsService::reset_cycle_stats()
+{
+    std::memset(burn_dur_, 0, sizeof(burn_dur_));
+    std::memset(pause_dur_, 0, sizeof(pause_dur_));
+    cycle_idx_ = 0;
+    cycle_total_ = 0;
+    cycle_cnt_ = 0;
+    portENTER_CRITICAL(&stats_mux_);
+    burner_sec_ = 0;
+    flame_on_ms_ = 0;
+    flame_off_ms_ = 0;
+    portEXIT_CRITICAL(&stats_mux_);
+    save_nvs();
+    push_stats();
+}
+
+void StatsService::reset_gas_stats()
+{
+    gas_.reset_integral();
+    save_nvs();
+    push_stats();
+}
 }

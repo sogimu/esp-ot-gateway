@@ -227,6 +227,7 @@ void Controller::WebServerObserver::on_cmd_set_k_calib(float value)
     c_.log_service_.event(LOG_CAT_USER, "K_calib: %.3f", (double)value);
 }
 
+
 void Controller::WebServerObserver::on_cmd_set_gas_meter_base(float value)
 {
     if (value < 0.0f) value = 0.0f;
@@ -284,6 +285,23 @@ void Controller::WebServerObserver::on_cmd_add_gas_meter_correction(float readin
     c_.stats_service_.save_nvs_meter();
 }
 
+void Controller::WebServerObserver::on_cmd_reset_modulation_stats()
+{
+    c_.stats_service_.reset_modulation_stats();
+    c_.log_service_.event(LOG_CAT_USER, "Статистика модуляции сброшена");
+}
+
+void Controller::WebServerObserver::on_cmd_reset_cycle_stats()
+{
+    c_.stats_service_.reset_cycle_stats();
+    c_.log_service_.event(LOG_CAT_USER, "Статистика циклов горения сброшена");
+}
+
+void Controller::WebServerObserver::on_cmd_reset_gas_stats()
+{
+    c_.stats_service_.reset_gas_stats();
+    c_.log_service_.event(LOG_CAT_USER, "Статистика расхода газа сброшена");
+}
 // ===== SensorsObserver =====
 
 void Controller::SensorsObserver::on_sensor_data(int sensor_id, float temperature)

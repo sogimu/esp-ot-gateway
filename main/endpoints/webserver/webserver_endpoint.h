@@ -34,6 +34,10 @@ private:
     void notify_cmd_set_gas_meter_base(float value);
     void notify_cmd_add_gas_meter_correction(float reading);
 
+    void notify_cmd_reset_modulation_stats();
+    void notify_cmd_reset_cycle_stats();
+    void notify_cmd_reset_gas_stats();
+
     static float json_get_float(const char* json, const char* key);
     static int   json_get_int(const char* json, const char* key);
 

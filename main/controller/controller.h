@@ -6,6 +6,7 @@
 #include "interfaces/iwebserver_observer.h"
 #include "interfaces/isensors_observer.h"
 #include "log/log_service.h"
+#include "stats/stats_service.h"
 
 class StatsService;
 
@@ -60,6 +61,9 @@ private:
         void on_cmd_set_k_calib(float value) override;
         void on_cmd_set_gas_meter_base(float value) override;
         void on_cmd_add_gas_meter_correction(float reading) override;
+        void on_cmd_reset_modulation_stats() override;
+        void on_cmd_reset_cycle_stats() override;
+        void on_cmd_reset_gas_stats() override;
     };
 
     class SensorsObserver : public ISensorsObserver {
