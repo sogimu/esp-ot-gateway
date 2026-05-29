@@ -7,9 +7,12 @@
 
 static const char* TAG = "sensors_ep";
 
+static const float SENSOR_INVALID = -127.0f;
+static const float SENSOR_VALID_THRESHOLD = -100.0f;
+
 SensorsEndpoint::SensorsEndpoint()
     : task_(nullptr), running_(false)
-    , converting_(false), skip_(0)
+    , prev_t1_(SENSOR_INVALID), prev_t2_(SENSOR_INVALID)
 {
 }
 
@@ -61,27 +64,17 @@ void SensorsEndpoint::task_loop()
 {
     ESP_LOGI(TAG, "Sensors poll task started");
     while (running_) {
-        skip_++;
-        if (skip_ < 5) {
-            vTaskDelay(pdMS_TO_TICKS(1100));
-            continue;
+        sensors_poll();
+
+        if (sensor1_temp > SENSOR_VALID_THRESHOLD && sensor1_temp != prev_t1_) {
+            prev_t1_ = sensor1_temp;
+            for (auto* o : observers_)
+                o->on_sensor_data(0, sensor1_temp);
         }
-        skip_ = 0;
-
-        if (!converting_) {
-            sensors_poll();
-            converting_ = sensor1_temp > -100.0f || sensor2_temp > -100.0f;
-        } else {
-            sensors_poll();
-            converting_ = false;
-
-            for (auto* o : observers_) {
-                extern float sensor1_temp, sensor2_temp;
-                if (sensor1_temp > -100.0f)
-                    o->on_sensor_data(0, sensor1_temp);
-                if (sensor2_temp > -100.0f)
-                    o->on_sensor_data(1, sensor2_temp);
-            }
+        if (sensor2_temp > SENSOR_VALID_THRESHOLD && sensor2_temp != prev_t2_) {
+            prev_t2_ = sensor2_temp;
+            for (auto* o : observers_)
+                o->on_sensor_data(1, sensor2_temp);
         }
 
         vTaskDelay(pdMS_TO_TICKS(1100));

@@ -22,8 +22,8 @@ private:
 
     TaskHandle_t task_;
     bool         running_;
-    bool         converting_;
-    int          skip_;
+    float        prev_t1_;
+    float        prev_t2_;
 
     std::vector<ISensorsObserver*> observers_;
 };
