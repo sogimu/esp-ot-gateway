@@ -28,7 +28,7 @@ void WebServerEndpoint::start()
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port         = 80;
-    config.max_uri_handlers    = 8;
+    config.max_uri_handlers    = 16;
     config.stack_size          = 16384;
     config.lru_purge_enable    = true;
     config.recv_wait_timeout   = 3000;
@@ -118,6 +118,11 @@ void WebServerEndpoint::notify_cmd_set_timezone(int offset)
     for (auto* o : observers_) o->on_cmd_set_timezone(offset);
 }
 
+void WebServerEndpoint::notify_cmd_set_k_calib(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_k_calib(value);
+}
+
 float WebServerEndpoint::json_get_float(const char* json, const char* key)
 {
     const char* p = strstr(json, key);
@@ -199,6 +204,9 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
 
     v = json_get_int(body, "\"tz_offset\"");
     if (v > -100) self->notify_cmd_set_timezone(v);
+
+    f = json_get_float(body, "\"k_calib\"");
+    if (f > -1e37f) self->notify_cmd_set_k_calib(f);
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");

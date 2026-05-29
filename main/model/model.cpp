@@ -75,9 +75,18 @@ void Model::set_tz_offset(int v) { tz_offset_ = v; }
 void Model::set_stats(const StatsData& s) { stats_ = s; }
 const StatsData& Model::get_stats() const { return stats_; }
 
+void Model::set_gas_data(const GasData& d) { gas_data_ = d; }
+const GasData& Model::get_gas_data() const { return gas_data_; }
+void Model::set_k_calib(float v) { k_calib_ = v; }
+float Model::get_k_calib() const { return k_calib_; }
+void Model::set_p_max(float v) { p_max_ = v; }
+float Model::get_p_max() const { return p_max_; }
+void Model::set_gas_calorific(float v) { gas_calorific_ = v; }
+float Model::get_gas_calorific() const { return gas_calorific_; }
+
 std::string Model::to_stats_json() const
 {
-    char buf[1024];
+    char buf[1536];
     float p10p50 = (stats_.p50 > 0) ? stats_.p10 / stats_.p50 : 0;
     int len = snprintf(buf, sizeof(buf),
         "{"
@@ -88,7 +97,13 @@ std::string Model::to_stats_json() const
         "\"med_burn\":%.0f,\"med_pause\":%.0f,"
         "\"avg_burn\":%.0f,\"avg_pause\":%.0f,"
         "\"burner_h\":%.1f,"
-        "\"p90_max\":%.1f,\"p10_p50\":%.1f,\"p99_p90\":%.1f"
+        "\"p90_max\":%.1f,\"p10_p50\":%.1f,\"p99_p90\":%.1f,"
+        "\"instant_flow\":%.4f,"
+        "\"integral_m3\":%.3f,"
+        "\"avg_1h\":%.4f,\"avg_3h\":%.4f,\"avg_12h\":%.4f,"
+        "\"avg_24h\":%.4f,\"avg_7d\":%.4f,"
+        "\"mod_filt\":%.1f,\"t_ret_filt\":%.1f,"
+        "\"k_calib\":%.3f,\"p_max\":%.1f,\"gas_cal\":%.1f"
         "}",
         stats_.sample_count,
         (double)stats_.p1, (double)stats_.p10,
@@ -99,7 +114,14 @@ std::string Model::to_stats_json() const
         (double)stats_.avg_burn, (double)stats_.avg_pause,
         (double)stats_.burner_hours,
         (double)stats_.p90, (double)p10p50,
-        (double)(stats_.p99 - stats_.p90)
+        (double)(stats_.p99 - stats_.p90),
+        (double)gas_data_.instant_flow,
+        (double)gas_data_.integral_m3,
+        (double)gas_data_.avg_1h, (double)gas_data_.avg_3h,
+        (double)gas_data_.avg_12h, (double)gas_data_.avg_24h,
+        (double)gas_data_.avg_7d,
+        (double)gas_data_.mod_filtered, (double)gas_data_.t_ret_filtered,
+        (double)k_calib_, (double)p_max_, (double)gas_calorific_
     );
     return std::string(buf, (size_t)len);
 }

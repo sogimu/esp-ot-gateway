@@ -30,6 +30,7 @@ private:
     void notify_cmd_fault_reset();
     void notify_cmd_set_schedule(const CH_Schedule& sched);
     void notify_cmd_set_timezone(int offset);
+    void notify_cmd_set_k_calib(float value);
 
     static float json_get_float(const char* json, const char* key);
     static int   json_get_int(const char* json, const char* key);

@@ -52,6 +52,7 @@ private:
         void on_cmd_fault_reset() override;
         void on_cmd_set_schedule(const CH_Schedule& schedule) override;
         void on_cmd_set_timezone(int offset) override;
+        void on_cmd_set_k_calib(float value) override;
     };
 
     class SensorsObserver : public ISensorsObserver {
