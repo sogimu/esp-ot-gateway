@@ -1,0 +1,228 @@
+#include "controller.h"
+
+#include <ctime>
+#include <sys/time.h>
+#include "esp_log.h"
+#include "esp_timer.h"
+
+static const char* TAG = "controller";
+
+Controller::Controller(Model& model,
+                       Endpoints& endpoints,
+                       LogService& log_service)
+    : model_(model), endpoints_(endpoints), log_service_(log_service)
+    , last_schedule_hour_(-1)
+{
+}
+
+void Controller::start()
+{
+    endpoints_.web_.set_model(&model_);
+    endpoints_.ot_.subscribe(&ot_obs_);
+    endpoints_.web_.subscribe(&web_obs_);
+    endpoints_.sensors_.subscribe(&sens_obs_);
+
+    ESP_LOGI(TAG, "Controller initialized");
+}
+
+void Controller::apply_schedule()
+{
+    const auto& sched = model_.get_schedule();
+    if (!sched.enabled) return;
+
+    time_t now;
+    struct tm ti;
+    time(&now);
+    localtime_r(&now, &ti);
+    if (ti.tm_year < (2024 - 1900)) return;
+
+    int hour = ti.tm_hour;
+    if (hour < 0 || hour >= 24) return;
+    if (hour == last_schedule_hour_) return;
+
+    last_schedule_hour_ = hour;
+    float sp = sched.temps[hour];
+    if (sp >= 20.0f && sp <= 80.0f) {
+        endpoints_.ot_.set_ch_setpoint(sp);
+        model_.set_ch_setpoint(sp);
+        ESP_LOGI(TAG, "Schedule: hour=%d setpoint=%.0f", hour, (double)sp);
+    }
+}
+
+// ===== OpenthermObserver =====
+
+void Controller::OpenthermObserver::on_connected()
+{
+    c_.model_.set_connected(true);
+    c_.log_service_.event(LOG_CAT_SYSTEM, "Котёл подключён");
+}
+
+void Controller::OpenthermObserver::on_disconnected()
+{
+    c_.model_.set_connected(false);
+    c_.log_service_.event(LOG_CAT_SYSTEM, "Котёл отключён");
+}
+
+void Controller::OpenthermObserver::on_status_changed(
+    bool fault, bool flame, bool ch_active, bool dhw_active)
+{
+    c_.model_.set_fault(fault);
+    c_.model_.set_flame(flame);
+    c_.model_.set_ch_active(ch_active);
+    c_.model_.set_dhw_active(dhw_active);
+
+    static bool prev_fault = false;
+    if (fault != prev_fault) {
+        if (fault)
+            c_.log_service_.event(LOG_CAT_EQUIP, "АВАРИЯ!");
+        else
+            c_.log_service_.event(LOG_CAT_EQUIP, "Авария снята");
+        prev_fault = fault;
+    }
+
+    bool pump = ch_active || dhw_active;
+    static bool prev_pump = false;
+    if (pump != prev_pump) {
+        c_.log_service_.event(LOG_CAT_EQUIP, pump ? "Насос: вкл" : "Насос: выкл");
+        prev_pump = pump;
+    }
+
+    static bool prev_dhw = false;
+    if (dhw_active != prev_dhw) {
+        if (dhw_active)
+            c_.log_service_.event(LOG_CAT_EQUIP, "Клапан → БКН");
+        else
+            c_.log_service_.event(LOG_CAT_EQUIP, "Клапан → CH");
+        prev_dhw = dhw_active;
+    }
+
+    c_.apply_schedule();
+}
+
+void Controller::OpenthermObserver::on_ch_temp(float value)
+{
+    c_.model_.set_ch_temp(value);
+}
+
+void Controller::OpenthermObserver::on_dhw_temp(float value)
+{
+    c_.model_.set_dhw_temp(value);
+}
+
+void Controller::OpenthermObserver::on_return_temp(float value)
+{
+    c_.model_.set_return_temp(value);
+}
+
+void Controller::OpenthermObserver::on_outside_temp(float value)
+{
+    c_.model_.set_outside_temp(value);
+}
+
+void Controller::OpenthermObserver::on_modulation(float pct)
+{
+    c_.model_.set_modulation(pct);
+}
+
+void Controller::OpenthermObserver::on_ch_bounds(float min, float max)
+{
+    c_.model_.set_ch_sp_min(min);
+    c_.model_.set_ch_sp_max(max);
+}
+
+void Controller::OpenthermObserver::on_dhw_bounds(float min, float max)
+{
+    c_.model_.set_dhw_sp_min(min);
+    c_.model_.set_dhw_sp_max(max);
+}
+
+void Controller::OpenthermObserver::on_fault_codes(
+    uint8_t asf, uint8_t oem_fault, uint16_t oem_diag)
+{
+    c_.model_.set_fault_codes(asf, oem_fault, oem_diag);
+}
+
+void Controller::OpenthermObserver::on_runtime_counters(
+    uint16_t bs, uint16_t cps, uint16_t dvs, uint16_t dbs)
+{
+    c_.model_.set_runtime_counters(bs, cps, dvs, dbs);
+}
+
+void Controller::OpenthermObserver::on_runtime_hours(
+    uint16_t bh, uint16_t cph, uint16_t dvh, uint16_t dbh)
+{
+    c_.model_.set_runtime_hours(bh, cph, dvh, dbh);
+}
+
+void Controller::OpenthermObserver::on_version(
+    uint8_t st, uint8_t sv, float ov)
+{
+    c_.model_.set_version(st, sv, ov);
+}
+
+void Controller::OpenthermObserver::on_dhw_session_finished(
+    uint32_t dur_ms, float min_temp)
+{
+    c_.model_.set_dhw_session_finished(dur_ms, min_temp);
+}
+
+// ===== WebServerObserver =====
+
+void Controller::WebServerObserver::on_cmd_set_ch_enable(bool enable)
+{
+    c_.endpoints_.ot_.set_ch_enable(enable);
+    c_.model_.set_ch_enable(enable);
+    c_.log_service_.event(LOG_CAT_USER, "CH: %s", enable ? "вкл" : "выкл");
+}
+
+void Controller::WebServerObserver::on_cmd_set_dhw_enable(bool enable)
+{
+    c_.endpoints_.ot_.set_dhw_enable(enable);
+    c_.model_.set_dhw_enable(enable);
+    c_.log_service_.event(LOG_CAT_USER, "DHW: %s", enable ? "вкл" : "выкл");
+}
+
+void Controller::WebServerObserver::on_cmd_set_ch_setpoint(float temp)
+{
+    c_.endpoints_.ot_.set_ch_setpoint(temp);
+    c_.model_.set_ch_setpoint(temp);
+    c_.log_service_.event(LOG_CAT_USER, "Уставка CH: %.0f°C", (double)temp);
+}
+
+void Controller::WebServerObserver::on_cmd_set_dhw_setpoint(float temp)
+{
+    c_.endpoints_.ot_.set_dhw_setpoint(temp);
+    c_.model_.set_dhw_setpoint(temp);
+    c_.log_service_.event(LOG_CAT_USER, "Уставка DHW: %.0f°C", (double)temp);
+}
+
+void Controller::WebServerObserver::on_cmd_fault_reset()
+{
+    c_.endpoints_.ot_.trigger_fault_reset();
+    c_.log_service_.event(LOG_CAT_USER, "Сброс аварии");
+}
+
+void Controller::WebServerObserver::on_cmd_set_schedule(const CH_Schedule& schedule)
+{
+    c_.model_.set_schedule(schedule);
+    c_.last_schedule_hour_ = -1;
+    c_.log_service_.event(LOG_CAT_USER, "Расписание: %s",
+              schedule.enabled ? "вкл" : "выкл");
+}
+
+void Controller::WebServerObserver::on_cmd_set_timezone(int offset)
+{
+    c_.endpoints_.sntp_.set_timezone(offset);
+    c_.model_.set_tz_offset(offset);
+    c_.log_service_.event(LOG_CAT_USER, "Часовой пояс: UTC%+d", offset);
+}
+
+// ===== SensorsObserver =====
+
+void Controller::SensorsObserver::on_sensor_data(int sensor_id, float temperature)
+{
+    if (sensor_id == 0)
+        c_.model_.set_t1_temp(temperature);
+    else if (sensor_id == 1)
+        c_.model_.set_t2_temp(temperature);
+}

@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * OpenTherm master для ESP32 + SmartTherm adapter
  *
@@ -179,9 +183,14 @@ typedef struct {
 /* Инициализация (GPIO + esp_timer) */
 void OT_Init(void);
 
-/* Опрос котла — вызывать каждые OT_POLL_INTERVAL_MS мс */
-void OT_Poll(OT_State *state);
+/* Низкоуровневая транзакция: отправить фрейм, получить ответ.
+   Возвращает true если ответ получен и корректен. */
+bool OT_Transaction(const OT_Frame *request, OT_Frame *response);
 
 /* Вспомогательные функции формата f8.8 */
 float    OT_f88_to_float(uint16_t v);
 uint16_t OT_float_to_f88(float f);
+
+#ifdef __cplusplus
+}
+#endif

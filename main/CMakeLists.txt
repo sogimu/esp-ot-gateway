@@ -1,13 +1,30 @@
 idf_component_register(
     SRCS
-        "main.c"
-        "opentherm.c"
-        "http_server.c"
-        "log.c"
-        "stats.c"
-        "sensors.c"
+        "main.cpp"
+        "endpoints/opentherm/opentherm.c"
+        "endpoints/sensors/sensors.c"
+        "model/model.cpp"
+        "controller/controller.cpp"
+        "endpoints/endpoints.cpp"
+        "endpoints/opentherm/opentherm_endpoint.cpp"
+        "endpoints/webserver/webserver_endpoint.cpp"
+        "endpoints/sensors/sensors_endpoint.cpp"
+        "endpoints/sntp/sntp_endpoint.cpp"
+        "endpoints/wifi/wifi_endpoint.cpp"
+        "log/log_service.cpp"
+        "stats/stats_service.cpp"
     INCLUDE_DIRS
         "."
+        "interfaces"
+        "model"
+        "controller"
+        "log"
+        "stats"
+        "endpoints/opentherm"
+        "endpoints/webserver"
+        "endpoints/sensors"
+        "endpoints/sntp"
+        "endpoints/wifi"
     REQUIRES
         esp_wifi
         esp_http_server
