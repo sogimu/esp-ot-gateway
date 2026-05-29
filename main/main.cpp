@@ -33,7 +33,7 @@ extern "C" void app_main(void)
 
     LogService   log_service(model);
     StatsService stats_service(model, endpoints.ot_);
-    Controller   controller(model, endpoints, log_service);
+    Controller   controller(model, endpoints, log_service, stats_service);
 
     stats_service.start();
     controller.start();

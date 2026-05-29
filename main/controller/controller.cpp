@@ -9,8 +9,10 @@ static const char* TAG = "controller";
 
 Controller::Controller(Model& model,
                        Endpoints& endpoints,
-                       LogService& log_service)
+                       LogService& log_service,
+                       StatsService& stats_service)
     : model_(model), endpoints_(endpoints), log_service_(log_service)
+    , stats_service_(stats_service)
     , last_schedule_hour_(-1)
 {
 }
@@ -223,6 +225,24 @@ void Controller::WebServerObserver::on_cmd_set_k_calib(float value)
     if (value > 10.0f) value = 10.0f;
     c_.model_.set_k_calib(value);
     c_.log_service_.event(LOG_CAT_USER, "K_calib: %.3f", (double)value);
+}
+
+void Controller::WebServerObserver::on_cmd_reset_modulation_stats()
+{
+    c_.stats_service_.reset_modulation_stats();
+    c_.log_service_.event(LOG_CAT_USER, "Статистика модуляции сброшена");
+}
+
+void Controller::WebServerObserver::on_cmd_reset_cycle_stats()
+{
+    c_.stats_service_.reset_cycle_stats();
+    c_.log_service_.event(LOG_CAT_USER, "Статистика циклов горения сброшена");
+}
+
+void Controller::WebServerObserver::on_cmd_reset_gas_stats()
+{
+    c_.stats_service_.reset_gas_stats();
+    c_.log_service_.event(LOG_CAT_USER, "Статистика расхода газа сброшена");
 }
 
 // ===== SensorsObserver =====

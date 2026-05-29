@@ -32,6 +32,10 @@ private:
     void notify_cmd_set_timezone(int offset);
     void notify_cmd_set_k_calib(float value);
 
+    void notify_cmd_reset_modulation_stats();
+    void notify_cmd_reset_cycle_stats();
+    void notify_cmd_reset_gas_stats();
+
     static float json_get_float(const char* json, const char* key);
     static int   json_get_int(const char* json, const char* key);
 

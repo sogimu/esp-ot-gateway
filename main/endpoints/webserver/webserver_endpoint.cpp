@@ -123,6 +123,21 @@ void WebServerEndpoint::notify_cmd_set_k_calib(float value)
     for (auto* o : observers_) o->on_cmd_set_k_calib(value);
 }
 
+void WebServerEndpoint::notify_cmd_reset_modulation_stats()
+{
+    for (auto* o : observers_) o->on_cmd_reset_modulation_stats();
+}
+
+void WebServerEndpoint::notify_cmd_reset_cycle_stats()
+{
+    for (auto* o : observers_) o->on_cmd_reset_cycle_stats();
+}
+
+void WebServerEndpoint::notify_cmd_reset_gas_stats()
+{
+    for (auto* o : observers_) o->on_cmd_reset_gas_stats();
+}
+
 float WebServerEndpoint::json_get_float(const char* json, const char* key)
 {
     const char* p = strstr(json, key);
@@ -207,6 +222,15 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
 
     f = json_get_float(body, "\"k_calib\"");
     if (f > -1e37f) self->notify_cmd_set_k_calib(f);
+
+    v = json_get_int(body, "\"reset_mod_stats\"");
+    if (v > 0) self->notify_cmd_reset_modulation_stats();
+
+    v = json_get_int(body, "\"reset_cycle_stats\"");
+    if (v > 0) self->notify_cmd_reset_cycle_stats();
+
+    v = json_get_int(body, "\"reset_gas_stats\"");
+    if (v > 0) self->notify_cmd_reset_gas_stats();
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");

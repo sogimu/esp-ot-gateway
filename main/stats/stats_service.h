@@ -5,6 +5,10 @@
 #include "endpoints/opentherm/opentherm_endpoint.h"
 
 #include <cstdint>
+#include <cstring>
+#include "esp_timer.h"
+#include "nvs.h"
+#include "freertos/FreeRTOS.h"
 
 #define HIST_BINS 1000
 #define CYCLE_RING 256
@@ -43,6 +47,25 @@ public:
 
     void update(float mod_raw, float t_ret_raw, uint32_t dt_ms);
     void push_to_model(Model& model);
+
+    float get_integral_m3() const { return integral_m3_; }
+    void set_integral_m3(float v) { integral_m3_ = v; }
+
+    float get_ema_1h() const { return ema_1h_; }
+    float get_ema_3h() const { return ema_3h_; }
+    float get_ema_12h() const { return ema_12h_; }
+    float get_ema_24h() const { return ema_24h_; }
+    float get_ema_7d() const { return ema_7d_; }
+    void set_ema_1h(float v) { ema_1h_ = v; }
+    void set_ema_3h(float v) { ema_3h_ = v; }
+    void set_ema_12h(float v) { ema_12h_ = v; }
+    void set_ema_24h(float v) { ema_24h_ = v; }
+    void set_ema_7d(float v) { ema_7d_ = v; }
+
+    uint64_t get_ema_start_us() const { return ema_start_us_; }
+    void set_ema_start_us(uint64_t v) { ema_start_us_ = v; }
+
+    void reset_integral();
 
 private:
     static float eta_corr(float t_ret);
@@ -100,13 +123,26 @@ public:
     void on_version(uint8_t st, uint8_t sv, float ov) override { (void)st; (void)sv; (void)ov; }
     void on_dhw_session_finished(uint32_t dur_ms, float min_temp) override { (void)dur_ms; (void)min_temp; }
 
+    void reset_modulation_stats();
+    void reset_cycle_stats();
+    void reset_gas_stats();
+
 private:
     void push_stats();
     void try_gas_estimate();
+    void load_nvs();
+    void save_nvs();
+    void periodic_tick();
+    static void tick_callback_static(void* arg);
 
     Model& model_;
     OpenthermEndpoint& ot_;
     bool started_ = false;
+
+    esp_timer_handle_t tick_timer_ = nullptr;
+    portMUX_TYPE stats_mux_ = portMUX_INITIALIZER_UNLOCKED;
+    uint32_t tick_count_ = 0;
+    uint32_t last_nvs_save_sec_ = 0;
 
     uint16_t hist_[HIST_BINS];
     uint32_t samples_;
