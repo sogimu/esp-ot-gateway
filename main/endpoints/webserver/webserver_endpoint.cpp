@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <ctime>
 
 static const char* TAG = "http";
 
@@ -228,7 +229,7 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
     if (v > 0) self->notify_cmd_fault_reset();
 
     v = json_get_int(body, "\"tz_offset\"");
-    if (v > -100) self->notify_cmd_set_timezone(v);
+    if (strstr(body, "\"tz_offset\"") && v > -100) self->notify_cmd_set_timezone(v);
 
     f = json_get_float(body, "\"k_calib\"");
     if (f > -1e37f) self->notify_cmd_set_k_calib(f);
@@ -261,11 +262,18 @@ esp_err_t WebServerEndpoint::handler_schedule_get(httpd_req_t* req)
     }
 
     const auto& sched = self->model_->get_schedule();
+
+    time_t now;
+    struct tm ti;
+    time(&now);
+    localtime_r(&now, &ti);
+    int hour = (ti.tm_year >= (2024 - 1900)) ? ti.tm_hour : -1;
+
     char buf[512];
     int len = snprintf(buf, sizeof(buf),
         "{\"enabled\":%d,\"hour\":%d,\"temps\":[",
         sched.enabled ? 1 : 0,
-        0);
+        hour);
     for (int i = 0; i < 24; i++) {
         len += snprintf(buf + len, sizeof(buf) - len,
             "%s%.0f", i ? "," : "", (double)sched.temps[i]);

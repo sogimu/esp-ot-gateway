@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <cmath>
 #include "esp_timer.h"
 
 Model::Model()
@@ -166,12 +167,18 @@ std::string Model::to_stats_json() const
                      ti.tm_hour, ti.tm_min, ti.tm_mday, ti.tm_mon + 1);
         }
 
+        float pct = (e.estimated_total > 0.001f)
+            ? (fabsf(e.difference) / e.estimated_total) * 100.0f
+            : 0.0f;
+
         len += snprintf(buf + len, sizeof(buf) - len,
-            "%s{\"t\":\"%s\",\"ar\":%.3f,\"et\":%.3f,"
-            "\"diff\":%.3f,\"pk\":%.4f,\"nk\":%.4f}",
+            "%s{\"t\":\"%s\",\"ts\":%lu,\"ar\":%.3f,\"et\":%.3f,"
+            "\"diff\":%.3f,\"pk\":%.4f,\"nk\":%.4f,\"pct\":%.2f}",
             i ? "," : "", tbuf,
+            (unsigned long)e.timestamp,
             (double)e.actual_reading, (double)e.estimated_total,
-            (double)e.difference, (double)e.prev_k_calib, (double)e.new_k_calib);
+            (double)e.difference, (double)e.prev_k_calib, (double)e.new_k_calib,
+            (double)pct);
     }
 
     len += snprintf(buf + len, sizeof(buf) - len, "]}");

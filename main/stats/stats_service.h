@@ -10,6 +10,8 @@
 #include "nvs_flash.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 
 #define HIST_BINS 1000
 #define CYCLE_RING 256
@@ -107,7 +109,8 @@ public:
 
     GasFlowEstimator& gas() { return gas_; }
     void load_nvs_meter();
-    void save_nvs_meter();
+    void request_save_meter();
+    void request_save();
 
     // IOpenthermObserver
     void on_connected() override {}
@@ -125,6 +128,8 @@ public:
     void on_runtime_hours(uint16_t bh, uint16_t cph, uint16_t dvh, uint16_t dbh) override { (void)bh; (void)cph; (void)dvh; (void)dbh; }
     void on_version(uint8_t st, uint8_t sv, float ov) override { (void)st; (void)sv; (void)ov; }
     void on_dhw_session_finished(uint32_t dur_ms, float min_temp) override { (void)dur_ms; (void)min_temp; }
+    void on_ch_setpoint_confirmed(float value) override { (void)value; }
+    void on_dhw_setpoint_confirmed(float value) override { (void)value; }
 
     void reset_modulation_stats();
     void reset_cycle_stats();
@@ -135,8 +140,11 @@ private:
     void try_gas_estimate();
     void load_nvs();
     void save_nvs();
+    void save_nvs_meter();
     void periodic_tick();
     static void tick_callback_static(void* arg);
+
+    static void save_task_func(void* arg);
 
     Model& model_;
     OpenthermEndpoint& ot_;
@@ -146,6 +154,9 @@ private:
     portMUX_TYPE stats_mux_ = portMUX_INITIALIZER_UNLOCKED;
     uint32_t tick_count_ = 0;
     uint32_t last_nvs_save_sec_ = 0;
+
+    QueueHandle_t save_queue_ = nullptr;
+    TaskHandle_t  save_task_  = nullptr;
 
     uint16_t hist_[HIST_BINS];
     uint32_t samples_;

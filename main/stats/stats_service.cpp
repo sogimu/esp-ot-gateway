@@ -6,6 +6,9 @@
 #include "esp_timer.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "freertos/task.h"
+
+enum SaveCmd { SAVE_STOP = 0, SAVE_STATS = 1, SAVE_METER = 2 };
 
 // --- GasFlowEstimator ---
 
@@ -153,8 +156,12 @@ void StatsService::start()
 load_nvs_meter();
 
     load_nvs();
+    gas_.push_to_model(model_);
     ot_.subscribe(this);
     started_ = true;
+
+    save_queue_ = xQueueCreate(4, sizeof(int));
+    xTaskCreate(save_task_func, "nvs_save", 8192, this, 5, &save_task_);
 
     // Handle initial flame state: if boiler already burning, record timestamp
     if (flame_on_ms_ == 0 && model_.is_flame_on()) {
@@ -191,9 +198,52 @@ void StatsService::stop()
     }
     portEXIT_CRITICAL(&stats_mux_);
 
-    save_nvs();
+    // Signal save task to finish pending work and exit
+    if (save_queue_) {
+        int cmd = SAVE_STOP;
+        xQueueSend(save_queue_, &cmd, portMAX_DELAY);
+    }
+    while (save_task_ != nullptr) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (save_queue_) {
+        vQueueDelete(save_queue_);
+        save_queue_ = nullptr;
+    }
+
     ot_.unsubscribe(this);
     started_ = false;
+}
+
+void StatsService::save_task_func(void* arg)
+{
+    auto* self = static_cast<StatsService*>(arg);
+    int cmd;
+    while (true) {
+        if (xQueueReceive(self->save_queue_, &cmd, pdMS_TO_TICKS(1000)) != pdTRUE)
+            continue;
+        if (cmd == SAVE_STOP) break;
+        if (cmd == SAVE_STATS)  self->save_nvs();
+        if (cmd == SAVE_METER) self->save_nvs_meter();
+    }
+    self->save_task_ = nullptr;
+    vTaskDelete(nullptr);
+}
+
+void StatsService::request_save()
+{
+    if (!save_queue_) return;
+    int cmd = SAVE_STATS;
+    if (xQueueSend(save_queue_, &cmd, 0) == pdTRUE) {
+        last_nvs_save_sec_ = (uint32_t)(esp_timer_get_time() / 1000000);
+    }
+}
+
+void StatsService::request_save_meter()
+{
+    if (!save_queue_) return;
+    int cmd = SAVE_METER;
+    xQueueSend(save_queue_, &cmd, 0);
 }
 
 void StatsService::on_modulation(float pct)
@@ -268,7 +318,7 @@ void StatsService::on_status_changed(bool fault, bool flame,
         portEXIT_CRITICAL(&stats_mux_);
         flame_off_ms_ = now;
 
-        save_nvs();
+        request_save();
     }
 
     push_stats();
@@ -314,18 +364,19 @@ void StatsService::push_stats()
 {
     StatsData d;
     d.sample_count = (int)samples_;
-    d.cycle_count  = cycle_total_;
+    d.cycle_count  = cycle_cnt_;
     d.median_burn  = median(burn_dur_, cycle_total_);
-    d.median_pause = median(pause_dur_, cycle_total_);
+    d.median_pause = (cycle_total_ > 1) ? median(&pause_dur_[1], cycle_total_ - 1) : 0;
 
+    int pause_count = (cycle_total_ > 1) ? cycle_total_ - 1 : 0;
     if (cycle_total_ > 0) {
         uint32_t sum = 0;
         for (int i = 0; i < cycle_total_; i++) sum += burn_dur_[i];
         d.avg_burn = (float)sum / (float)cycle_total_;
 
         sum = 0;
-        for (int i = 0; i < cycle_total_; i++) sum += pause_dur_[i];
-        d.avg_pause = (float)sum / (float)cycle_total_;
+        for (int i = 1; i < cycle_total_; i++) sum += pause_dur_[i];
+        d.avg_pause = (pause_count > 0) ? (float)sum / (float)pause_count : 0;
     }
 
     // Include ongoing burn time
@@ -590,8 +641,6 @@ void StatsService::save_nvs()
 
     nvs_commit(h);
     nvs_close(h);
-
-    last_nvs_save_sec_ = (uint32_t)(esp_timer_get_time() / 1000000);
 }
 
 // --- Periodic tick ---
@@ -625,7 +674,7 @@ void StatsService::periodic_tick()
     // Also save if enough time passed since last save
     uint32_t now_sec = now / 1000;
     if (now_sec - last_nvs_save_sec_ >= 600) {
-        save_nvs();
+        request_save();
     }
 }
 
@@ -635,7 +684,7 @@ void StatsService::reset_modulation_stats()
 {
     std::memset(hist_, 0, sizeof(hist_));
     samples_ = 0;
-    save_nvs();
+    request_save();
     push_stats();
 }
 
@@ -651,14 +700,13 @@ void StatsService::reset_cycle_stats()
     flame_on_ms_ = 0;
     flame_off_ms_ = 0;
     portEXIT_CRITICAL(&stats_mux_);
-    save_nvs();
+    request_save();
     push_stats();
 }
 
 void StatsService::reset_gas_stats()
 {
     gas_.reset_integral();
-    save_nvs();
+    request_save();
     push_stats();
-}
 }

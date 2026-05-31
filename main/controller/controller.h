@@ -26,6 +26,9 @@ private:
 
     int last_schedule_hour_;
 
+    void load_config_nvs();
+    void save_config_nvs();
+
     class OpenthermObserver : public IOpenthermObserver {
         Controller& c_;
     public:
@@ -45,6 +48,8 @@ private:
         void on_runtime_hours(uint16_t bh, uint16_t cph, uint16_t dvh, uint16_t dbh) override;
         void on_version(uint8_t st, uint8_t sv, float ov) override;
         void on_dhw_session_finished(uint32_t dur_ms, float min_temp) override;
+        void on_ch_setpoint_confirmed(float value) override;
+        void on_dhw_setpoint_confirmed(float value) override;
     };
 
     class WebServerObserver : public IWebServerObserver {

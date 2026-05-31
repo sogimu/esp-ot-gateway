@@ -129,7 +129,7 @@ void OpenthermEndpoint::poll_cycle()
 
 void OpenthermEndpoint::do_handshake()
 {
-    OT_Frame req = {0}, rsp = {0};
+    OT_Frame req = OT_Frame{}, rsp = OT_Frame{};
     bool ok;
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
 
@@ -207,7 +207,7 @@ uint8_t OpenthermEndpoint::build_master_byte()
 
 void OpenthermEndpoint::do_status()
 {
-    OT_Frame req = {0}, rsp = {0};
+    OT_Frame req = OT_Frame{}, rsp = OT_Frame{};
     req.msg_type = OT_MSG_READ_DATA;
     req.data_id  = OT_ID_STATUS;
 
@@ -222,8 +222,12 @@ void OpenthermEndpoint::do_status()
         ot_.ch_active  = (sl & OT_SLAVE_CH_ACTIVE)  != 0;
         ot_.dhw_active = (sl & OT_SLAVE_DHW_ACTIVE) != 0;
         ot_.flame      = (sl & OT_SLAVE_FLAME)       != 0;
-        connected_     = true;
         last_response_ms_ = (uint32_t)(esp_timer_get_time() / 1000);
+
+        if (!connected_) {
+            connected_ = true;
+            for (auto* o : observers_) o->on_connected();
+        }
 
         if (ot_.fault != last_fault_ || ot_.flame != last_flame_ ||
             ot_.ch_active != last_ch_active_ || ot_.dhw_active != last_dhw_active_) {
@@ -238,7 +242,7 @@ void OpenthermEndpoint::do_status()
 
 void OpenthermEndpoint::do_extra_step()
 {
-    OT_Frame req = {0}, rsp = {0};
+    OT_Frame req = OT_Frame{}, rsp = OT_Frame{};
     bool ok;
 
     switch (poll_step_) {
@@ -261,6 +265,8 @@ void OpenthermEndpoint::do_extra_step()
         if (ok) {
             pending_ch_sp_dirty_ = false;
             ot_.ch_setpoint = sp;
+            for (auto* o : observers_)
+                o->on_ch_setpoint_confirmed(sp);
         }
         break;
     }
@@ -295,6 +301,8 @@ void OpenthermEndpoint::do_extra_step()
         if (ok) {
             pending_dhw_sp_dirty_ = false;
             ot_.dhw_setpoint = sp;
+            for (auto* o : observers_)
+                o->on_dhw_setpoint_confirmed(sp);
         }
         break;
     }
