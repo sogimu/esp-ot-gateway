@@ -10,7 +10,17 @@ typedef struct {
     float temps[24];
 } CH_Schedule;
 
+#define CORRECTION_LOG_SIZE 32
 #define LOG_RING_SIZE 512
+
+struct CorrectionEntry {
+    uint32_t timestamp;
+    float    actual_reading;
+    float    estimated_total;
+    float    difference;
+    float    prev_k_calib;
+    float    new_k_calib;
+};
 
 enum LogCategory {
     LOG_CAT_SYSTEM,
@@ -135,6 +145,16 @@ public:
     const StatsData& get_stats() const;
     void set_gas_data(const GasData& d);
     const GasData& get_gas_data() const;
+    void set_gas_meter_base(float v);
+    float get_gas_meter_base() const;
+    float get_gas_meter_total() const;
+    float get_last_correction_actual() const;
+    float get_integral_at_last_correction() const;
+    void set_last_correction_refs(float actual, float integral);
+    int  get_correction_count() const { return corrections_count_; }
+    const CorrectionEntry* get_corrections() const { return corrections_.data(); }
+    void add_correction(const CorrectionEntry& e);
+    void get_correction_by_index(int idx, CorrectionEntry& out) const;
     void set_k_calib(float v);
     float get_k_calib() const;
     void set_p_max(float v);
@@ -178,6 +198,13 @@ private:
     float k_calib_ = 1.0f;
     float p_max_ = 24.0f;
     float gas_calorific_ = 9.5f;
+
+    float gas_meter_base_ = 0.0f;
+    float last_correction_actual_ = 0.0f;
+    float integral_at_last_correction_ = 0.0f;
+    std::array<CorrectionEntry, CORRECTION_LOG_SIZE> corrections_;
+    int corrections_head_ = 0;
+    int corrections_count_ = 0;
     std::array<LogEntry, LOG_RING_SIZE> log_ring_;
     int log_head_ = 0;
     int log_count_ = 0;

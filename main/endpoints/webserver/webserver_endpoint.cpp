@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <ctime>
 
 static const char* TAG = "http";
 
@@ -123,6 +124,31 @@ void WebServerEndpoint::notify_cmd_set_k_calib(float value)
     for (auto* o : observers_) o->on_cmd_set_k_calib(value);
 }
 
+void WebServerEndpoint::notify_cmd_set_gas_meter_base(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_gas_meter_base(value);
+}
+
+void WebServerEndpoint::notify_cmd_add_gas_meter_correction(float reading)
+{
+    for (auto* o : observers_) o->on_cmd_add_gas_meter_correction(reading);
+}
+
+void WebServerEndpoint::notify_cmd_reset_modulation_stats()
+{
+    for (auto* o : observers_) o->on_cmd_reset_modulation_stats();
+}
+
+void WebServerEndpoint::notify_cmd_reset_cycle_stats()
+{
+    for (auto* o : observers_) o->on_cmd_reset_cycle_stats();
+}
+
+void WebServerEndpoint::notify_cmd_reset_gas_stats()
+{
+    for (auto* o : observers_) o->on_cmd_reset_gas_stats();
+}
+
 float WebServerEndpoint::json_get_float(const char* json, const char* key)
 {
     const char* p = strstr(json, key);
@@ -203,11 +229,25 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
     if (v > 0) self->notify_cmd_fault_reset();
 
     v = json_get_int(body, "\"tz_offset\"");
-    if (v > -100) self->notify_cmd_set_timezone(v);
+    if (strstr(body, "\"tz_offset\"") && v > -100) self->notify_cmd_set_timezone(v);
 
     f = json_get_float(body, "\"k_calib\"");
     if (f > -1e37f) self->notify_cmd_set_k_calib(f);
 
+    f = json_get_float(body, "\"gas_meter_base\"");
+    if (f > -1e37f) self->notify_cmd_set_gas_meter_base(f);
+
+    f = json_get_float(body, "\"gas_meter_correct\"");
+    if (f > -1e37f) self->notify_cmd_add_gas_meter_correction(f);
+
+    v = json_get_int(body, "\"reset_mod_stats\"");
+    if (v > 0) self->notify_cmd_reset_modulation_stats();
+
+    v = json_get_int(body, "\"reset_cycle_stats\"");
+    if (v > 0) self->notify_cmd_reset_cycle_stats();
+
+    v = json_get_int(body, "\"reset_gas_stats\"");
+    if (v > 0) self->notify_cmd_reset_gas_stats();
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     return httpd_resp_sendstr(req, "{\"ok\":true}");
@@ -222,11 +262,18 @@ esp_err_t WebServerEndpoint::handler_schedule_get(httpd_req_t* req)
     }
 
     const auto& sched = self->model_->get_schedule();
+
+    time_t now;
+    struct tm ti;
+    time(&now);
+    localtime_r(&now, &ti);
+    int hour = (ti.tm_year >= (2024 - 1900)) ? ti.tm_hour : -1;
+
     char buf[512];
     int len = snprintf(buf, sizeof(buf),
         "{\"enabled\":%d,\"hour\":%d,\"temps\":[",
         sched.enabled ? 1 : 0,
-        0);
+        hour);
     for (int i = 0; i < 24; i++) {
         len += snprintf(buf + len, sizeof(buf) - len,
             "%s%.0f", i ? "," : "", (double)sched.temps[i]);

@@ -15,4 +15,10 @@ public:
     virtual void on_cmd_set_schedule(const CH_Schedule& schedule) = 0;
     virtual void on_cmd_set_timezone(int offset) = 0;
     virtual void on_cmd_set_k_calib(float value) = 0;
+    virtual void on_cmd_set_gas_meter_base(float value) = 0;
+    virtual void on_cmd_add_gas_meter_correction(float reading) = 0;
+
+    virtual void on_cmd_reset_modulation_stats() = 0;
+    virtual void on_cmd_reset_cycle_stats() = 0;
+    virtual void on_cmd_reset_gas_stats() = 0;
 };

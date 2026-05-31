@@ -6,10 +6,15 @@
 #include "interfaces/iwebserver_observer.h"
 #include "interfaces/isensors_observer.h"
 #include "log/log_service.h"
+#include "stats/stats_service.h"
+
+class StatsService;
+
+#include "stats/stats_service.h"
 
 class Controller {
 public:
-    Controller(Model& model, Endpoints& endpoints, LogService& log_service);
+    Controller(Model& model, Endpoints& endpoints, LogService& log_service, StatsService& stats_service);
 
     void start();
 
@@ -17,8 +22,12 @@ private:
     Model&     model_;
     Endpoints& endpoints_;
     LogService& log_service_;
+    StatsService& stats_service_;
 
     int last_schedule_hour_;
+
+    void load_config_nvs();
+    void save_config_nvs();
 
     class OpenthermObserver : public IOpenthermObserver {
         Controller& c_;
@@ -39,6 +48,8 @@ private:
         void on_runtime_hours(uint16_t bh, uint16_t cph, uint16_t dvh, uint16_t dbh) override;
         void on_version(uint8_t st, uint8_t sv, float ov) override;
         void on_dhw_session_finished(uint32_t dur_ms, float min_temp) override;
+        void on_ch_setpoint_confirmed(float value) override;
+        void on_dhw_setpoint_confirmed(float value) override;
     };
 
     class WebServerObserver : public IWebServerObserver {
@@ -53,6 +64,11 @@ private:
         void on_cmd_set_schedule(const CH_Schedule& schedule) override;
         void on_cmd_set_timezone(int offset) override;
         void on_cmd_set_k_calib(float value) override;
+        void on_cmd_set_gas_meter_base(float value) override;
+        void on_cmd_add_gas_meter_correction(float reading) override;
+        void on_cmd_reset_modulation_stats() override;
+        void on_cmd_reset_cycle_stats() override;
+        void on_cmd_reset_gas_stats() override;
     };
 
     class SensorsObserver : public ISensorsObserver {

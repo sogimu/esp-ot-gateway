@@ -17,6 +17,10 @@ CONFIG_HTTPD_MAX_URI_LEN=512
 # esp_timer ISR dispatch (нужен для OpenTherm таймера с минимальной задержкой)
 CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD=y
 
+# GPIO функции в IRAM (нужно для OT таймера: во время NVS flash-записи кеш отключён,
+# но 500мкс ISR вызывает gpio_set_level — без IRAM будет panic)
+CONFIG_GPIO_CTRL_FUNC_IN_IRAM=y
+
 # Логирование
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 

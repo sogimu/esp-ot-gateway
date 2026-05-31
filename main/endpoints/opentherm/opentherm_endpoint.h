@@ -22,6 +22,9 @@ public:
     void set_dhw_setpoint(float temp);
     void trigger_fault_reset();
 
+    float get_ch_setpoint() const { return ot_.ch_setpoint; }
+    float get_dhw_setpoint() const { return ot_.dhw_setpoint; }
+
     void subscribe(IOpenthermObserver* obs);
     void unsubscribe(IOpenthermObserver* obs);
 

@@ -4,25 +4,101 @@
 #include <sys/time.h>
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 static const char* TAG = "controller";
 
 Controller::Controller(Model& model,
                        Endpoints& endpoints,
-                       LogService& log_service)
+                       LogService& log_service,
+                       StatsService& stats_service)
     : model_(model), endpoints_(endpoints), log_service_(log_service)
+    , stats_service_(stats_service)
     , last_schedule_hour_(-1)
 {
 }
 
 void Controller::start()
 {
+    load_config_nvs();
+
     endpoints_.web_.set_model(&model_);
     endpoints_.ot_.subscribe(&ot_obs_);
     endpoints_.web_.subscribe(&web_obs_);
     endpoints_.sensors_.subscribe(&sens_obs_);
 
     ESP_LOGI(TAG, "Controller initialized");
+}
+
+void Controller::load_config_nvs()
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open("config", NVS_READONLY, &h);
+    if (err != ESP_OK) return;
+
+    int32_t tz = 0;
+    if (nvs_get_i32(h, "tz_offset", &tz) == ESP_OK) {
+        model_.set_tz_offset((int)tz);
+        endpoints_.sntp_.set_timezone((int)tz);
+    }
+
+    uint8_t u8;
+    if (nvs_get_u8(h, "ch_en", &u8) == ESP_OK) {
+        bool en = (u8 != 0);
+        model_.set_ch_enable(en);
+        endpoints_.ot_.set_ch_enable(en);
+    }
+    if (nvs_get_u8(h, "dhw_en", &u8) == ESP_OK) {
+        bool en = (u8 != 0);
+        model_.set_dhw_enable(en);
+        endpoints_.ot_.set_dhw_enable(en);
+    }
+    int16_t i16;
+    if (nvs_get_i16(h, "ch_sp", &i16) == ESP_OK) {
+        if (i16 >= 20 && i16 <= 80) {
+            float sp = (float)i16;
+            endpoints_.ot_.set_ch_setpoint(sp);
+            model_.set_ch_setpoint(sp);
+        }
+    }
+    if (nvs_get_i16(h, "dhw_sp", &i16) == ESP_OK) {
+        if (i16 >= 35 && i16 <= 80) {
+            float sp = (float)i16;
+            endpoints_.ot_.set_dhw_setpoint(sp);
+            model_.set_dhw_setpoint(sp);
+        }
+    }
+
+    size_t sz = sizeof(CH_Schedule);
+    CH_Schedule sched;
+    if (nvs_get_blob(h, "schedule", &sched, &sz) == ESP_OK) {
+        model_.set_schedule(sched);
+        if (sched.enabled && sched.temps[0] >= 20.0f && sched.temps[0] <= 80.0f) {
+            float sp = sched.temps[0];
+            endpoints_.ot_.set_ch_setpoint(sp);
+            model_.set_ch_setpoint(sp);
+        }
+    }
+
+    nvs_close(h);
+}
+
+void Controller::save_config_nvs()
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open("config", NVS_READWRITE, &h);
+    if (err != ESP_OK) return;
+
+    nvs_set_i32(h, "tz_offset", (int32_t)model_.get_tz_offset());
+    nvs_set_u8(h, "ch_en", model_.is_ch_enabled() ? 1 : 0);
+    nvs_set_u8(h, "dhw_en", model_.is_dhw_enabled() ? 1 : 0);
+    nvs_set_i16(h, "ch_sp", (int16_t)model_.get_ch_setpoint());
+    nvs_set_i16(h, "dhw_sp", (int16_t)model_.get_dhw_setpoint());
+    nvs_set_blob(h, "schedule", (const void*)&model_.get_schedule(), sizeof(CH_Schedule));
+
+    nvs_commit(h);
+    nvs_close(h);
 }
 
 void Controller::apply_schedule()
@@ -166,12 +242,27 @@ void Controller::OpenthermObserver::on_dhw_session_finished(
     c_.model_.set_dhw_session_finished(dur_ms, min_temp);
 }
 
+void Controller::OpenthermObserver::on_ch_setpoint_confirmed(float value)
+{
+    if (value != c_.model_.get_ch_setpoint()) {
+        c_.model_.set_ch_setpoint(value);
+    }
+}
+
+void Controller::OpenthermObserver::on_dhw_setpoint_confirmed(float value)
+{
+    if (value != c_.model_.get_dhw_setpoint()) {
+        c_.model_.set_dhw_setpoint(value);
+    }
+}
+
 // ===== WebServerObserver =====
 
 void Controller::WebServerObserver::on_cmd_set_ch_enable(bool enable)
 {
     c_.endpoints_.ot_.set_ch_enable(enable);
     c_.model_.set_ch_enable(enable);
+    c_.save_config_nvs();
     c_.log_service_.event(LOG_CAT_USER, "CH: %s", enable ? "вкл" : "выкл");
 }
 
@@ -179,20 +270,21 @@ void Controller::WebServerObserver::on_cmd_set_dhw_enable(bool enable)
 {
     c_.endpoints_.ot_.set_dhw_enable(enable);
     c_.model_.set_dhw_enable(enable);
+    c_.save_config_nvs();
     c_.log_service_.event(LOG_CAT_USER, "DHW: %s", enable ? "вкл" : "выкл");
 }
 
 void Controller::WebServerObserver::on_cmd_set_ch_setpoint(float temp)
 {
     c_.endpoints_.ot_.set_ch_setpoint(temp);
-    c_.model_.set_ch_setpoint(temp);
+    c_.save_config_nvs();
     c_.log_service_.event(LOG_CAT_USER, "Уставка CH: %.0f°C", (double)temp);
 }
 
 void Controller::WebServerObserver::on_cmd_set_dhw_setpoint(float temp)
 {
     c_.endpoints_.ot_.set_dhw_setpoint(temp);
-    c_.model_.set_dhw_setpoint(temp);
+    c_.save_config_nvs();
     c_.log_service_.event(LOG_CAT_USER, "Уставка DHW: %.0f°C", (double)temp);
 }
 
@@ -206,6 +298,7 @@ void Controller::WebServerObserver::on_cmd_set_schedule(const CH_Schedule& sched
 {
     c_.model_.set_schedule(schedule);
     c_.last_schedule_hour_ = -1;
+    c_.save_config_nvs();
     c_.log_service_.event(LOG_CAT_USER, "Расписание: %s",
               schedule.enabled ? "вкл" : "выкл");
 }
@@ -214,6 +307,7 @@ void Controller::WebServerObserver::on_cmd_set_timezone(int offset)
 {
     c_.endpoints_.sntp_.set_timezone(offset);
     c_.model_.set_tz_offset(offset);
+    c_.save_config_nvs();
     c_.log_service_.event(LOG_CAT_USER, "Часовой пояс: UTC%+d", offset);
 }
 
@@ -225,6 +319,82 @@ void Controller::WebServerObserver::on_cmd_set_k_calib(float value)
     c_.log_service_.event(LOG_CAT_USER, "K_calib: %.3f", (double)value);
 }
 
+
+void Controller::WebServerObserver::on_cmd_set_gas_meter_base(float value)
+{
+    if (value < 0.0f) value = 0.0f;
+    c_.model_.set_gas_meter_base(value);
+    c_.model_.set_last_correction_refs(value, c_.model_.get_gas_data().integral_m3);
+    c_.log_service_.event(LOG_CAT_USER, "Нач. показ. счётчика: %.3f", (double)value);
+    c_.stats_service_.request_save_meter();
+}
+
+void Controller::WebServerObserver::on_cmd_add_gas_meter_correction(float reading)
+{
+    if (reading < c_.model_.get_gas_meter_base() && c_.model_.get_gas_meter_base() > 0) {
+        c_.log_service_.event(LOG_CAT_USER, "Ошибка: показ. < нач. знач.");
+        return;
+    }
+
+    float current_integral = c_.model_.get_gas_data().integral_m3;
+    float base = c_.model_.get_gas_meter_base();
+    float estimated_total = base + current_integral;
+    float difference = reading - estimated_total;
+
+    // Compute ratio-based correction coefficient
+    float prev_k = c_.model_.get_k_calib();
+    float new_k = prev_k;
+    float prev_actual = c_.model_.get_last_correction_actual();
+    float prev_integral = c_.model_.get_integral_at_last_correction();
+
+    if (prev_actual > 0 && prev_integral >= 0) {
+        float actual_delta = reading - prev_actual;
+        float integral_delta = current_integral - prev_integral;
+        if (actual_delta > 0.001f && integral_delta > 0.0001f) {
+            float ratio = actual_delta / integral_delta;
+            new_k = prev_k * ratio;
+            if (new_k < 0.1f) new_k = 0.1f;
+            if (new_k > 10.0f) new_k = 10.0f;
+        }
+    }
+
+    c_.model_.set_k_calib(new_k);
+    c_.model_.set_last_correction_refs(reading, current_integral);
+    c_.stats_service_.request_save();
+
+    CorrectionEntry entry;
+    entry.timestamp = (uint32_t)time(nullptr);
+    entry.actual_reading = reading;
+    entry.estimated_total = estimated_total;
+    entry.difference = difference;
+    entry.prev_k_calib = prev_k;
+    entry.new_k_calib = new_k;
+    c_.model_.add_correction(entry);
+
+    c_.log_service_.event(LOG_CAT_USER,
+        "Сверка: показ. %.3f, расх. %+.4f, K %.4f→%.4f",
+        (double)reading, (double)difference, (double)prev_k, (double)new_k);
+
+    c_.stats_service_.request_save_meter();
+}
+
+void Controller::WebServerObserver::on_cmd_reset_modulation_stats()
+{
+    c_.stats_service_.reset_modulation_stats();
+    c_.log_service_.event(LOG_CAT_USER, "Статистика модуляции сброшена");
+}
+
+void Controller::WebServerObserver::on_cmd_reset_cycle_stats()
+{
+    c_.stats_service_.reset_cycle_stats();
+    c_.log_service_.event(LOG_CAT_USER, "Статистика циклов горения сброшена");
+}
+
+void Controller::WebServerObserver::on_cmd_reset_gas_stats()
+{
+    c_.stats_service_.reset_gas_stats();
+    c_.log_service_.event(LOG_CAT_USER, "Статистика расхода газа сброшена");
+}
 // ===== SensorsObserver =====
 
 void Controller::SensorsObserver::on_sensor_data(int sensor_id, float temperature)
