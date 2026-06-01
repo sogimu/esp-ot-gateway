@@ -26,6 +26,7 @@ OpenthermEndpoint::OpenthermEndpoint()
     std::memset(&ot_, 0, sizeof(ot_));
     ot_.ch_setpoint = 30.0f;
     ot_.dhw_setpoint = 55.0f;
+    ot_.dhw_hysteresis = 2.0f;
     ot_.ch_enable = true;
     ot_.dhw_enable = true;
     ot_.t1_temp = -127.0f;
@@ -77,6 +78,11 @@ void OpenthermEndpoint::set_dhw_setpoint(float temp)
 {
     pending_dhw_sp_ = temp;
     pending_dhw_sp_dirty_ = true;
+}
+
+void OpenthermEndpoint::set_dhw_hysteresis(float value)
+{
+    ot_.dhw_hysteresis = value;
 }
 
 void OpenthermEndpoint::trigger_fault_reset()
@@ -176,10 +182,14 @@ void OpenthermEndpoint::do_dhw_hysteresis()
 {
     bool dhw_user_enabled = pending_dhw_enable_ ? pending_dhw_enable_val_ : false;
     if (dhw_user_enabled && ot_.dhw_temp > 5.0f) {
-        if (!dhw_priority_ && ot_.dhw_temp < ot_.dhw_setpoint - DHW_HYST_ON) {
+        float hyst = ot_.dhw_hysteresis;
+        if (hyst < 0.5f) hyst = 2.0f;
+        if (!dhw_priority_ && ot_.dhw_temp < ot_.dhw_setpoint - hyst) {
             dhw_priority_ = true;
             dhw_session_start_ms_ = (uint32_t)(esp_timer_get_time() / 1000);
             dhw_session_min_temp_ = ot_.dhw_temp;
+            for (auto* o : observers_)
+                o->on_dhw_session_started(dhw_session_min_temp_);
         } else if (dhw_priority_ && ot_.dhw_temp >= ot_.dhw_setpoint) {
             dhw_priority_ = false;
             uint32_t dur = (uint32_t)(esp_timer_get_time() / 1000) - dhw_session_start_ms_;

@@ -96,9 +96,15 @@ public:
     void set_runtime_hours(uint16_t bh, uint16_t cph, uint16_t dvh, uint16_t dbh);
     void set_version(uint8_t slave_type, uint8_t slave_ver, float ot_ver);
     void set_dhw_session_finished(uint32_t dur_ms, float min_temp);
-    void set_dhw_priority(bool active, uint32_t session_start_ms, float min_temp);
+    void set_dhw_prediction(bool active, int remaining_sec, int uncertainty_sec, float rate_cps, int elapsed_sec);
     void set_schedule(const CH_Schedule& sched);
     void set_tz_offset(int v);
+    void set_dhw_hysteresis(float v);
+    float get_dhw_hysteresis() const { return dhw_hyst_on_; }
+    void set_sntp_server0(const char* v);
+    const char* get_sntp_server0() const { return sntp_srv0_; }
+    void set_sntp_server1(const char* v);
+    const char* get_sntp_server1() const { return sntp_srv1_; }
 
     bool   is_connected()   const { return connected_; }
     bool   has_fault()      const { return fault_; }
@@ -135,9 +141,10 @@ public:
     uint8_t  get_slave_version()const { return slave_version_; }
     float    get_ot_version()  const { return ot_version_; }
     int      get_dhw_last_session_sec() const { return dhw_last_session_sec_; }
-    bool     get_dhw_priority() const { return dhw_priority_; }
-    uint32_t get_dhw_session_start_ms() const { return dhw_session_start_ms_; }
-    float    get_dhw_session_min_temp() const { return dhw_session_min_temp_; }
+    bool     get_dhw_pred_active() const { return dhw_pred_active_; }
+    int      get_dhw_pred_remaining_sec() const { return dhw_pred_remaining_sec_; }
+    int      get_dhw_pred_uncertainty_sec() const { return dhw_pred_uncertainty_sec_; }
+    int      get_dhw_pred_elapsed_sec() const { return dhw_pred_elapsed_sec_; }
     const CH_Schedule& get_schedule() const { return schedule_; }
     int      get_tz_offset()   const { return tz_offset_; }
 
@@ -187,11 +194,16 @@ private:
     uint8_t  slave_type_, slave_version_;
     float    ot_version_;
     int      dhw_last_session_sec_;
-    bool     dhw_priority_;
-    uint32_t dhw_session_start_ms_;
-    float    dhw_session_min_temp_;
+    bool     dhw_pred_active_ = false;
+    int      dhw_pred_remaining_sec_ = 0;
+    int      dhw_pred_uncertainty_sec_ = 0;
+    int      dhw_pred_elapsed_sec_ = 0;
+    float    dhw_pred_rate_cps_ = 0;
     CH_Schedule schedule_;
     int      tz_offset_;
+    float    dhw_hyst_on_ = 2.0f;
+    char     sntp_srv0_[64] = {};
+    char     sntp_srv1_[64] = {};
 
     StatsData stats_;
     GasData   gas_data_;

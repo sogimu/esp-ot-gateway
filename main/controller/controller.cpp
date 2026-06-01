@@ -54,6 +54,15 @@ void Controller::load_config_nvs()
         model_.set_dhw_enable(en);
         endpoints_.ot_.set_dhw_enable(en);
     }
+
+        if (nvs_get_u8(h, "dhw_hyst", &u8) == ESP_OK) {
+        float hyst = (float)u8 / 10.0f;
+        if (hyst >= 0.5f && hyst <= 10.0f) {
+            model_.set_dhw_hysteresis(hyst);
+            endpoints_.ot_.set_dhw_hysteresis(hyst);
+        }
+    }
+
     int16_t i16;
     if (nvs_get_i16(h, "ch_sp", &i16) == ESP_OK) {
         if (i16 >= 20 && i16 <= 80) {
@@ -81,6 +90,24 @@ void Controller::load_config_nvs()
         }
     }
 
+    char srv[64];
+    bool srv0_loaded = false, srv1_loaded = false;
+    sz = sizeof(srv);
+    if (nvs_get_blob(h, "sntp_srv0", srv, &sz) == ESP_OK) {
+        model_.set_sntp_server0(srv);
+        srv0_loaded = true;
+    }
+    sz = sizeof(srv);
+    if (nvs_get_blob(h, "sntp_srv1", srv, &sz) == ESP_OK) {
+        model_.set_sntp_server1(srv);
+        srv1_loaded = true;
+    }
+    if (srv0_loaded || srv1_loaded) {
+        endpoints_.sntp_.set_servers(
+            model_.get_sntp_server0(),
+            model_.get_sntp_server1());
+    }
+
     nvs_close(h);
 }
 
@@ -96,6 +123,11 @@ void Controller::save_config_nvs()
     nvs_set_i16(h, "ch_sp", (int16_t)model_.get_ch_setpoint());
     nvs_set_i16(h, "dhw_sp", (int16_t)model_.get_dhw_setpoint());
     nvs_set_blob(h, "schedule", (const void*)&model_.get_schedule(), sizeof(CH_Schedule));
+
+    nvs_set_u8(h, "dhw_hyst", (uint8_t)(model_.get_dhw_hysteresis() * 10.0f + 0.5f));
+
+    nvs_set_blob(h, "sntp_srv0", model_.get_sntp_server0(), strlen(model_.get_sntp_server0()) + 1);
+    nvs_set_blob(h, "sntp_srv1", model_.get_sntp_server1(), strlen(model_.get_sntp_server1()) + 1);
 
     nvs_commit(h);
     nvs_close(h);
@@ -170,6 +202,12 @@ void Controller::OpenthermObserver::on_status_changed(
         else
             c_.log_service_.event(LOG_CAT_EQUIP, "Клапан → CH");
         prev_dhw = dhw_active;
+    }
+
+    static bool prev_flame = false;
+    if (flame != prev_flame) {
+        c_.log_service_.event(LOG_CAT_MODE, flame ? "Горелка: вкл" : "Горелка: выкл");
+        prev_flame = flame;
     }
 
     c_.apply_schedule();
@@ -286,6 +324,25 @@ void Controller::WebServerObserver::on_cmd_set_dhw_setpoint(float temp)
     c_.endpoints_.ot_.set_dhw_setpoint(temp);
     c_.save_config_nvs();
     c_.log_service_.event(LOG_CAT_USER, "Уставка DHW: %.0f°C", (double)temp);
+}
+
+void Controller::WebServerObserver::on_cmd_set_dhw_hysteresis(float value)
+{
+    if (value < 0.5f) value = 0.5f;
+    if (value > 10.0f) value = 10.0f;
+    c_.model_.set_dhw_hysteresis(value);
+    c_.endpoints_.ot_.set_dhw_hysteresis(value);
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "Гистерезис БКН: %.1f°C", (double)value);
+}
+
+void Controller::WebServerObserver::on_cmd_set_sntp_servers(const char* srv0, const char* srv1)
+{
+    c_.model_.set_sntp_server0(srv0);
+    c_.model_.set_sntp_server1(srv1);
+    c_.endpoints_.sntp_.set_servers(srv0, srv1);
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "NTP серверы: %s, %s", srv0, srv1);
 }
 
 void Controller::WebServerObserver::on_cmd_fault_reset()

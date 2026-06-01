@@ -88,16 +88,17 @@ extern "C" {
  * использует собственную уставку с передней панели.
  * Управление осцилляцией — через флаг DHW_ENABLE в STATUS:
  *
- * Когда dhw_temp опускается ниже (dhw_setpoint - DHW_HYST_ON):
+ * Когда dhw_temp опускается ниже (dhw_setpoint - dhw_hysteresis):
  *   → DHW_ENABLE=1 в STATUS, котёл греет БКН до своей внутренней уставки.
  * Когда dhw_temp достигает dhw_setpoint:
  *   → DHW_ENABLE=0, котёл заблокирован на CH.
  *
- * Пример при setpoint=55°C, DHW_HYST_ON=2:
+ * Пример при setpoint=55°C, dhw_hysteresis=2:
  *   БКН разрешён  когда temp < 53°C
  *   БКН запрещён  когда temp >= 55°C (только CH)
+ *
+ * Значение настраивается через веб-интерфейс, сохраняется в NVS.
  */
-#define DHW_HYST_ON   2.0f   /* гистерезис: разница включения ниже уставки       */
 
 /* Фрейм OpenTherm */
 typedef struct {
@@ -173,6 +174,7 @@ typedef struct {
     bool     dhw_enable;      /* разрешить нагрев БКН */
     bool     fault_reset;     /* однократный сброс аварии (через LB STATUS) */
     bool     dhw_priority;    /* гистерезис БКН: true=DHW_ENABLE=1 (греем), false=DHW_ENABLE=0 (блок) */
+    float    dhw_hysteresis;  /* гистерезис: разница включения ниже уставки, °C */
 
     /* Сессия нагрева БКН */
     uint32_t dhw_session_start_ms;  /* timestamp начала сессии (мс) */

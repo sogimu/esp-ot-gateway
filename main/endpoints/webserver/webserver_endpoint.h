@@ -33,6 +33,8 @@ private:
     void notify_cmd_set_k_calib(float value);
     void notify_cmd_set_gas_meter_base(float value);
     void notify_cmd_add_gas_meter_correction(float reading);
+    void notify_cmd_set_dhw_hysteresis(float value);
+    void notify_cmd_set_sntp_servers(const char* srv0, const char* srv1);
 
     void notify_cmd_reset_modulation_stats();
     void notify_cmd_reset_cycle_stats();
@@ -40,6 +42,7 @@ private:
 
     static float json_get_float(const char* json, const char* key);
     static int   json_get_int(const char* json, const char* key);
+    static void  json_get_str(const char* json, const char* key, char* out, size_t max_len);
 
     static esp_err_t handler_root(httpd_req_t* req);
     static esp_err_t handler_status(httpd_req_t* req);

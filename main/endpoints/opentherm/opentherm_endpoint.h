@@ -20,6 +20,7 @@ public:
     void set_dhw_enable(bool enable);
     void set_ch_setpoint(float temp);
     void set_dhw_setpoint(float temp);
+    void set_dhw_hysteresis(float value);
     void trigger_fault_reset();
 
     float get_ch_setpoint() const { return ot_.ch_setpoint; }

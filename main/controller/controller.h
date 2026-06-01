@@ -66,6 +66,8 @@ private:
         void on_cmd_set_k_calib(float value) override;
         void on_cmd_set_gas_meter_base(float value) override;
         void on_cmd_add_gas_meter_correction(float reading) override;
+        void on_cmd_set_dhw_hysteresis(float value) override;
+        void on_cmd_set_sntp_servers(const char* srv0, const char* srv1) override;
         void on_cmd_reset_modulation_stats() override;
         void on_cmd_reset_cycle_stats() override;
         void on_cmd_reset_gas_stats() override;

@@ -134,6 +134,16 @@ void WebServerEndpoint::notify_cmd_add_gas_meter_correction(float reading)
     for (auto* o : observers_) o->on_cmd_add_gas_meter_correction(reading);
 }
 
+void WebServerEndpoint::notify_cmd_set_dhw_hysteresis(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_dhw_hysteresis(value);
+}
+
+void WebServerEndpoint::notify_cmd_set_sntp_servers(const char* srv0, const char* srv1)
+{
+    for (auto* o : observers_) o->on_cmd_set_sntp_servers(srv0, srv1);
+}
+
 void WebServerEndpoint::notify_cmd_reset_modulation_stats()
 {
     for (auto* o : observers_) o->on_cmd_reset_modulation_stats();
@@ -162,6 +172,21 @@ int WebServerEndpoint::json_get_int(const char* json, const char* key)
 {
     float v = json_get_float(json, key);
     return (v < -1e37f) ? -1 : (int)v;
+}
+
+void WebServerEndpoint::json_get_str(const char* json, const char* key, char* out, size_t max_len)
+{
+    out[0] = '\0';
+    const char* p = strstr(json, key);
+    if (!p) return;
+    p += strlen(key);
+    while (*p == ':' || *p == ' ' || *p == '\"') p++;
+    const char* end = strchr(p, '\"');
+    if (!end) return;
+    size_t len = (size_t)(end - p);
+    if (len >= max_len) len = max_len - 1;
+    memcpy(out, p, len);
+    out[len] = '\0';
 }
 
 esp_err_t WebServerEndpoint::handler_root(httpd_req_t* req)
@@ -239,6 +264,14 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
 
     f = json_get_float(body, "\"gas_meter_correct\"");
     if (f > -1e37f) self->notify_cmd_add_gas_meter_correction(f);
+
+    f = json_get_float(body, "\"dhw_hysteresis\"");
+    if (f > -1e37f) self->notify_cmd_set_dhw_hysteresis(f);
+
+    char srv0[64] = {0}, srv1[64] = {0};
+    json_get_str(body, "\"sntp_server0\"", srv0, sizeof(srv0));
+    json_get_str(body, "\"sntp_server1\"", srv1, sizeof(srv1));
+    if (srv0[0] || srv1[0]) self->notify_cmd_set_sntp_servers(srv0, srv1);
 
     v = json_get_int(body, "\"reset_mod_stats\"");
     if (v > 0) self->notify_cmd_reset_modulation_stats();

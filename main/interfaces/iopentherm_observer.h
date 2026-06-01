@@ -22,6 +22,7 @@ public:
                                   uint16_t dhw_valve_hrs, uint16_t dhw_burner_hrs) = 0;
     virtual void on_version(uint8_t slave_type, uint8_t slave_ver, float ot_ver) = 0;
     virtual void on_dhw_session_finished(uint32_t duration_ms, float min_temp) = 0;
+    virtual void on_dhw_session_started(float start_temp) {}
     virtual void on_ch_setpoint_confirmed(float value) = 0;
     virtual void on_dhw_setpoint_confirmed(float value) = 0;
 };

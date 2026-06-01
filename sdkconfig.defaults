@@ -1,5 +1,9 @@
 # ESP32 конфигурация по умолчанию для gas_boiler
 
+# FreeRTOS trace + runtime stats (для CPU load в главном цикле)
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+
 # Частота CPU — максимальная производительность
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 
