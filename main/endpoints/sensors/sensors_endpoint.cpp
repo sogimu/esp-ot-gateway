@@ -23,7 +23,7 @@ void SensorsEndpoint::start()
     if (running_) return;
     sensors_init();
     running_ = true;
-    xTaskCreate(task_wrapper, "sensors", 2048, this, 4, &task_);
+    xTaskCreate(task_wrapper, "sensors", 3072, this, 4, &task_);
 }
 
 void SensorsEndpoint::stop()

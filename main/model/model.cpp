@@ -20,13 +20,15 @@ Model::Model()
     , burner_hours_(0), ch_pump_hours_(0), dhw_valve_hours_(0), dhw_burner_hours_(0)
     , slave_type_(0), slave_version_(0), ot_version_(0)
     , dhw_last_session_sec_(0)
-    , dhw_priority_(false), dhw_session_start_ms_(0), dhw_session_min_temp_(0)
     , tz_offset_(3)
+    , dhw_hyst_on_(2.0f)
 {
     schedule_.enabled = false;
     float default_temps[24] = {30,30,30,30,30,30, 35,40,40,35,35,35,
                                35,35,35,35,35,40, 40,40,40,35,35,30};
     for (int i = 0; i < 24; i++) schedule_.temps[i] = default_temps[i];
+    strncpy(sntp_srv0_, "pool.ntp.org", sizeof(sntp_srv0_) - 1);
+    strncpy(sntp_srv1_, "time.google.com", sizeof(sntp_srv1_) - 1);
 }
 
 void Model::set_connected(bool v) { connected_ = v; }
@@ -63,15 +65,19 @@ void Model::set_version(uint8_t st, uint8_t sv, float ov) {
 }
 void Model::set_dhw_session_finished(uint32_t dur_ms, float min_temp) {
     (void)min_temp; dhw_last_session_sec_ = (int)(dur_ms / 1000);
-    dhw_priority_ = false;
 }
-void Model::set_dhw_priority(bool active, uint32_t session_start_ms, float min_temp) {
-    dhw_priority_ = active;
-    dhw_session_start_ms_ = session_start_ms;
-    dhw_session_min_temp_ = min_temp;
+void Model::set_dhw_prediction(bool active, int remaining_sec, int uncertainty_sec, float rate_cps, int elapsed_sec) {
+    dhw_pred_active_ = active;
+    dhw_pred_remaining_sec_ = remaining_sec;
+    dhw_pred_uncertainty_sec_ = uncertainty_sec;
+    dhw_pred_rate_cps_ = rate_cps;
+    dhw_pred_elapsed_sec_ = elapsed_sec;
 }
 void Model::set_schedule(const CH_Schedule& sched) { schedule_ = sched; }
 void Model::set_tz_offset(int v) { tz_offset_ = v; }
+void Model::set_dhw_hysteresis(float v) { if (v >= 0.5f && v <= 10.0f) dhw_hyst_on_ = v; }
+void Model::set_sntp_server0(const char* v) { strncpy(sntp_srv0_, v, sizeof(sntp_srv0_) - 1); }
+void Model::set_sntp_server1(const char* v) { strncpy(sntp_srv1_, v, sizeof(sntp_srv1_) - 1); }
 
 void Model::set_stats(const StatsData& s) { stats_ = s; }
 const StatsData& Model::get_stats() const { return stats_; }
@@ -250,21 +256,6 @@ std::string Model::to_json() const
                  ti.tm_hour, ti.tm_min, ti.tm_sec);
     }
 
-    int dhw_session_sec = -1;
-    int dhw_est_total_sec = -1;
-    if (dhw_priority_ && dhw_session_start_ms_ > 0) {
-        uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
-        if (now_ms > dhw_session_start_ms_) {
-            dhw_session_sec = (int)((now_ms - dhw_session_start_ms_) / 1000);
-            if (dhw_session_sec >= 10 && dhw_temp_ > dhw_session_min_temp_) {
-                float rate = (dhw_temp_ - dhw_session_min_temp_) / (float)dhw_session_sec;
-                if (rate > 0) {
-                    dhw_est_total_sec = (int)((dhw_setpoint_ - dhw_session_min_temp_) / rate);
-                }
-            }
-        }
-    }
-
     int len = snprintf(buf, sizeof(buf),
         "{"
         "\"connected\":%d,"
@@ -285,9 +276,11 @@ std::string Model::to_json() const
         "\"ch_sp_max\":%.0f,"
         "\"ch_enable\":%d,"
         "\"dhw_enable\":%d,"
-        "\"dhw_priority\":%d,"
-        "\"dhw_session_sec\":%d,"
-        "\"dhw_est_total_sec\":%d,"
+        "\"dhw_pred_active\":%d,"
+        "\"dhw_pred_remaining\":%d,"
+        "\"dhw_pred_uncertainty\":%d,"
+        "\"dhw_pred_elapsed\":%d,"
+        "\"dhw_pred_rate\":%.4f,"
         "\"dhw_last_session_sec\":%d,"
         "\"asf_flags\":%d,"
         "\"oem_fault\":%d,"
@@ -300,7 +293,10 @@ std::string Model::to_json() const
         "\"sched_on\":%d,"
         "\"hour\":%d,"
         "\"time\":\"%s\","
-        "\"tz_offset\":%d"
+        "\"tz_offset\":%d,"
+        "\"dhw_hyst_on\":%.1f,"
+        "\"sntp_server0\":\"%s\","
+        "\"sntp_server1\":\"%s\""
         "}",
         connected_ ? 1 : 0,
         fault_ ? 1 : 0,
@@ -320,9 +316,11 @@ std::string Model::to_json() const
         (double)ch_sp_max_,
         ch_enable_ ? 1 : 0,
         dhw_enable_ ? 1 : 0,
-        dhw_priority_ ? 1 : 0,
-        dhw_session_sec,
-        dhw_est_total_sec,
+        dhw_pred_active_ ? 1 : 0,
+        dhw_pred_remaining_sec_,
+        dhw_pred_uncertainty_sec_,
+        dhw_pred_elapsed_sec_,
+        (double)dhw_pred_rate_cps_,
         dhw_last_session_sec_,
         asf_flags_,
         oem_fault_code_,
@@ -335,7 +333,10 @@ std::string Model::to_json() const
         schedule_.enabled ? 1 : 0,
         (ti.tm_year >= (2024 - 1900)) ? ti.tm_hour : -1,
         timebuf,
-        tz_offset_
+        tz_offset_,
+        (double)dhw_hyst_on_,
+        sntp_srv0_,
+        sntp_srv1_
     );
     return std::string(buf, (size_t)len);
 }

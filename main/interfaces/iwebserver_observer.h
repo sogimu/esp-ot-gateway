@@ -14,6 +14,9 @@ public:
     virtual void on_cmd_fault_reset() = 0;
     virtual void on_cmd_set_schedule(const CH_Schedule& schedule) = 0;
     virtual void on_cmd_set_timezone(int offset) = 0;
+    virtual void on_cmd_set_dhw_hysteresis(float value) = 0;
+    virtual void on_cmd_set_sntp_servers(const char* srv0, const char* srv1) = 0;
+
     virtual void on_cmd_set_k_calib(float value) = 0;
     virtual void on_cmd_set_gas_meter_base(float value) = 0;
     virtual void on_cmd_add_gas_meter_correction(float reading) = 0;
