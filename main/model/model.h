@@ -97,6 +97,11 @@ public:
     void set_version(uint8_t slave_type, uint8_t slave_ver, float ot_ver);
     void set_dhw_session_finished(uint32_t dur_ms, float min_temp);
     void set_dhw_prediction(bool active, int remaining_sec, int uncertainty_sec, float rate_cps, int elapsed_sec);
+    void set_pid_state(bool enabled, bool active, float output,
+                       float p, float i, float d,
+                       float room_temp, float target_room,
+                       bool cycle_locked, int remaining_lockout);
+    void set_pid_config(float kp, float ki, float kd, int dt_sec, int room_sensor, float target_room, int lockout_sec);
     void set_schedule(const CH_Schedule& sched);
     void set_tz_offset(int v);
     void set_dhw_hysteresis(float v);
@@ -145,6 +150,22 @@ public:
     int      get_dhw_pred_remaining_sec() const { return dhw_pred_remaining_sec_; }
     int      get_dhw_pred_uncertainty_sec() const { return dhw_pred_uncertainty_sec_; }
     int      get_dhw_pred_elapsed_sec() const { return dhw_pred_elapsed_sec_; }
+    bool     get_pid_enabled() const { return pid_enabled_; }
+    bool     get_pid_controller_active() const { return pid_active_; }
+    float    get_pid_output() const { return pid_output_; }
+    float    get_pid_p() const { return pid_p_; }
+    float    get_pid_i() const { return pid_i_; }
+    float    get_pid_d() const { return pid_d_; }
+    float    get_pid_room_temp() const { return pid_room_temp_; }
+    float    get_pid_target_room() const { return pid_target_room_; }
+    bool     get_pid_cycle_locked() const { return pid_cycle_locked_; }
+    int      get_pid_remaining_lockout() const { return pid_remaining_lockout_; }
+    float    get_pid_kp() const { return pid_kp_; }
+    float    get_pid_ki() const { return pid_ki_; }
+    float    get_pid_kd() const { return pid_kd_; }
+    int      get_pid_dt_sec() const { return pid_dt_sec_; }
+    int      get_pid_room_sensor() const { return pid_room_sensor_; }
+    int      get_pid_lockout_sec() const { return pid_lockout_sec_; }
     const CH_Schedule& get_schedule() const { return schedule_; }
     int      get_tz_offset()   const { return tz_offset_; }
 
@@ -199,6 +220,22 @@ private:
     int      dhw_pred_uncertainty_sec_ = 0;
     int      dhw_pred_elapsed_sec_ = 0;
     float    dhw_pred_rate_cps_ = 0;
+    bool     pid_enabled_ = false;
+    bool     pid_active_ = false;
+    float    pid_output_ = 0;
+    float    pid_p_ = 0;
+    float    pid_i_ = 0;
+    float    pid_d_ = 0;
+    float    pid_room_temp_ = 0;
+    float    pid_target_room_ = 0;
+    bool     pid_cycle_locked_ = false;
+    int      pid_remaining_lockout_ = 0;
+    float    pid_kp_ = 2.0f;
+    float    pid_ki_ = 0.01f;
+    float    pid_kd_ = 0.0f;
+    int      pid_dt_sec_ = 60;
+    int      pid_room_sensor_ = 0;
+    int      pid_lockout_sec_ = 300;
     CH_Schedule schedule_;
     int      tz_offset_;
     float    dhw_hyst_on_ = 2.0f;

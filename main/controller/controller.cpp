@@ -1,4 +1,5 @@
 #include "controller.h"
+#include "pid/pid_service.h"
 
 #include <ctime>
 #include <sys/time.h>
@@ -12,9 +13,10 @@ static const char* TAG = "controller";
 Controller::Controller(Model& model,
                        Endpoints& endpoints,
                        LogService& log_service,
-                       StatsService& stats_service)
+                       StatsService& stats_service,
+                       PidService& pid_service)
     : model_(model), endpoints_(endpoints), log_service_(log_service)
-    , stats_service_(stats_service)
+    , stats_service_(stats_service), pid_service_(pid_service)
     , last_schedule_hour_(-1)
 {
 }
@@ -108,6 +110,24 @@ void Controller::load_config_nvs()
             model_.get_sntp_server1());
     }
 
+    int32_t i32;
+    float kp = 2.0f, ki = 0.01f, kd = 0.0f;
+    int dt_sec = 60, sensor = 0, lockout = 300;
+    float target = 22.0f;
+    bool pid_en = false;
+
+    if (nvs_get_u8(h, "pid_en", &u8) == ESP_OK) pid_en = (u8 != 0);
+    if (nvs_get_i32(h, "pid_kp", &i32) == ESP_OK) kp = (float)i32 / 100.0f;
+    if (nvs_get_i32(h, "pid_ki", &i32) == ESP_OK) ki = (float)i32 / 10000.0f;
+    if (nvs_get_i32(h, "pid_kd", &i32) == ESP_OK) kd = (float)i32 / 100.0f;
+    if (nvs_get_i32(h, "pid_dt", &i32) == ESP_OK) dt_sec = (int)i32;
+    if (nvs_get_i32(h, "pid_sensor", &i32) == ESP_OK) sensor = (int)i32;
+    if (nvs_get_i32(h, "pid_target", &i32) == ESP_OK) target = (float)i32 / 10.0f;
+    if (nvs_get_i32(h, "pid_lockout", &i32) == ESP_OK) lockout = (int)i32;
+
+    pid_service_.set_config(kp, ki, kd, dt_sec, sensor, target, lockout);
+    pid_service_.set_enabled(pid_en);
+
     nvs_close(h);
 }
 
@@ -128,6 +148,15 @@ void Controller::save_config_nvs()
 
     nvs_set_blob(h, "sntp_srv0", model_.get_sntp_server0(), strlen(model_.get_sntp_server0()) + 1);
     nvs_set_blob(h, "sntp_srv1", model_.get_sntp_server1(), strlen(model_.get_sntp_server1()) + 1);
+
+    nvs_set_u8(h, "pid_en", pid_service_.is_enabled() ? 1 : 0);
+    nvs_set_i32(h, "pid_kp", (int32_t)(pid_service_.get_kp() * 100.0f + 0.5f));
+    nvs_set_i32(h, "pid_ki", (int32_t)(pid_service_.get_ki() * 10000.0f + 0.5f));
+    nvs_set_i32(h, "pid_kd", (int32_t)(pid_service_.get_kd() * 100.0f + 0.5f));
+    nvs_set_i32(h, "pid_dt", (int32_t)pid_service_.get_dt_sec());
+    nvs_set_i32(h, "pid_sensor", (int32_t)pid_service_.get_room_sensor());
+    nvs_set_i32(h, "pid_target", (int32_t)(pid_service_.get_target_room() * 10.0f + 0.5f));
+    nvs_set_i32(h, "pid_lockout", (int32_t)pid_service_.get_lockout_sec());
 
     nvs_commit(h);
     nvs_close(h);
@@ -151,9 +180,17 @@ void Controller::apply_schedule()
     last_schedule_hour_ = hour;
     float sp = sched.temps[hour];
     if (sp >= 20.0f && sp <= 80.0f) {
-        endpoints_.ot_.set_ch_setpoint(sp);
-        model_.set_ch_setpoint(sp);
-        ESP_LOGI(TAG, "Schedule: hour=%d setpoint=%.0f", hour, (double)sp);
+        if (pid_service_.is_enabled()) {
+            pid_service_.set_config(
+                pid_service_.get_kp(), pid_service_.get_ki(), pid_service_.get_kd(),
+                pid_service_.get_dt_sec(), pid_service_.get_room_sensor(),
+                sp, pid_service_.get_lockout_sec());
+            ESP_LOGI(TAG, "Schedule: hour=%d PID target=%.1f", hour, (double)sp);
+        } else {
+            endpoints_.ot_.set_ch_setpoint(sp);
+            model_.set_ch_setpoint(sp);
+            ESP_LOGI(TAG, "Schedule: hour=%d setpoint=%.0f", hour, (double)sp);
+        }
     }
 }
 
@@ -452,6 +489,77 @@ void Controller::WebServerObserver::on_cmd_reset_gas_stats()
     c_.stats_service_.reset_gas_stats();
     c_.log_service_.event(LOG_CAT_USER, "Статистика расхода газа сброшена");
 }
+
+void Controller::WebServerObserver::on_cmd_set_pid_enable(bool enable)
+{
+    c_.pid_service_.set_enabled(enable);
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "PID: %s", enable ? "вкл" : "выкл");
+}
+
+void Controller::WebServerObserver::on_cmd_set_pid_kp(float value)
+{
+    c_.pid_service_.set_config(value, c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
+        c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
+        c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "PID Kp: %.3f", (double)value);
+}
+
+void Controller::WebServerObserver::on_cmd_set_pid_ki(float value)
+{
+    c_.pid_service_.set_config(c_.pid_service_.get_kp(), value, c_.pid_service_.get_kd(),
+        c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
+        c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "PID Ki: %.5f", (double)value);
+}
+
+void Controller::WebServerObserver::on_cmd_set_pid_kd(float value)
+{
+    c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), value,
+        c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
+        c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "PID Kd: %.3f", (double)value);
+}
+
+void Controller::WebServerObserver::on_cmd_set_pid_dt_sec(int value)
+{
+    c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
+        value, c_.pid_service_.get_room_sensor(),
+        c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "PID dt: %d с", value);
+}
+
+void Controller::WebServerObserver::on_cmd_set_pid_room_sensor(int value)
+{
+    c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
+        c_.pid_service_.get_dt_sec(), value,
+        c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "PID датчик: T%d", value + 1);
+}
+
+void Controller::WebServerObserver::on_cmd_set_pid_target_room(float value)
+{
+    c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
+        c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
+        value, c_.pid_service_.get_lockout_sec());
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "PID цель: %.1f°C", (double)value);
+}
+
+void Controller::WebServerObserver::on_cmd_set_pid_cycle_lockout_sec(int value)
+{
+    c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
+        c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
+        c_.pid_service_.get_target_room(), value);
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "PID защита цикла: %d с", value);
+}
+
 // ===== SensorsObserver =====
 
 void Controller::SensorsObserver::on_sensor_data(int sensor_id, float temperature)

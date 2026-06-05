@@ -73,6 +73,32 @@ void Model::set_dhw_prediction(bool active, int remaining_sec, int uncertainty_s
     dhw_pred_rate_cps_ = rate_cps;
     dhw_pred_elapsed_sec_ = elapsed_sec;
 }
+void Model::set_pid_state(bool enabled, bool active, float output,
+                          float p, float i, float d,
+                          float room_temp, float target_room,
+                          bool cycle_locked, int remaining_lockout)
+{
+    pid_enabled_ = enabled;
+    pid_active_ = active;
+    pid_output_ = output;
+    pid_p_ = p;
+    pid_i_ = i;
+    pid_d_ = d;
+    pid_room_temp_ = room_temp;
+    pid_target_room_ = target_room;
+    pid_cycle_locked_ = cycle_locked;
+    pid_remaining_lockout_ = remaining_lockout;
+}
+void Model::set_pid_config(float kp, float ki, float kd, int dt_sec, int room_sensor, float target_room, int lockout_sec)
+{
+    pid_kp_ = kp;
+    pid_ki_ = ki;
+    pid_kd_ = kd;
+    pid_dt_sec_ = dt_sec;
+    pid_room_sensor_ = room_sensor;
+    pid_target_room_ = target_room;
+    pid_lockout_sec_ = lockout_sec;
+}
 void Model::set_schedule(const CH_Schedule& sched) { schedule_ = sched; }
 void Model::set_tz_offset(int v) { tz_offset_ = v; }
 void Model::set_dhw_hysteresis(float v) { if (v >= 0.5f && v <= 10.0f) dhw_hyst_on_ = v; }
@@ -296,7 +322,23 @@ std::string Model::to_json() const
         "\"tz_offset\":%d,"
         "\"dhw_hyst_on\":%.1f,"
         "\"sntp_server0\":\"%s\","
-        "\"sntp_server1\":\"%s\""
+        "\"sntp_server1\":\"%s\","
+        "\"pid_enabled\":%d,"
+        "\"pid_active\":%d,"
+        "\"pid_output\":%.0f,"
+        "\"pid_p\":%.1f,"
+        "\"pid_i\":%.1f,"
+        "\"pid_d\":%.1f,"
+        "\"pid_room_temp\":%.1f,"
+        "\"pid_target_room\":%.1f,"
+        "\"pid_cycle_locked\":%d,"
+        "\"pid_remaining_lockout\":%d,"
+        "\"pid_kp\":%.1f,"
+        "\"pid_ki\":%.4f,"
+        "\"pid_kd\":%.1f,"
+        "\"pid_dt_sec\":%d,"
+        "\"pid_room_sensor\":%d,"
+        "\"pid_lockout_sec\":%d"
         "}",
         connected_ ? 1 : 0,
         fault_ ? 1 : 0,
@@ -336,7 +378,23 @@ std::string Model::to_json() const
         tz_offset_,
         (double)dhw_hyst_on_,
         sntp_srv0_,
-        sntp_srv1_
+        sntp_srv1_,
+        pid_enabled_ ? 1 : 0,
+        pid_active_ ? 1 : 0,
+        (double)pid_output_,
+        (double)pid_p_,
+        (double)pid_i_,
+        (double)pid_d_,
+        (double)pid_room_temp_,
+        (double)pid_target_room_,
+        pid_cycle_locked_ ? 1 : 0,
+        pid_remaining_lockout_,
+        (double)pid_kp_,
+        (double)pid_ki_,
+        (double)pid_kd_,
+        pid_dt_sec_,
+        pid_room_sensor_,
+        pid_lockout_sec_
     );
     return std::string(buf, (size_t)len);
 }

@@ -14,6 +14,7 @@ idf_component_register(
         "log/log_service.cpp"
         "stats/stats_service.cpp"
         "predict/predict_service.cpp"
+        "pid/pid_service.cpp"
     INCLUDE_DIRS
         "."
         "interfaces"
@@ -22,6 +23,7 @@ idf_component_register(
         "log"
         "stats"
         "predict"
+        "pid"
         "endpoints/opentherm"
         "endpoints/webserver"
         "endpoints/sensors"

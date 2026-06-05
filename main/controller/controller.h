@@ -9,12 +9,13 @@
 #include "stats/stats_service.h"
 
 class StatsService;
+class PidService;
 
 #include "stats/stats_service.h"
 
 class Controller {
 public:
-    Controller(Model& model, Endpoints& endpoints, LogService& log_service, StatsService& stats_service);
+    Controller(Model& model, Endpoints& endpoints, LogService& log_service, StatsService& stats_service, PidService& pid_service);
 
     void start();
 
@@ -23,6 +24,7 @@ private:
     Endpoints& endpoints_;
     LogService& log_service_;
     StatsService& stats_service_;
+    PidService& pid_service_;
 
     int last_schedule_hour_;
 
@@ -71,6 +73,14 @@ private:
         void on_cmd_reset_modulation_stats() override;
         void on_cmd_reset_cycle_stats() override;
         void on_cmd_reset_gas_stats() override;
+        void on_cmd_set_pid_enable(bool enable) override;
+        void on_cmd_set_pid_kp(float value) override;
+        void on_cmd_set_pid_ki(float value) override;
+        void on_cmd_set_pid_kd(float value) override;
+        void on_cmd_set_pid_dt_sec(int value) override;
+        void on_cmd_set_pid_room_sensor(int value) override;
+        void on_cmd_set_pid_target_room(float value) override;
+        void on_cmd_set_pid_cycle_lockout_sec(int value) override;
     };
 
     class SensorsObserver : public ISensorsObserver {
