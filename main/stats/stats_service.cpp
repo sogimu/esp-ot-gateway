@@ -4,8 +4,6 @@
 #include <cstring>
 #include <cmath>
 #include "esp_timer.h"
-#include "nvs.h"
-#include "nvs_flash.h"
 #include "freertos/task.h"
 
 enum SaveCmd { SAVE_STOP = 0, SAVE_STATS = 1, SAVE_METER = 2 };
@@ -150,12 +148,42 @@ StatsService::StatsService(Model& model, OpenthermEndpoint& ot)
     std::memset(pause_dur_, 0, sizeof(pause_dur_));
 }
 
-void StatsService::start()
+void StatsService::start(ConfigEndpoint& config)
 {
     if (started_) return;
-load_nvs_meter();
+    config_ = &config;
 
-    load_nvs();
+    config_->load_meter(model_);
+
+    // Load stats from NVS
+    uint32_t burner_sec = 0;
+    float integ_m3 = 0;
+    NvsGasEmaBlob ema{};
+    NvsHistBlob hist{};
+    NvsCycleBlob cycles{};
+    NvsCalibBlob calib{};
+    if (config_->load_stats(burner_sec, integ_m3, ema, hist, cycles, calib)) {
+        burner_sec_ = burner_sec;
+        gas_.set_integral_m3(integ_m3);
+        gas_.set_ema_1h(ema.ema_1h);
+        gas_.set_ema_3h(ema.ema_3h);
+        gas_.set_ema_12h(ema.ema_12h);
+        gas_.set_ema_24h(ema.ema_24h);
+        gas_.set_ema_7d(ema.ema_7d);
+        gas_.set_ema_start_us(ema.ema_start_us);
+        samples_ = hist.samples;
+        memcpy(hist_, hist.hist, sizeof(hist_));
+        burner_sec_ = cycles.burner_sec;
+        cycle_cnt_ = cycles.cycle_cnt;
+        cycle_idx_ = cycles.cycle_idx;
+        cycle_total_ = cycles.cycle_total;
+        memcpy(burn_dur_, cycles.burn_dur, sizeof(burn_dur_));
+        memcpy(pause_dur_, cycles.pause_dur, sizeof(pause_dur_));
+        model_.set_k_calib(calib.k_calib);
+        model_.set_p_max(calib.p_max);
+        model_.set_gas_calorific(calib.gas_calorific);
+    }
+
     gas_.push_to_model(model_);
     ot_.subscribe(this);
     started_ = true;
@@ -420,227 +448,44 @@ void StatsService::push_stats()
     model_.set_stats(d);
 }
 
-// --- NVS persistence for meter corrections ---
+// --- NVS I/O (delegated to ConfigEndpoint) ---
 
-struct __attribute__((packed)) NvsCorrLogEntry {
-    uint32_t timestamp;
-    float actual_reading;
-    float estimated_total;
-    float difference;
-    float prev_k_calib;
-    float new_k_calib;
-};
-
-struct __attribute__((packed)) NvsMeterBlob {
-    float base_reading;
-    float last_correction_actual;
-    float integral_at_last_correction;
-    int32_t corrections_head;
-    int32_t corrections_count;
-    NvsCorrLogEntry corrections[CORRECTION_LOG_SIZE];
-};
-
-void StatsService::load_nvs_meter()
+void StatsService::save_nvs()
 {
-    nvs_handle_t h;
-    esp_err_t err = nvs_open("meter", NVS_READONLY, &h);
-    if (err != ESP_OK) return;
+    if (!config_) return;
 
-    NvsMeterBlob* blob = new NvsMeterBlob;
-    size_t sz = sizeof(*blob);
-    if (nvs_get_blob(h, "data", blob, &sz) == ESP_OK) {
-        model_.set_gas_meter_base(blob->base_reading);
-        model_.set_last_correction_refs(blob->last_correction_actual,
-                                         blob->integral_at_last_correction);
-        int n = blob->corrections_count;
-        if (n > CORRECTION_LOG_SIZE) n = CORRECTION_LOG_SIZE;
-        for (int i = 0; i < n; i++) {
-            CorrectionEntry e;
-            e.timestamp       = blob->corrections[i].timestamp;
-            e.actual_reading  = blob->corrections[i].actual_reading;
-            e.estimated_total = blob->corrections[i].estimated_total;
-            e.difference      = blob->corrections[i].difference;
-            e.prev_k_calib    = blob->corrections[i].prev_k_calib;
-            e.new_k_calib     = blob->corrections[i].new_k_calib;
-            model_.add_correction(e);
-        }
-    }
-    delete blob;
-    nvs_close(h);
+    NvsGasEmaBlob ema;
+    ema.ema_1h = gas_.get_ema_1h();
+    ema.ema_3h = gas_.get_ema_3h();
+    ema.ema_12h = gas_.get_ema_12h();
+    ema.ema_24h = gas_.get_ema_24h();
+    ema.ema_7d = gas_.get_ema_7d();
+    ema.ema_start_us = gas_.get_ema_start_us();
+
+    NvsHistBlob hist;
+    hist.samples = samples_;
+    memcpy(hist.hist, hist_, sizeof(hist_));
+
+    NvsCycleBlob cycles;
+    cycles.burner_sec = burner_sec_;
+    cycles.cycle_cnt = cycle_cnt_;
+    cycles.cycle_idx = cycle_idx_;
+    cycles.cycle_total = cycle_total_;
+    memcpy(cycles.burn_dur, burn_dur_, sizeof(burn_dur_));
+    memcpy(cycles.pause_dur, pause_dur_, sizeof(pause_dur_));
+
+    NvsCalibBlob calib;
+    calib.k_calib = model_.get_k_calib();
+    calib.p_max = model_.get_p_max();
+    calib.gas_calorific = model_.get_gas_calorific();
+
+    float integ_m3 = gas_.get_integral_m3();
+    config_->save_stats(burner_sec_, integ_m3, ema, hist, cycles, calib);
 }
 
 void StatsService::save_nvs_meter()
 {
-    nvs_handle_t h;
-    esp_err_t err = nvs_open("meter", NVS_READWRITE, &h);
-    if (err != ESP_OK) return;
-
-    NvsMeterBlob* blob = new NvsMeterBlob;
-    memset(blob, 0, sizeof(*blob));
-    blob->base_reading      = model_.get_gas_meter_base();
-    blob->last_correction_actual     = model_.get_last_correction_actual();
-    blob->integral_at_last_correction = model_.get_integral_at_last_correction();
-    blob->corrections_count = model_.get_correction_count();
-    blob->corrections_head  = 0;
-
-    int total = model_.get_correction_count();
-    for (int i = 0; i < total && i < CORRECTION_LOG_SIZE; i++) {
-        CorrectionEntry src;
-        model_.get_correction_by_index(i, src);
-        blob->corrections[i].timestamp       = src.timestamp;
-        blob->corrections[i].actual_reading  = src.actual_reading;
-        blob->corrections[i].estimated_total = src.estimated_total;
-        blob->corrections[i].difference      = src.difference;
-        blob->corrections[i].prev_k_calib    = src.prev_k_calib;
-        blob->corrections[i].new_k_calib     = src.new_k_calib;
-    }
-
-    nvs_set_blob(h, "data", blob, sizeof(*blob));
-    nvs_commit(h);
-    nvs_close(h);
-    delete blob;
-}
-
-// --- NVS blob structures ---
-
-struct __attribute__((packed)) NvsHistBlob {
-    uint32_t samples;
-    uint16_t hist[HIST_BINS];
-};
-
-struct __attribute__((packed)) NvsCycleBlob {
-    uint32_t burner_sec;
-    uint32_t cycle_cnt;
-    int32_t cycle_idx;
-    int32_t cycle_total;
-    uint16_t burn_dur[CYCLE_RING];
-    uint16_t pause_dur[CYCLE_RING];
-};
-
-struct __attribute__((packed)) NvsGasEmaBlob {
-    float ema_1h;
-    float ema_3h;
-    float ema_12h;
-    float ema_24h;
-    float ema_7d;
-    uint64_t ema_start_us;
-};
-
-struct __attribute__((packed)) NvsCalibBlob {
-    float k_calib;
-    float p_max;
-    float gas_calorific;
-};
-
-// --- NVS I/O ---
-
-void StatsService::load_nvs()
-{
-    nvs_handle_t h;
-    esp_err_t err = nvs_open("stats", NVS_READONLY, &h);
-    if (err != ESP_OK) return;
-
-    uint32_t u32val = 0;
-    if (nvs_get_u32(h, "burn_sec", &u32val) == ESP_OK) {
-        burner_sec_ = u32val;
-    }
-
-    float fval = 0;
-    size_t sz = sizeof(fval);
-    if (nvs_get_blob(h, "integ_m3", &fval, &sz) == ESP_OK) {
-        gas_.set_integral_m3(fval);
-    }
-
-    NvsGasEmaBlob* ema = new NvsGasEmaBlob;
-    sz = sizeof(*ema);
-    if (nvs_get_blob(h, "gas_ema", ema, &sz) == ESP_OK) {
-        gas_.set_ema_1h(ema->ema_1h);
-        gas_.set_ema_3h(ema->ema_3h);
-        gas_.set_ema_12h(ema->ema_12h);
-        gas_.set_ema_24h(ema->ema_24h);
-        gas_.set_ema_7d(ema->ema_7d);
-        gas_.set_ema_start_us(ema->ema_start_us);
-    }
-    delete ema;
-
-    NvsHistBlob* hist = new NvsHistBlob;
-    sz = sizeof(*hist);
-    if (nvs_get_blob(h, "hist", hist, &sz) == ESP_OK) {
-        samples_ = hist->samples;
-        memcpy(hist_, hist->hist, sizeof(hist_));
-    }
-    delete hist;
-
-    NvsCycleBlob* cycles = new NvsCycleBlob;
-    sz = sizeof(*cycles);
-    if (nvs_get_blob(h, "cycles", cycles, &sz) == ESP_OK) {
-        burner_sec_ = cycles->burner_sec;
-        cycle_cnt_ = cycles->cycle_cnt;
-        cycle_idx_ = cycles->cycle_idx;
-        cycle_total_ = cycles->cycle_total;
-        memcpy(burn_dur_, cycles->burn_dur, sizeof(burn_dur_));
-        memcpy(pause_dur_, cycles->pause_dur, sizeof(pause_dur_));
-    }
-    delete cycles;
-
-    NvsCalibBlob* calib = new NvsCalibBlob;
-    sz = sizeof(*calib);
-    if (nvs_get_blob(h, "calib", calib, &sz) == ESP_OK) {
-        model_.set_k_calib(calib->k_calib);
-        model_.set_p_max(calib->p_max);
-        model_.set_gas_calorific(calib->gas_calorific);
-    }
-    delete calib;
-
-    nvs_close(h);
-}
-
-void StatsService::save_nvs()
-{
-    nvs_handle_t h;
-    esp_err_t err = nvs_open("stats", NVS_READWRITE, &h);
-    if (err != ESP_OK) return;
-
-    nvs_set_u32(h, "burn_sec", burner_sec_);
-
-    float fval = gas_.get_integral_m3();
-    nvs_set_blob(h, "integ_m3", &fval, sizeof(fval));
-
-    NvsGasEmaBlob* ema = new NvsGasEmaBlob;
-    ema->ema_1h = gas_.get_ema_1h();
-    ema->ema_3h = gas_.get_ema_3h();
-    ema->ema_12h = gas_.get_ema_12h();
-    ema->ema_24h = gas_.get_ema_24h();
-    ema->ema_7d = gas_.get_ema_7d();
-    ema->ema_start_us = gas_.get_ema_start_us();
-    nvs_set_blob(h, "gas_ema", ema, sizeof(*ema));
-    delete ema;
-
-    NvsHistBlob* hist = new NvsHistBlob;
-    hist->samples = samples_;
-    memcpy(hist->hist, hist_, sizeof(hist_));
-    nvs_set_blob(h, "hist", hist, sizeof(*hist));
-    delete hist;
-
-    NvsCycleBlob* cycles = new NvsCycleBlob;
-    cycles->burner_sec = burner_sec_;
-    cycles->cycle_cnt = cycle_cnt_;
-    cycles->cycle_idx = cycle_idx_;
-    cycles->cycle_total = cycle_total_;
-    memcpy(cycles->burn_dur, burn_dur_, sizeof(burn_dur_));
-    memcpy(cycles->pause_dur, pause_dur_, sizeof(pause_dur_));
-    nvs_set_blob(h, "cycles", cycles, sizeof(*cycles));
-    delete cycles;
-
-    NvsCalibBlob* calib = new NvsCalibBlob;
-    calib->k_calib = model_.get_k_calib();
-    calib->p_max = model_.get_p_max();
-    calib->gas_calorific = model_.get_gas_calorific();
-    nvs_set_blob(h, "calib", calib, sizeof(*calib));
-    delete calib;
-
-    nvs_commit(h);
-    nvs_close(h);
+    if (config_) config_->save_meter(model_);
 }
 
 // --- Periodic tick ---

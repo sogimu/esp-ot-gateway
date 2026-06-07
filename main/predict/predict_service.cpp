@@ -1,7 +1,7 @@
 #include "predict/predict_service.h"
 #include "endpoints/opentherm/opentherm_endpoint.h"
+#include "endpoints/config/config_endpoint.h"
 #include "esp_timer.h"
-#include "nvs_flash.h"
 #include <cmath>
 #include <cstring>
 
@@ -16,16 +16,24 @@ static constexpr float MIN_RATE  = 0.002f;
 static constexpr float MIN_VAR   = 1e-6f;
 static constexpr float MIN_UNCERT = 15.0f;
 
-constexpr const char* PredictService::NVS_NS;
-
 PredictService::PredictService(Model& model)
     : model_(model)
 {}
 
-void PredictService::start(OpenthermEndpoint& ot)
+void PredictService::start(OpenthermEndpoint& ot, ConfigEndpoint& config)
 {
     ot.subscribe(this);
-    dhw_.history.load_nvs();
+    config_ = &config;
+
+    float rates[3] = {};
+    int idx = 0, count = 0;
+    if (config_->load_predict(rates, idx, count)) {
+        auto& h = dhw_.history;
+        memcpy(h.rates_, rates, sizeof(float) * 3);
+        h.idx_ = idx;
+        h.count_ = count;
+        if (h.count_ > 3) h.count_ = 3;
+    }
 }
 
 float PredictService::now_ms() const
@@ -62,37 +70,6 @@ float PredictService::SessionHistory::prior_variance() const
     float v = sum / (float)n + MIN_VAR;
     if (v < MIN_VAR) v = MIN_VAR;
     return v;
-}
-
-void PredictService::SessionHistory::save_nvs() const
-{
-    nvs_handle_t h;
-    if (nvs_open(NVS_NS, NVS_READWRITE, &h) != ESP_OK) return;
-
-    NvsPredictBlob blob;
-    std::memcpy(blob.rates, rates_, sizeof(float) * N);
-    blob.idx   = (int32_t)idx_;
-    blob.count = (int32_t)count_;
-
-    nvs_set_blob(h, "dhw_hist", &blob, sizeof(blob));
-    nvs_commit(h);
-    nvs_close(h);
-}
-
-void PredictService::SessionHistory::load_nvs()
-{
-    nvs_handle_t h;
-    if (nvs_open(NVS_NS, NVS_READONLY, &h) != ESP_OK) return;
-
-    NvsPredictBlob blob;
-    size_t sz = sizeof(blob);
-    if (nvs_get_blob(h, "dhw_hist", &blob, &sz) == ESP_OK && sz == sizeof(blob)) {
-        std::memcpy(rates_, blob.rates, sizeof(float) * N);
-        idx_   = (int)blob.idx;
-        count_ = (int)blob.count;
-    }
-
-    nvs_close(h);
 }
 
 void PredictService::on_dhw_session_started(float start_temp)
@@ -150,7 +127,9 @@ void PredictService::on_dhw_session_finished(uint32_t duration_ms, float min_tem
     if (actual_rate < MIN_RATE) actual_rate = DEF_RATE_PRIOR;
 
     d.history.record(actual_rate);
-    d.history.save_nvs();
+    if (config_) {
+        config_->save_predict(d.history.rates_, d.history.idx_, d.history.count_);
+    }
     d.active = false;
     dhw_result_.active = false;
     dhw_result_.remaining_sec = 0;
