@@ -5,8 +5,6 @@
 #include <sys/time.h>
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "nvs.h"
-#include "nvs_flash.h"
 
 static const char* TAG = "controller";
 
@@ -23,7 +21,7 @@ Controller::Controller(Model& model,
 
 void Controller::start()
 {
-    load_config_nvs();
+    endpoints_.config_.load_config(model_, pid_service_, endpoints_.sntp_, endpoints_.ot_);
 
     endpoints_.web_.set_model(&model_);
     endpoints_.ot_.subscribe(&ot_obs_);
@@ -31,147 +29,6 @@ void Controller::start()
     endpoints_.sensors_.subscribe(&sens_obs_);
 
     ESP_LOGI(TAG, "Controller initialized");
-}
-
-void Controller::load_config_nvs()
-{
-    nvs_handle_t h;
-    esp_err_t err = nvs_open("config", NVS_READONLY, &h);
-    if (err != ESP_OK) return;
-
-    int32_t tz = 0;
-    if (nvs_get_i32(h, "tz_offset", &tz) == ESP_OK) {
-        model_.set_tz_offset((int)tz);
-        endpoints_.sntp_.set_timezone((int)tz);
-    }
-
-    uint8_t u8;
-    if (nvs_get_u8(h, "ch_en", &u8) == ESP_OK) {
-        bool en = (u8 != 0);
-        model_.set_ch_enable(en);
-        endpoints_.ot_.set_ch_enable(en);
-    }
-    if (nvs_get_u8(h, "dhw_en", &u8) == ESP_OK) {
-        bool en = (u8 != 0);
-        model_.set_dhw_enable(en);
-        endpoints_.ot_.set_dhw_enable(en);
-    }
-
-        if (nvs_get_u8(h, "dhw_hyst", &u8) == ESP_OK) {
-        float hyst = (float)u8 / 10.0f;
-        if (hyst >= 0.5f && hyst <= 10.0f) {
-            model_.set_dhw_hysteresis(hyst);
-            endpoints_.ot_.set_dhw_hysteresis(hyst);
-        }
-    }
-
-    int16_t i16;
-    if (nvs_get_i16(h, "ch_sp", &i16) == ESP_OK) {
-        if (i16 >= 20 && i16 <= 80) {
-            float sp = (float)i16;
-            endpoints_.ot_.set_ch_setpoint(sp);
-            model_.set_ch_setpoint(sp);
-        }
-    }
-    if (nvs_get_i16(h, "dhw_sp", &i16) == ESP_OK) {
-        if (i16 >= 35 && i16 <= 80) {
-            float sp = (float)i16;
-            endpoints_.ot_.set_dhw_setpoint(sp);
-            model_.set_dhw_setpoint(sp);
-        }
-    }
-
-    size_t sz = sizeof(CH_Schedule);
-    CH_Schedule sched;
-    if (nvs_get_blob(h, "schedule", &sched, &sz) == ESP_OK) {
-        model_.set_schedule(sched);
-        if (sched.enabled && sched.temps[0] >= 20.0f && sched.temps[0] <= 80.0f) {
-            float sp = sched.temps[0];
-            endpoints_.ot_.set_ch_setpoint(sp);
-            model_.set_ch_setpoint(sp);
-        }
-    }
-
-    char srv[64];
-    bool srv0_loaded = false, srv1_loaded = false;
-    sz = sizeof(srv);
-    if (nvs_get_blob(h, "sntp_srv0", srv, &sz) == ESP_OK) {
-        model_.set_sntp_server0(srv);
-        srv0_loaded = true;
-    }
-    sz = sizeof(srv);
-    if (nvs_get_blob(h, "sntp_srv1", srv, &sz) == ESP_OK) {
-        model_.set_sntp_server1(srv);
-        srv1_loaded = true;
-    }
-    if (srv0_loaded || srv1_loaded) {
-        endpoints_.sntp_.set_servers(
-            model_.get_sntp_server0(),
-            model_.get_sntp_server1());
-    }
-
-    int32_t i32;
-    float kp = 2.0f, ki = 0.01f, kd = 0.0f;
-    int dt_sec = 60, sensor = 0, lockout = 300;
-    float target = 22.0f;
-    bool pid_en = false;
-
-    if (nvs_get_u8(h, "pid_en", &u8) == ESP_OK) pid_en = (u8 != 0);
-    if (nvs_get_i32(h, "pid_kp", &i32) == ESP_OK) kp = (float)i32 / 100.0f;
-    if (nvs_get_i32(h, "pid_ki", &i32) == ESP_OK) ki = (float)i32 / 10000.0f;
-    if (nvs_get_i32(h, "pid_kd", &i32) == ESP_OK) kd = (float)i32 / 100.0f;
-    if (nvs_get_i32(h, "pid_dt", &i32) == ESP_OK) dt_sec = (int)i32;
-    if (nvs_get_i32(h, "pid_sensor", &i32) == ESP_OK) sensor = (int)i32;
-    if (nvs_get_i32(h, "pid_target", &i32) == ESP_OK) target = (float)i32 / 10.0f;
-    if (nvs_get_i32(h, "pid_lockout", &i32) == ESP_OK) lockout = (int)i32;
-    float hyst = 0.5f;
-    if (nvs_get_i32(h, "pid_hyst", &i32) == ESP_OK) hyst = (float)i32 / 10.0f;
-    int ch_mode = 0;
-    if (nvs_get_i32(h, "ch_mode", &i32) == ESP_OK) ch_mode = (int)i32;
-
-    model_.set_ch_mode(ch_mode);
-    pid_service_.set_config(kp, ki, kd, dt_sec, sensor, target, lockout);
-    pid_service_.set_hysteresis(hyst);
-    if (ch_mode == 1) {
-        pid_service_.set_enabled(true);
-    } else {
-        pid_service_.set_enabled(pid_en);
-    }
-
-    nvs_close(h);
-}
-
-void Controller::save_config_nvs()
-{
-    nvs_handle_t h;
-    esp_err_t err = nvs_open("config", NVS_READWRITE, &h);
-    if (err != ESP_OK) return;
-
-    nvs_set_i32(h, "tz_offset", (int32_t)model_.get_tz_offset());
-    nvs_set_u8(h, "ch_en", model_.is_ch_enabled() ? 1 : 0);
-    nvs_set_u8(h, "dhw_en", model_.is_dhw_enabled() ? 1 : 0);
-    nvs_set_i16(h, "ch_sp", (int16_t)model_.get_ch_setpoint());
-    nvs_set_i16(h, "dhw_sp", (int16_t)model_.get_dhw_setpoint());
-    nvs_set_blob(h, "schedule", (const void*)&model_.get_schedule(), sizeof(CH_Schedule));
-
-    nvs_set_u8(h, "dhw_hyst", (uint8_t)(model_.get_dhw_hysteresis() * 10.0f + 0.5f));
-
-    nvs_set_blob(h, "sntp_srv0", model_.get_sntp_server0(), strlen(model_.get_sntp_server0()) + 1);
-    nvs_set_blob(h, "sntp_srv1", model_.get_sntp_server1(), strlen(model_.get_sntp_server1()) + 1);
-
-    nvs_set_u8(h, "pid_en", pid_service_.is_enabled() ? 1 : 0);
-    nvs_set_i32(h, "pid_kp", (int32_t)(pid_service_.get_kp() * 100.0f + 0.5f));
-    nvs_set_i32(h, "pid_ki", (int32_t)(pid_service_.get_ki() * 10000.0f + 0.5f));
-    nvs_set_i32(h, "pid_kd", (int32_t)(pid_service_.get_kd() * 100.0f + 0.5f));
-    nvs_set_i32(h, "pid_dt", (int32_t)pid_service_.get_dt_sec());
-    nvs_set_i32(h, "pid_sensor", (int32_t)pid_service_.get_room_sensor());
-    nvs_set_i32(h, "pid_target", (int32_t)(pid_service_.get_target_room() * 10.0f + 0.5f));
-    nvs_set_i32(h, "pid_lockout", (int32_t)pid_service_.get_lockout_sec());
-    nvs_set_i32(h, "pid_hyst", (int32_t)(pid_service_.get_hysteresis() * 10.0f + 0.5f));
-    nvs_set_i32(h, "ch_mode", (int32_t)model_.get_ch_mode());
-
-    nvs_commit(h);
-    nvs_close(h);
 }
 
 void Controller::apply_schedule()
@@ -349,7 +206,7 @@ void Controller::WebServerObserver::on_cmd_set_ch_enable(bool enable)
 {
     c_.endpoints_.ot_.set_ch_enable(enable);
     c_.model_.set_ch_enable(enable);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "CH: %s", enable ? "вкл" : "выкл");
 }
 
@@ -371,28 +228,28 @@ void Controller::WebServerObserver::on_cmd_set_ch_mode(int mode)
         c_.log_service_.event(LOG_CAT_USER, "Режим: ручной");
     }
     c_.model_.set_schedule(sched);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
 }
 
 void Controller::WebServerObserver::on_cmd_set_dhw_enable(bool enable)
 {
     c_.endpoints_.ot_.set_dhw_enable(enable);
     c_.model_.set_dhw_enable(enable);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "DHW: %s", enable ? "вкл" : "выкл");
 }
 
 void Controller::WebServerObserver::on_cmd_set_ch_setpoint(float temp)
 {
     c_.endpoints_.ot_.set_ch_setpoint(temp);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "Уставка CH: %.0f°C", (double)temp);
 }
 
 void Controller::WebServerObserver::on_cmd_set_dhw_setpoint(float temp)
 {
     c_.endpoints_.ot_.set_dhw_setpoint(temp);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "Уставка DHW: %.0f°C", (double)temp);
 }
 
@@ -402,7 +259,7 @@ void Controller::WebServerObserver::on_cmd_set_dhw_hysteresis(float value)
     if (value > 10.0f) value = 10.0f;
     c_.model_.set_dhw_hysteresis(value);
     c_.endpoints_.ot_.set_dhw_hysteresis(value);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "Гистерезис БКН: %.1f°C", (double)value);
 }
 
@@ -411,7 +268,7 @@ void Controller::WebServerObserver::on_cmd_set_sntp_servers(const char* srv0, co
     c_.model_.set_sntp_server0(srv0);
     c_.model_.set_sntp_server1(srv1);
     c_.endpoints_.sntp_.set_servers(srv0, srv1);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "NTP серверы: %s, %s", srv0, srv1);
 }
 
@@ -425,7 +282,7 @@ void Controller::WebServerObserver::on_cmd_set_schedule(const CH_Schedule& sched
 {
     c_.model_.set_schedule(schedule);
     c_.last_schedule_hour_ = -1;
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "Расписание: %s",
               schedule.enabled ? "вкл" : "выкл");
 }
@@ -434,7 +291,7 @@ void Controller::WebServerObserver::on_cmd_set_timezone(int offset)
 {
     c_.endpoints_.sntp_.set_timezone(offset);
     c_.model_.set_tz_offset(offset);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "Часовой пояс: UTC%+d", offset);
 }
 
@@ -526,7 +383,7 @@ void Controller::WebServerObserver::on_cmd_reset_gas_stats()
 void Controller::WebServerObserver::on_cmd_set_pid_enable(bool enable)
 {
     c_.pid_service_.set_enabled(enable);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "PID: %s", enable ? "вкл" : "выкл");
 }
 
@@ -535,7 +392,7 @@ void Controller::WebServerObserver::on_cmd_set_pid_kp(float value)
     c_.pid_service_.set_config(value, c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
         c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
         c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "PID Kp: %.3f", (double)value);
 }
 
@@ -544,7 +401,7 @@ void Controller::WebServerObserver::on_cmd_set_pid_ki(float value)
     c_.pid_service_.set_config(c_.pid_service_.get_kp(), value, c_.pid_service_.get_kd(),
         c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
         c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "PID Ki: %.5f", (double)value);
 }
 
@@ -553,7 +410,7 @@ void Controller::WebServerObserver::on_cmd_set_pid_kd(float value)
     c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), value,
         c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
         c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "PID Kd: %.3f", (double)value);
 }
 
@@ -562,7 +419,7 @@ void Controller::WebServerObserver::on_cmd_set_pid_dt_sec(int value)
     c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
         value, c_.pid_service_.get_room_sensor(),
         c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "PID dt: %d с", value);
 }
 
@@ -571,7 +428,7 @@ void Controller::WebServerObserver::on_cmd_set_pid_room_sensor(int value)
     c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
         c_.pid_service_.get_dt_sec(), value,
         c_.pid_service_.get_target_room(), c_.pid_service_.get_lockout_sec());
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "PID датчик: T%d", value + 1);
 }
 
@@ -580,7 +437,7 @@ void Controller::WebServerObserver::on_cmd_set_pid_target_room(float value)
     c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
         c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
         value, c_.pid_service_.get_lockout_sec());
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "PID цель: %.1f°C", (double)value);
 }
 
@@ -589,14 +446,14 @@ void Controller::WebServerObserver::on_cmd_set_pid_cycle_lockout_sec(int value)
     c_.pid_service_.set_config(c_.pid_service_.get_kp(), c_.pid_service_.get_ki(), c_.pid_service_.get_kd(),
         c_.pid_service_.get_dt_sec(), c_.pid_service_.get_room_sensor(),
         c_.pid_service_.get_target_room(), value);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "PID защита цикла: %d с", value);
 }
 
 void Controller::WebServerObserver::on_cmd_set_pid_hysteresis(float value)
 {
     c_.pid_service_.set_hysteresis(value);
-    c_.save_config_nvs();
+    c_.endpoints_.config_.save_config(c_.model_, c_.pid_service_);
     c_.log_service_.event(LOG_CAT_USER, "PID гистерезис: %.1f°C", (double)value);
 }
 

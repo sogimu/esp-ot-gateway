@@ -11,6 +11,7 @@ idf_component_register(
         "endpoints/sensors/sensors_endpoint.cpp"
         "endpoints/sntp/sntp_endpoint.cpp"
         "endpoints/wifi/wifi_endpoint.cpp"
+        "endpoints/config/config_endpoint.cpp"
         "log/log_service.cpp"
         "stats/stats_service.cpp"
         "predict/predict_service.cpp"

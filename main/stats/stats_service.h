@@ -3,18 +3,14 @@
 #include "model/model.h"
 #include "interfaces/iopentherm_observer.h"
 #include "endpoints/opentherm/opentherm_endpoint.h"
+#include "endpoints/config/config_endpoint.h"
 
 #include <cstdint>
 #include <cstring>
-#include "nvs.h"
-#include "nvs_flash.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
-
-#define HIST_BINS 1000
-#define CYCLE_RING 256
 
 // Gas flow history ring buffer for 1h sliding average at ~10s interval
 #define GAS_RING_SIZE 720
@@ -104,11 +100,10 @@ class StatsService : public IOpenthermObserver {
 public:
     StatsService(Model& model, OpenthermEndpoint& ot);
 
-    void start();
+    void start(ConfigEndpoint& config);
     void stop();
 
     GasFlowEstimator& gas() { return gas_; }
-    void load_nvs_meter();
     void request_save_meter();
     void request_save();
 
@@ -138,7 +133,6 @@ public:
 private:
     void push_stats();
     void try_gas_estimate();
-    void load_nvs();
     void save_nvs();
     void save_nvs_meter();
     void periodic_tick();
@@ -148,6 +142,7 @@ private:
 
     Model& model_;
     OpenthermEndpoint& ot_;
+    ConfigEndpoint* config_ = nullptr;
     bool started_ = false;
 
     esp_timer_handle_t tick_timer_ = nullptr;

@@ -5,6 +5,7 @@
 #include "endpoints/sensors/sensors_endpoint.h"
 #include "endpoints/sntp/sntp_endpoint.h"
 #include "endpoints/wifi/wifi_endpoint.h"
+#include "endpoints/config/config_endpoint.h"
 
 class Endpoints {
 public:
@@ -13,6 +14,7 @@ public:
     void start();
     void stop();
 
+    ConfigEndpoint      config_;
     WifiEndpoint        wifi_;
     OpenthermEndpoint   ot_;
     WebServerEndpoint   web_;

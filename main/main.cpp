@@ -8,7 +8,6 @@
 
 #include "esp_system.h"
 #include "esp_log.h"
-#include "nvs_flash.h"
 #include "esp_timer.h"
 
 #include "model/model.h"
@@ -24,17 +23,13 @@ static const char *TAG = "main";
 
 extern "C" void app_main(void)
 {
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        nvs_flash_erase();
-        nvs_flash_init();
-    }
-
     ESP_LOGI(TAG, "=== Газовый котёл Baxi duo-tec compact ===");
     ESP_LOGI(TAG, "MVC Architecture");
 
     Model model;
     Endpoints endpoints;
+
+    endpoints.config_.init();
 
     LogService   log_service(model);
     CrashService crash_service(log_service);
@@ -44,8 +39,8 @@ extern "C" void app_main(void)
     Controller   controller(model, endpoints, log_service, stats_service, pid_service);
 
     crash_service.start();
-    stats_service.start();
-    predict_service.start(endpoints.ot_);
+    stats_service.start(endpoints.config_);
+    predict_service.start(endpoints.ot_, endpoints.config_);
     pid_service.start();
     controller.start();
     endpoints.start();

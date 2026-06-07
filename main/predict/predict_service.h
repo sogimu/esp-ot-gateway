@@ -1,18 +1,18 @@
 #pragma once
 
 #include <stdint.h>
-#include "nvs_flash.h"
 #include "interfaces/iopentherm_observer.h"
 #include "model/model.h"
 #include "kalman2d.h"
 
 class OpenthermEndpoint;
+class ConfigEndpoint;
 
 class PredictService : public IOpenthermObserver {
 public:
     PredictService(Model& model);
 
-    void start(OpenthermEndpoint& ot);
+    void start(OpenthermEndpoint& ot, ConfigEndpoint& config);
 
     struct PredResult {
         bool active = false;
@@ -25,14 +25,6 @@ public:
     PredResult get_dhw_prediction() const { return dhw_result_; }
 
 private:
-    static constexpr const char* NVS_NS = "predict";
-
-    struct __attribute__((packed)) NvsPredictBlob {
-        float rates[3];
-        int32_t idx;
-        int32_t count;
-    };
-
     struct SessionHistory {
         static constexpr int N = 3;
         float rates_[N] = {};
@@ -42,8 +34,6 @@ private:
         void record(float rate);
         float prior_rate() const;
         float prior_variance() const;
-        void save_nvs() const;
-        void load_nvs();
     };
 
     struct DhwPred {
@@ -58,6 +48,7 @@ private:
     };
 
     Model& model_;
+    ConfigEndpoint* config_ = nullptr;
     DhwPred dhw_;
     PredResult dhw_result_;
 

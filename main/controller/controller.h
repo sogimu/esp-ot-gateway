@@ -28,9 +28,6 @@ private:
 
     int last_schedule_hour_;
 
-    void load_config_nvs();
-    void save_config_nvs();
-
     class OpenthermObserver : public IOpenthermObserver {
         Controller& c_;
     public:
