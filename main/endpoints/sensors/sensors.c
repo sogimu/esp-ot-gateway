@@ -54,9 +54,9 @@ static int ow_read_bit(int pin)
     ow_drive_low(pin);
     esp_rom_delay_us(3);
     ow_release(pin);
-    esp_rom_delay_us(8);
+    esp_rom_delay_us(12);   // больше времени на нарастание при слабом pull-up
     int bit = gpio_get_level(pin) ? 1 : 0;
-    esp_rom_delay_us(55);
+    esp_rom_delay_us(51);   // 3+12+51=66 мкс — общая длина слота сохранена
     return bit;
 }
 
@@ -91,33 +91,42 @@ static bool ds18b20_start_convert(int pin)
 static bool ds18b20_read_temp(int pin, float *out)
 {
     *out = -127.0f;
-    if (!ow_reset(pin)) return false;
-    ow_write_byte(pin, 0xCC);
-    ow_write_byte(pin, 0xBE);
-    uint8_t sp[9];
-    for (int i = 0; i < 9; i++) sp[i] = ow_read_byte(pin);
-    uint8_t crc = 0;
-    for (int i = 0; i < 8; i++) {
-        uint8_t b = sp[i];
-        for (int j = 0; j < 8; j++) {
-            uint8_t mix = (crc ^ b) & 1;
-            crc >>= 1;
-            if (mix) crc ^= 0x8C;
-            b >>= 1;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (!ow_reset(pin)) continue;
+        ow_write_byte(pin, 0xCC);
+        ow_write_byte(pin, 0xBE);
+        uint8_t sp[9];
+        for (int i = 0; i < 9; i++) sp[i] = ow_read_byte(pin);
+        uint8_t crc = 0;
+        for (int i = 0; i < 8; i++) {
+            uint8_t b = sp[i];
+            for (int j = 0; j < 8; j++) {
+                uint8_t mix = (crc ^ b) & 1;
+                crc >>= 1;
+                if (mix) crc ^= 0x8C;
+                b >>= 1;
+            }
         }
+        if (crc != sp[8]) continue;
+        int16_t raw = (int16_t)((sp[1] << 8) | sp[0]);
+        *out = (float)raw * 0.0625f;
+        return true;
     }
-    if (crc != sp[8]) return false;
-    int16_t raw = (int16_t)((sp[1] << 8) | sp[0]);
-    *out = (float)raw * 0.0625f;
-    return true;
+    return false;
 }
 
 /* ── Initialization ────────────────────────────────────────────────────────── */
 
 void sensors_init(void)
 {
-    gpio_reset_pin(SENSOR_T1_GPIO);
-    gpio_reset_pin(SENSOR_T2_GPIO);
+    gpio_config_t cfg = {
+        .pin_bit_mask = (1ULL << SENSOR_T1_GPIO) | (1ULL << SENSOR_T2_GPIO),
+        .mode         = GPIO_MODE_INPUT,
+        .pull_up_en   = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&cfg);
 
     /* Первая проверка presence (ещё до старта цикла опроса) */
     bool p1 = ow_reset(SENSOR_T1_GPIO);
@@ -129,13 +138,14 @@ void sensors_init(void)
 
 /* ── Non-blocking poll (state machine, runs every ~5 cycles) ───────────────── */
 
-static int s_skip = 5;
+static int s_skip = 1;
 static bool s_converting = false;
+static int t1_errors = 0, t2_errors = 0;
 
 void sensors_poll(void)
 {
     s_skip++;
-    if (s_skip < 5) return;
+    if (s_skip < 1) return;
     s_skip = 0;
 
     if (!s_converting) {
@@ -148,15 +158,29 @@ void sensors_poll(void)
         float t;
         if (ds18b20_read_temp(SENSOR_T1_GPIO, &t)) {
             sensor1_temp = t;
+            t1_errors = 0;
             ESP_LOGI(TAG, "T1=%.1f°C", (double)t);
         } else {
-            ESP_LOGW(TAG, "T1 read failed");
+            t1_errors++;
+            ESP_LOGW(TAG, "T1 read failed (%d)", t1_errors);
+            if (t1_errors >= 5) {
+                ESP_LOGW(TAG, "T1 bus recovery: reset x3");
+                for (int i = 0; i < 3; i++) ow_reset(SENSOR_T1_GPIO);
+                t1_errors = 0;
+            }
         }
         if (ds18b20_read_temp(SENSOR_T2_GPIO, &t)) {
             sensor2_temp = t;
+            t2_errors = 0;
             ESP_LOGI(TAG, "T2=%.1f°C", (double)t);
         } else {
-            ESP_LOGW(TAG, "T2 read failed");
+            t2_errors++;
+            ESP_LOGW(TAG, "T2 read failed (%d)", t2_errors);
+            if (t2_errors >= 5) {
+                ESP_LOGW(TAG, "T2 bus recovery: reset x3");
+                for (int i = 0; i < 3; i++) ow_reset(SENSOR_T2_GPIO);
+                t2_errors = 0;
+            }
         }
         s_converting = false;
     }

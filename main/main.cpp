@@ -15,8 +15,10 @@
 #include "controller/controller.h"
 #include "endpoints/endpoints.h"
 #include "log/log_service.h"
+#include "crash/crash_service.h"
 #include "stats/stats_service.h"
 #include "predict/predict_service.h"
+#include "pid/pid_service.h"
 
 static const char *TAG = "main";
 
@@ -35,12 +37,16 @@ extern "C" void app_main(void)
     Endpoints endpoints;
 
     LogService   log_service(model);
+    CrashService crash_service(log_service);
     StatsService stats_service(model, endpoints.ot_);
     PredictService predict_service(model);
-    Controller   controller(model, endpoints, log_service, stats_service);
+    PidService pid_service(model, endpoints.ot_, endpoints.sensors_);
+    Controller   controller(model, endpoints, log_service, stats_service, pid_service);
 
+    crash_service.start();
     stats_service.start();
     predict_service.start(endpoints.ot_);
+    pid_service.start();
     controller.start();
     endpoints.start();
 

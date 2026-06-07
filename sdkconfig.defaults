@@ -28,6 +28,15 @@ CONFIG_GPIO_CTRL_FUNC_IN_IRAM=y
 # Логирование
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 
+# Кастомная таблица разделов (добавлен coredump раздел)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Core dump to flash — сохраняет crash-инфо (стектрейс, причина) на flash
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_LOGGING=n
+
 # Оптимизация Flash: сжатие и скорость
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 CONFIG_ESPTOOLPY_FLASHMODE_DIO=y

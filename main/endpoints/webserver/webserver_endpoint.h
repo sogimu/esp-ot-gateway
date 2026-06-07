@@ -24,6 +24,7 @@ private:
     std::vector<IWebServerObserver*> observers_;
 
     void notify_cmd_ch_enable(bool enable);
+    void notify_cmd_ch_mode(int mode);
     void notify_cmd_dhw_enable(bool enable);
     void notify_cmd_ch_setpoint(float temp);
     void notify_cmd_dhw_setpoint(float temp);
@@ -35,6 +36,16 @@ private:
     void notify_cmd_add_gas_meter_correction(float reading);
     void notify_cmd_set_dhw_hysteresis(float value);
     void notify_cmd_set_sntp_servers(const char* srv0, const char* srv1);
+
+    void notify_cmd_set_pid_enable(bool enable);
+    void notify_cmd_set_pid_kp(float value);
+    void notify_cmd_set_pid_ki(float value);
+    void notify_cmd_set_pid_kd(float value);
+    void notify_cmd_set_pid_dt_sec(int value);
+    void notify_cmd_set_pid_room_sensor(int value);
+    void notify_cmd_set_pid_target_room(float value);
+    void notify_cmd_set_pid_cycle_lockout_sec(int value);
+    void notify_cmd_set_pid_hysteresis(float value);
 
     void notify_cmd_reset_modulation_stats();
     void notify_cmd_reset_cycle_stats();

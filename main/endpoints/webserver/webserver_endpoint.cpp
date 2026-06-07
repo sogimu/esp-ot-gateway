@@ -89,6 +89,11 @@ void WebServerEndpoint::notify_cmd_ch_enable(bool enable)
     for (auto* o : observers_) o->on_cmd_set_ch_enable(enable);
 }
 
+void WebServerEndpoint::notify_cmd_ch_mode(int mode)
+{
+    for (auto* o : observers_) o->on_cmd_set_ch_mode(mode);
+}
+
 void WebServerEndpoint::notify_cmd_dhw_enable(bool enable)
 {
     for (auto* o : observers_) o->on_cmd_set_dhw_enable(enable);
@@ -157,6 +162,51 @@ void WebServerEndpoint::notify_cmd_reset_cycle_stats()
 void WebServerEndpoint::notify_cmd_reset_gas_stats()
 {
     for (auto* o : observers_) o->on_cmd_reset_gas_stats();
+}
+
+void WebServerEndpoint::notify_cmd_set_pid_enable(bool enable)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_enable(enable);
+}
+
+void WebServerEndpoint::notify_cmd_set_pid_kp(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_kp(value);
+}
+
+void WebServerEndpoint::notify_cmd_set_pid_ki(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_ki(value);
+}
+
+void WebServerEndpoint::notify_cmd_set_pid_kd(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_kd(value);
+}
+
+void WebServerEndpoint::notify_cmd_set_pid_dt_sec(int value)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_dt_sec(value);
+}
+
+void WebServerEndpoint::notify_cmd_set_pid_room_sensor(int value)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_room_sensor(value);
+}
+
+void WebServerEndpoint::notify_cmd_set_pid_target_room(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_target_room(value);
+}
+
+void WebServerEndpoint::notify_cmd_set_pid_cycle_lockout_sec(int value)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_cycle_lockout_sec(value);
+}
+
+void WebServerEndpoint::notify_cmd_set_pid_hysteresis(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_hysteresis(value);
 }
 
 float WebServerEndpoint::json_get_float(const char* json, const char* key)
@@ -233,6 +283,9 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
     v = json_get_int(body, "\"ch_enable\"");
     if (v >= 0) self->notify_cmd_ch_enable(v != 0);
 
+    v = json_get_int(body, "\"ch_mode\"");
+    if (v >= 0) self->notify_cmd_ch_mode(v);
+
     v = json_get_int(body, "\"dhw_enable\"");
     if (v >= 0) self->notify_cmd_dhw_enable(v != 0);
 
@@ -281,6 +334,41 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
 
     v = json_get_int(body, "\"reset_gas_stats\"");
     if (v > 0) self->notify_cmd_reset_gas_stats();
+
+    int   iv;
+    float ff;
+
+    iv = json_get_int(body, "\"pid_enabled\"");
+    if (iv >= 0) self->notify_cmd_set_pid_enable(iv != 0);
+
+    ff = json_get_float(body, "\"pid_kp\"");
+    if (ff > -1e37f) self->notify_cmd_set_pid_kp(ff);
+
+    ff = json_get_float(body, "\"pid_ki\"");
+    if (ff > -1e37f) self->notify_cmd_set_pid_ki(ff);
+
+    ff = json_get_float(body, "\"pid_kd\"");
+    if (ff > -1e37f) self->notify_cmd_set_pid_kd(ff);
+
+    iv = json_get_int(body, "\"pid_dt_sec\"");
+    if (iv >= 0) self->notify_cmd_set_pid_dt_sec(iv);
+
+    iv = json_get_int(body, "\"pid_room_sensor\"");
+    if (iv >= 0) self->notify_cmd_set_pid_room_sensor(iv);
+
+    ff = json_get_float(body, "\"pid_target_room\"");
+    if (ff > -1e37f) {
+        if (ff < 16.0f) ff = 16.0f;
+        if (ff > 28.0f) ff = 28.0f;
+        self->notify_cmd_set_pid_target_room(ff);
+    }
+
+    iv = json_get_int(body, "\"pid_cycle_lockout\"");
+    if (iv >= 0) self->notify_cmd_set_pid_cycle_lockout_sec(iv);
+
+    ff = json_get_float(body, "\"pid_hysteresis\"");
+    if (ff > -1e37f) self->notify_cmd_set_pid_hysteresis(ff);
+
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     return httpd_resp_sendstr(req, "{\"ok\":true}");
