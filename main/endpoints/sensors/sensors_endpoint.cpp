@@ -61,13 +61,6 @@ void SensorsEndpoint::task_loop()
 {
     ESP_LOGI(TAG, "Sensors poll task started");
     while (running_) {
-        skip_++;
-        if (skip_ < 5) {
-            vTaskDelay(pdMS_TO_TICKS(1100));
-            continue;
-        }
-        skip_ = 0;
-
         if (!converting_) {
             sensors_poll();
             converting_ = sensor1_temp > -100.0f || sensor2_temp > -100.0f;
@@ -84,7 +77,7 @@ void SensorsEndpoint::task_loop()
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(1100));
+        vTaskDelay(pdMS_TO_TICKS(800));
     }
     vTaskDelete(nullptr);
 }

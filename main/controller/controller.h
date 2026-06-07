@@ -59,6 +59,7 @@ private:
     public:
         explicit WebServerObserver(Controller& c) : c_(c) {}
         void on_cmd_set_ch_enable(bool enable) override;
+        void on_cmd_set_ch_mode(int mode) override;
         void on_cmd_set_dhw_enable(bool enable) override;
         void on_cmd_set_ch_setpoint(float temp) override;
         void on_cmd_set_dhw_setpoint(float temp) override;
@@ -81,6 +82,7 @@ private:
         void on_cmd_set_pid_room_sensor(int value) override;
         void on_cmd_set_pid_target_room(float value) override;
         void on_cmd_set_pid_cycle_lockout_sec(int value) override;
+        void on_cmd_set_pid_hysteresis(float value) override;
     };
 
     class SensorsObserver : public ISensorsObserver {

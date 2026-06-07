@@ -21,6 +21,7 @@ public:
     void set_enabled(bool en);
     void set_config(float kp, float ki, float kd, int dt_sec,
                     int room_sensor, float target_room, int lockout_sec);
+    void set_hysteresis(float h);
 
     bool  is_enabled() const { return enabled_; }
     float get_kp()     const { return kp_; }
@@ -30,6 +31,7 @@ public:
     int   get_room_sensor() const { return room_sensor_; }
     float get_target_room() const { return target_room_; }
     int   get_lockout_sec() const { return lockout_sec_; }
+    float get_hysteresis()  const { return hysteresis_; }
 
 private:
     Model& model_;
@@ -42,8 +44,10 @@ private:
     int    room_sensor_ = 0;
     float  target_room_ = 22.0f;
     int    lockout_sec_ = 300;
+    float  hysteresis_ = 0.5f;
 
     bool   active_ = false;
+    bool   ch_enabled_by_pid_ = false;
     float  output_ = 0.0f;
     float  p_ = 0, i_ = 0, d_ = 0;
 
@@ -55,8 +59,14 @@ private:
     bool     dhw_active_ = false;
     bool     cycle_locked_ = false;
     int      remaining_lockout_ = 0;
+    bool     lockout_logged_ = false;
+    bool     lockout_ended_ = false;
+    bool     timeout_logged_ = false;
+    bool     overheat_logged_ = false;
+    bool     hyst_block_logged_ = false;
 
     uint32_t last_compute_ms_ = 0;
+    uint32_t start_ms_ = 0;
     int      tick_count_ = 0;
     bool     sensor_timeout_ = false;
 

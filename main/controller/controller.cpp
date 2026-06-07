@@ -124,9 +124,19 @@ void Controller::load_config_nvs()
     if (nvs_get_i32(h, "pid_sensor", &i32) == ESP_OK) sensor = (int)i32;
     if (nvs_get_i32(h, "pid_target", &i32) == ESP_OK) target = (float)i32 / 10.0f;
     if (nvs_get_i32(h, "pid_lockout", &i32) == ESP_OK) lockout = (int)i32;
+    float hyst = 0.5f;
+    if (nvs_get_i32(h, "pid_hyst", &i32) == ESP_OK) hyst = (float)i32 / 10.0f;
+    int ch_mode = 0;
+    if (nvs_get_i32(h, "ch_mode", &i32) == ESP_OK) ch_mode = (int)i32;
 
+    model_.set_ch_mode(ch_mode);
     pid_service_.set_config(kp, ki, kd, dt_sec, sensor, target, lockout);
-    pid_service_.set_enabled(pid_en);
+    pid_service_.set_hysteresis(hyst);
+    if (ch_mode == 1) {
+        pid_service_.set_enabled(true);
+    } else {
+        pid_service_.set_enabled(pid_en);
+    }
 
     nvs_close(h);
 }
@@ -157,6 +167,8 @@ void Controller::save_config_nvs()
     nvs_set_i32(h, "pid_sensor", (int32_t)pid_service_.get_room_sensor());
     nvs_set_i32(h, "pid_target", (int32_t)(pid_service_.get_target_room() * 10.0f + 0.5f));
     nvs_set_i32(h, "pid_lockout", (int32_t)pid_service_.get_lockout_sec());
+    nvs_set_i32(h, "pid_hyst", (int32_t)(pid_service_.get_hysteresis() * 10.0f + 0.5f));
+    nvs_set_i32(h, "ch_mode", (int32_t)model_.get_ch_mode());
 
     nvs_commit(h);
     nvs_close(h);
@@ -339,6 +351,27 @@ void Controller::WebServerObserver::on_cmd_set_ch_enable(bool enable)
     c_.model_.set_ch_enable(enable);
     c_.save_config_nvs();
     c_.log_service_.event(LOG_CAT_USER, "CH: %s", enable ? "вкл" : "выкл");
+}
+
+void Controller::WebServerObserver::on_cmd_set_ch_mode(int mode)
+{
+    c_.model_.set_ch_mode(mode);
+    auto sched = c_.model_.get_schedule();
+    if (mode == 1) {
+        c_.pid_service_.set_enabled(true);
+        sched.enabled = false;
+        c_.log_service_.event(LOG_CAT_USER, "Режим: ПИД");
+    } else if (mode == 2) {
+        c_.pid_service_.set_enabled(false);
+        sched.enabled = true;
+        c_.log_service_.event(LOG_CAT_USER, "Режим: расписание");
+    } else {
+        c_.pid_service_.set_enabled(false);
+        sched.enabled = false;
+        c_.log_service_.event(LOG_CAT_USER, "Режим: ручной");
+    }
+    c_.model_.set_schedule(sched);
+    c_.save_config_nvs();
 }
 
 void Controller::WebServerObserver::on_cmd_set_dhw_enable(bool enable)
@@ -558,6 +591,13 @@ void Controller::WebServerObserver::on_cmd_set_pid_cycle_lockout_sec(int value)
         c_.pid_service_.get_target_room(), value);
     c_.save_config_nvs();
     c_.log_service_.event(LOG_CAT_USER, "PID защита цикла: %d с", value);
+}
+
+void Controller::WebServerObserver::on_cmd_set_pid_hysteresis(float value)
+{
+    c_.pid_service_.set_hysteresis(value);
+    c_.save_config_nvs();
+    c_.log_service_.event(LOG_CAT_USER, "PID гистерезис: %.1f°C", (double)value);
 }
 
 // ===== SensorsObserver =====

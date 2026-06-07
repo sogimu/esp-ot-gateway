@@ -8,6 +8,7 @@ public:
     virtual ~IWebServerObserver() = default;
 
     virtual void on_cmd_set_ch_enable(bool enable) = 0;
+    virtual void on_cmd_set_ch_mode(int mode) = 0;
     virtual void on_cmd_set_dhw_enable(bool enable) = 0;
     virtual void on_cmd_set_ch_setpoint(float temp) = 0;
     virtual void on_cmd_set_dhw_setpoint(float temp) = 0;
@@ -33,4 +34,5 @@ public:
     virtual void on_cmd_set_pid_room_sensor(int value) = 0;
     virtual void on_cmd_set_pid_target_room(float value) = 0;
     virtual void on_cmd_set_pid_cycle_lockout_sec(int value) = 0;
+    virtual void on_cmd_set_pid_hysteresis(float value) = 0;
 };

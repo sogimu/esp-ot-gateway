@@ -26,7 +26,8 @@ enum LogCategory {
     LOG_CAT_SYSTEM,
     LOG_CAT_USER,
     LOG_CAT_EQUIP,
-    LOG_CAT_MODE
+    LOG_CAT_MODE,
+    LOG_CAT_BOOT     // 4 — запуск/краш/перезагрузка
 };
 
 struct LogEntry {
@@ -100,8 +101,10 @@ public:
     void set_pid_state(bool enabled, bool active, float output,
                        float p, float i, float d,
                        float room_temp, float target_room,
-                       bool cycle_locked, int remaining_lockout);
+                       bool cycle_locked, int remaining_lockout,
+                       bool ch_enabled);
     void set_pid_config(float kp, float ki, float kd, int dt_sec, int room_sensor, float target_room, int lockout_sec);
+    void set_pid_hysteresis(float v);
     void set_schedule(const CH_Schedule& sched);
     void set_tz_offset(int v);
     void set_dhw_hysteresis(float v);
@@ -160,12 +163,16 @@ public:
     float    get_pid_target_room() const { return pid_target_room_; }
     bool     get_pid_cycle_locked() const { return pid_cycle_locked_; }
     int      get_pid_remaining_lockout() const { return pid_remaining_lockout_; }
+    bool     get_pid_ch_enabled() const { return pid_ch_enabled_; }
     float    get_pid_kp() const { return pid_kp_; }
     float    get_pid_ki() const { return pid_ki_; }
     float    get_pid_kd() const { return pid_kd_; }
     int      get_pid_dt_sec() const { return pid_dt_sec_; }
     int      get_pid_room_sensor() const { return pid_room_sensor_; }
     int      get_pid_lockout_sec() const { return pid_lockout_sec_; }
+    float    get_pid_hysteresis() const { return pid_hysteresis_; }
+    int      get_ch_mode() const { return ch_mode_; }
+    void     set_ch_mode(int v);
     const CH_Schedule& get_schedule() const { return schedule_; }
     int      get_tz_offset()   const { return tz_offset_; }
 
@@ -230,12 +237,15 @@ private:
     float    pid_target_room_ = 0;
     bool     pid_cycle_locked_ = false;
     int      pid_remaining_lockout_ = 0;
+    bool     pid_ch_enabled_ = false;
     float    pid_kp_ = 2.0f;
     float    pid_ki_ = 0.01f;
     float    pid_kd_ = 0.0f;
     int      pid_dt_sec_ = 60;
     int      pid_room_sensor_ = 0;
     int      pid_lockout_sec_ = 300;
+    float    pid_hysteresis_ = 0.5f;
+    int      ch_mode_ = 0;
     CH_Schedule schedule_;
     int      tz_offset_;
     float    dhw_hyst_on_ = 2.0f;

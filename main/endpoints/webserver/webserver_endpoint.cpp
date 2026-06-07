@@ -89,6 +89,11 @@ void WebServerEndpoint::notify_cmd_ch_enable(bool enable)
     for (auto* o : observers_) o->on_cmd_set_ch_enable(enable);
 }
 
+void WebServerEndpoint::notify_cmd_ch_mode(int mode)
+{
+    for (auto* o : observers_) o->on_cmd_set_ch_mode(mode);
+}
+
 void WebServerEndpoint::notify_cmd_dhw_enable(bool enable)
 {
     for (auto* o : observers_) o->on_cmd_set_dhw_enable(enable);
@@ -199,6 +204,11 @@ void WebServerEndpoint::notify_cmd_set_pid_cycle_lockout_sec(int value)
     for (auto* o : observers_) o->on_cmd_set_pid_cycle_lockout_sec(value);
 }
 
+void WebServerEndpoint::notify_cmd_set_pid_hysteresis(float value)
+{
+    for (auto* o : observers_) o->on_cmd_set_pid_hysteresis(value);
+}
+
 float WebServerEndpoint::json_get_float(const char* json, const char* key)
 {
     const char* p = strstr(json, key);
@@ -272,6 +282,9 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
 
     v = json_get_int(body, "\"ch_enable\"");
     if (v >= 0) self->notify_cmd_ch_enable(v != 0);
+
+    v = json_get_int(body, "\"ch_mode\"");
+    if (v >= 0) self->notify_cmd_ch_mode(v);
 
     v = json_get_int(body, "\"dhw_enable\"");
     if (v >= 0) self->notify_cmd_dhw_enable(v != 0);
@@ -352,6 +365,9 @@ esp_err_t WebServerEndpoint::handler_control(httpd_req_t* req)
 
     iv = json_get_int(body, "\"pid_cycle_lockout\"");
     if (iv >= 0) self->notify_cmd_set_pid_cycle_lockout_sec(iv);
+
+    ff = json_get_float(body, "\"pid_hysteresis\"");
+    if (ff > -1e37f) self->notify_cmd_set_pid_hysteresis(ff);
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
