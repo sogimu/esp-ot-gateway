@@ -118,16 +118,19 @@ if(ENABLE_COVERAGE)
             COMMAND ${CMAKE_COMMAND} -E make_directory ${COVERAGE_DIR}
             # Run tests (gcda files written on clean exit)
             COMMAND ./run_tests > /dev/null
-            # Capture coverage data (ignore branch data — GCC --coverage doesn't emit it)
-            COMMAND ${LCOV} --capture --directory . --output-file ${COVERAGE_DIR}/coverage.info --ignore-errors unused
+            # Capture coverage data (disable branch coverage — GCC doesn't emit it)
+            COMMAND ${LCOV} --capture --directory . --output-file ${COVERAGE_DIR}/coverage.info
+                --rc branch_coverage=0 --ignore-errors unused
             # Exclude test files and system headers from report
             COMMAND ${LCOV} --remove ${COVERAGE_DIR}/coverage.info
                 '*/test/*' '*/fakes/*' '/usr/*'
-                --output-file ${COVERAGE_DIR}/coverage.info --ignore-errors unused
-            # HTML report (ignore missing branch/function data)
+                --output-file ${COVERAGE_DIR}/coverage.info
+                --rc branch_coverage=0 --ignore-errors unused
+            # HTML report
             COMMAND ${GENHTML} ${COVERAGE_DIR}/coverage.info
                 --output-directory ${COVERAGE_DIR}/html
-                --title "esp-ot-gateway test coverage" --ignore-errors source,empty,mismatch
+                --title "esp-ot-gateway test coverage"
+                --rc branch_coverage=0 --ignore-errors unused,empty,corrupt
             DEPENDS run_tests
             COMMENT "Generating coverage report..."
         )
