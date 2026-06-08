@@ -1,0 +1,8 @@
+build/
+build_test/
+.claude/
+sdkconfig
+sdkconfig.old
+*.swp
+*.swo
+.DS_Store
