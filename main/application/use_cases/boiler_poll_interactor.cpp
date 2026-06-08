@@ -178,7 +178,7 @@ void BoilerPollInteractor::do_handshake()
 
     if (any_success) {
         handshake_done_ = true;
-        log_.event(ILogger::SYSTEM, "OT handshake complete");
+        log_.event(ILogger::SYSTEM, "OT рукопожатие завершено");
     }
     // If no success, handshake_done_ stays false → retry in 10s
 }
@@ -204,14 +204,14 @@ void BoilerPollInteractor::do_dhw_hysteresis()
             dhw_priority_ = true;
             dhw_session_start_ms_ = now_ms();
             dhw_session_min_temp_ = dhw_temp;
-            log_.event(ILogger::MODE, "DHW session started at %.1f C", (double)dhw_temp);
+            log_.event(ILogger::MODE, "ГВС нагрев начат с %.1f C", (double)dhw_temp);
         } else if (dhw_priority_ && DHWHysteresisService::should_stop(dhw_temp, dhw_setpoint)) {
             dhw_priority_ = false;
             uint32_t dur = now_ms() - dhw_session_start_ms_;
             state_.lock_exclusive();
             state_.set_dhw_session_finished(dur, dhw_session_min_temp_);
             state_.unlock_exclusive();
-            log_.event(ILogger::MODE, "DHW session finished: %lu s from %.1f C",
+            log_.event(ILogger::MODE, "ГВС нагрев завершён: %lu с с %.1f C",
                        (unsigned long)(dur / 1000), (double)dhw_session_min_temp_);
             dhw_session_start_ms_ = 0;
         }
@@ -281,7 +281,7 @@ void BoilerPollInteractor::do_status()
             state_.lock_exclusive();
             state_.set_connected(true);
             state_.unlock_exclusive();
-            log_.event(ILogger::SYSTEM, "Boiler connected");
+            log_.event(ILogger::SYSTEM, "Котёл подключён");
         }
 
         if (fault != last_fault_ || flame != last_flame_ ||
@@ -531,7 +531,7 @@ void BoilerPollInteractor::check_connectivity()
 {
     if (now_ms() - last_response_ms_ > CONNECTIVITY_TIMEOUT_MS && connected_) {
         connected_ = false;
-        log_.event(ILogger::EQUIP, "Boiler disconnected (>10s)");
+        log_.event(ILogger::EQUIP, "Котёл отключён (>10с)");
         state_.lock_exclusive();
         state_.set_connected(false);
         state_.unlock_exclusive();

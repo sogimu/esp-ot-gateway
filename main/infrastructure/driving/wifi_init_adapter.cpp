@@ -31,15 +31,15 @@ void WifiInitAdapter::event_handler(void* arg, esp_event_base_t base, int32_t id
         if (self->retry_count_ < MAX_RETRY) {
             esp_wifi_connect();
             self->retry_count_++;
-            ESP_LOGI(TAG, "WiFi retry %d/%d", self->retry_count_, MAX_RETRY);
+            ESP_LOGI(TAG, "WiFi повтор %d/%d", self->retry_count_, MAX_RETRY);
         } else {
             xEventGroupSetBits(self->event_group_, WIFI_FAIL_BIT);
-            ESP_LOGE(TAG, "WiFi failed after %d retries", MAX_RETRY);
+            ESP_LOGE(TAG, "WiFi ошибка после %d попыток", MAX_RETRY);
         }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         auto* event = (ip_event_got_ip_t*)data;
-        ESP_LOGI(TAG, "WiFi connected. IP: " IPSTR, IP2STR(&event->ip_info.ip));
-        ESP_LOGI(TAG, "Web: http://" IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "WiFi подключён. IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "Веб: http://" IPSTR, IP2STR(&event->ip_info.ip));
         self->retry_count_ = 0;
         self->connected_ = true;
         xEventGroupSetBits(self->event_group_, WIFI_CONNECTED_BIT);
@@ -74,7 +74,7 @@ bool WifiInitAdapter::start()
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_cfg));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "Connecting to SSID: %s ...", WIFI_SSID);
+    ESP_LOGI(TAG, "Подключение к SSID: %s ...", WIFI_SSID);
 
     EventBits_t bits = xEventGroupWaitBits(event_group_,
         WIFI_CONNECTED_BIT | WIFI_FAIL_BIT, pdFALSE, pdFALSE,
@@ -85,7 +85,7 @@ bool WifiInitAdapter::start()
         connected_ = true;
         return true;
     }
-    ESP_LOGE(TAG, "WiFi connection failed — restarting in 5 sec");
+    ESP_LOGE(TAG, "WiFi ошибка — перезагрузка через 5 сек");
     vTaskDelay(pdMS_TO_TICKS(5000));
     esp_restart();
     return false;

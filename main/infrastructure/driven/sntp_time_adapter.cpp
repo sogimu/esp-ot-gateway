@@ -25,7 +25,7 @@ void SntpTimeAdapter::start()
     if (started_) return;
     started_ = true;
 
-    ESP_LOGI(TAG, "Initializing SNTP...");
+    ESP_LOGI(TAG, "Инициализация SNTP...");
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, srv0_);
     esp_sntp_setservername(1, srv1_);
@@ -33,7 +33,7 @@ void SntpTimeAdapter::start()
 
     set_timezone(tz_offset_);
 
-    ESP_LOGI(TAG, "SNTP started, servers: %s, %s", srv0_, srv1_);
+    ESP_LOGI(TAG, "SNTP запущен, серверы: %s, %s", srv0_, srv1_);
 }
 
 void SntpTimeAdapter::set_timezone(int tz)
@@ -43,7 +43,7 @@ void SntpTimeAdapter::set_timezone(int tz)
     snprintf(tz_str, sizeof(tz_str), "UTC%s%d", tz >= 0 ? "+" : "", tz);
     setenv("TZ", tz_str, 1);
     tzset();
-    ESP_LOGI(TAG, "Timezone: %s", tz_str);
+    ESP_LOGI(TAG, "Часовой пояс: %s", tz_str);
 }
 
 void SntpTimeAdapter::set_servers(const char* srv0, const char* srv1)

@@ -115,7 +115,7 @@ extern "C" void app_main(void)
 
     MainPollerTaskAdapter poll_task(main_poller);
     poll_task.start();
-    ESP_LOGI("main", "Poll task started (7 IPollable)");
+    ESP_LOGI("main", "Задача опроса запущена (7 IPollable)");
 
     // ── Phase 8: HTTP server ─────────────────────────────
     HttpControllerAdapter http;
@@ -134,7 +134,7 @@ extern "C" void app_main(void)
         int idle0 = (int)ulTaskGetIdleRunTimePercentForCore(0);
         int idle1 = (int)ulTaskGetIdleRunTimePercentForCore(1);
 
-        ESP_LOGI(TAG, "Uptime: %lld s, free heap: %" PRIu32
+        ESP_LOGI(TAG, "Аптайм: %lld с, свободно: %" PRIu32
                  " | CPU: core0=%d%% core1=%d%% total=%d%%",
                  esp_timer_get_time() / 1000000,
                  esp_get_free_heap_size(),

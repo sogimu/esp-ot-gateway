@@ -27,7 +27,7 @@ void HttpControllerAdapter::start()
     config.stack_size          = 10240; // need 10KB: handler buf (4K) + httpd internal (~3K) + render_status args
 
     if (httpd_start(&server_, &config) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start HTTP server");
+        ESP_LOGE(TAG, "Ошибка запуска HTTP сервера");
         return;
     }
     static const httpd_uri_t routes[] = {
@@ -40,7 +40,7 @@ void HttpControllerAdapter::start()
     };
     for (int i = 0; i < 6; i++)
         httpd_register_uri_handler(server_, &routes[i]);
-    ESP_LOGI(TAG, "HTTP server started on port %d", config.server_port);
+    ESP_LOGI(TAG, "HTTP сервер запущен на порту %d", config.server_port);
 }
 void HttpControllerAdapter::stop() { if (server_) { httpd_stop(server_); server_ = nullptr; } }
 
@@ -72,7 +72,7 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
     char body[256] = {0};
     int recv_len = httpd_req_recv(req, body, sizeof(body)-1);
     if (recv_len <= 0) {
-        ESP_LOGW(TAG, "POST body empty or error: %d", recv_len);
+        ESP_LOGW(TAG, "POST пустой или ошибка: %d", recv_len);
         httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"empty body\"}");
         return ESP_FAIL;
     }

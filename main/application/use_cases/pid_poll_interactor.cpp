@@ -67,7 +67,7 @@ void PidPollInteractor::poll()
         state_.set_ch_setpoint(MIN_SETPOINT);  // signal BoilerPollInteractor via state
         state_.unlock_exclusive();
         if (!overheat_logged_) {
-            log_.event(ILogger::MODE, "PID: OVERHEAT %.1f>%.0f, SP %.0f", (double)room, (double)MAX_SAFE_ROOM, (double)MIN_SETPOINT);
+            log_.event(ILogger::MODE, "PID: ПЕРЕГРЕВ %.1f>%.0f, SP %.0f", (double)room, (double)MAX_SAFE_ROOM, (double)MIN_SETPOINT);
             overheat_logged_ = true;
         }
         return;
@@ -80,7 +80,7 @@ void PidPollInteractor::poll()
         state_.set_pid_state(enabled, true, MIN_SETPOINT, 0, 0, 0, room, state_.get_pid_target_room(), true, lockout, false);
         state_.unlock_exclusive();
         if (!lockout_logged_) {
-            log_.event(ILogger::MODE, "PID: cycle lockout, SP %.0f", (double)MIN_SETPOINT);
+            log_.event(ILogger::MODE, "PID: блокировка цикла, SP %.0f", (double)MIN_SETPOINT);
             lockout_logged_ = true;
         }
         return;

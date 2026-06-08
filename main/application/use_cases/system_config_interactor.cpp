@@ -43,7 +43,7 @@ void SystemConfigInteractor::set_ch_mode(int mode)
                           state_.get_pid_cycle_locked(), state_.get_pid_remaining_lockout(),
                           state_.get_pid_ch_enabled_by_pid());
     state_.unlock_exclusive();
-    save_and_log("CH mode: %d", mode);
+    save_and_log("Режим CH: %d", mode);
 }
 
 void SystemConfigInteractor::set_ch_enable(bool en)
@@ -51,7 +51,7 @@ void SystemConfigInteractor::set_ch_enable(bool en)
     state_.lock_exclusive();
     state_.set_ch_enable(en);
     state_.unlock_exclusive();
-    save_and_log("CH: %s", en ? "on" : "off");
+    save_and_log("CH: %s", en ? "вкл" : "выкл");
 }
 
 void SystemConfigInteractor::set_dhw_enable(bool en)
@@ -59,7 +59,7 @@ void SystemConfigInteractor::set_dhw_enable(bool en)
     state_.lock_exclusive();
     state_.set_dhw_enable(en);
     state_.unlock_exclusive();
-    save_and_log("DHW: %s", en ? "on" : "off");
+    save_and_log("ГВС: %s", en ? "вкл" : "выкл");
 }
 
 void SystemConfigInteractor::set_ch_setpoint(float sp)
@@ -70,7 +70,7 @@ void SystemConfigInteractor::set_ch_setpoint(float sp)
     state_.set_ch_setpoint(sp);
     state_.unlock_exclusive();
     // OT write is handled by BoilerPollInteractor::do_extra_step() at step 1/10
-    save_and_log("CH setpoint: %.0f C", (double)sp);
+    save_and_log("Уставка CH: %.0f C", (double)sp);
 }
 
 void SystemConfigInteractor::set_dhw_setpoint(float sp)
@@ -81,7 +81,7 @@ void SystemConfigInteractor::set_dhw_setpoint(float sp)
     state_.set_dhw_setpoint(sp);
     state_.unlock_exclusive();
     // OT write is handled by BoilerPollInteractor::do_extra_step() at step 3/6/11
-    save_and_log("DHW setpoint: %.0f C", (double)sp);
+    save_and_log("Уставка ГВС: %.0f C", (double)sp);
 }
 
 void SystemConfigInteractor::set_dhw_hysteresis(float v)
@@ -91,7 +91,7 @@ void SystemConfigInteractor::set_dhw_hysteresis(float v)
     state_.lock_exclusive();
     state_.set_dhw_hysteresis(v);
     state_.unlock_exclusive();
-    save_and_log("DHW hysteresis: %.1f C", (double)v);
+    save_and_log("Гистерезис ГВС: %.1f C", (double)v);
 }
 
 void SystemConfigInteractor::set_schedule(const CH_Schedule& sched)
@@ -99,7 +99,7 @@ void SystemConfigInteractor::set_schedule(const CH_Schedule& sched)
     state_.lock_exclusive();
     state_.set_schedule(&sched);
     state_.unlock_exclusive();
-    save_and_log("Schedule: %s", sched.enabled ? "on" : "off");
+    save_and_log("Расписание: %s", sched.enabled ? "вкл" : "выкл");
 }
 
 void SystemConfigInteractor::set_timezone(int offset)
@@ -108,7 +108,7 @@ void SystemConfigInteractor::set_timezone(int offset)
     state_.set_tz_offset(offset);
     state_.unlock_exclusive();
     time_.set_timezone(offset);  // update TZ env var for localtime_r
-    save_and_log("Timezone: UTC%+d", offset);
+    save_and_log("Часовой пояс: UTC%+d", offset);
 }
 
 void SystemConfigInteractor::set_sntp_servers(const char* srv0, const char* srv1)
@@ -117,7 +117,7 @@ void SystemConfigInteractor::set_sntp_servers(const char* srv0, const char* srv1
     state_.set_sntp_server0(srv0);
     state_.set_sntp_server1(srv1);
     state_.unlock_exclusive();
-    save_and_log("NTP: %s, %s", srv0, srv1);
+    save_and_log("NTP серверы: %s, %s", srv0, srv1);
 }
 
 // IConfigurePid
@@ -130,7 +130,7 @@ void SystemConfigInteractor::set_pid_enable(bool en)
                           state_.get_pid_cycle_locked(), state_.get_pid_remaining_lockout(),
                           state_.get_pid_ch_enabled_by_pid());
     state_.unlock_exclusive();
-    save_and_log("PID: %s", en ? "on" : "off");
+    save_and_log("PID: %s", en ? "вкл" : "выкл");
 }
 
 void SystemConfigInteractor::set_pid_parameters(float kp, float ki, float kd, int dt_sec,
@@ -148,7 +148,7 @@ void SystemConfigInteractor::set_pid_hysteresis(float v)
     state_.lock_exclusive();
     state_.set_pid_hysteresis(v);
     state_.unlock_exclusive();
-    save_and_log("PID hysteresis: %.1f C", (double)v);
+    save_and_log("Гистерезис PID: %.1f C", (double)v);
 }
 
 // IFaultReset — fault reset is handled by BoilerPollInteractor::do_status()
@@ -157,21 +157,21 @@ void SystemConfigInteractor::reset()
 {
     // Set fault reset flag in boiler poll interactor if wired
     if (boiler_poll_) boiler_poll_->trigger_fault_reset();
-    log_.event(ILogger::USER, "Fault reset requested");
+    log_.event(ILogger::USER, "Сброс ошибки запрошен");
 }
 
 // IResetStatistics
 void SystemConfigInteractor::reset_modulation_stats()
 {
-    log_.event(ILogger::USER, "Modulation stats reset");
+    log_.event(ILogger::USER, "Статистика модуляции сброшена");
 }
 
 void SystemConfigInteractor::reset_cycle_stats()
 {
-    log_.event(ILogger::USER, "Cycle stats reset");
+    log_.event(ILogger::USER, "Статистика циклов сброшена");
 }
 
 void SystemConfigInteractor::reset_gas_stats()
 {
-    log_.event(ILogger::USER, "Gas stats reset");
+    log_.event(ILogger::USER, "Статистика газа сброшена");
 }

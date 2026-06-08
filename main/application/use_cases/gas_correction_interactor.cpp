@@ -18,7 +18,7 @@ void GasCorrectionInteractor::set_k_calib(float v)
     state_.set_k_calib(v);
     state_.unlock_exclusive();
     config_.save_config(state_);
-    log_.event(ILogger::USER, "K_calib: %.3f", (double)v);
+    log_.event(ILogger::USER, "K_калиб: %.3f", (double)v);
 }
 
 void GasCorrectionInteractor::set_p_max(float v)
@@ -44,12 +44,12 @@ void GasCorrectionInteractor::set_gas_meter_base(float v)
     state_.set_gas_meter_base(v);
     state_.unlock_exclusive();
     config_.save_config(state_);
-    log_.event(ILogger::USER, "Meter base: %.3f", (double)v);
+    log_.event(ILogger::USER, "База счётчика: %.3f", (double)v);
 }
 
 void GasCorrectionInteractor::add_meter_correction(float reading)
 {
     // Strangler pattern: old Controller does the real correction calculation.
     // This interactor will take over in Step 10.
-    log_.event(ILogger::USER, "Meter correction: %.3f", (double)reading);
+    log_.event(ILogger::USER, "Коррекция счётчика: %.3f", (double)reading);
 }
