@@ -71,10 +71,24 @@ target_compile_features(run_tests PRIVATE cxx_std_17)
 target_compile_options(run_tests PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 # ── Sanitizers ────────────────────────────────────────
-option(ENABLE_SANITIZERS "Build with address and undefined behavior sanitizers" ON)
+option(ENABLE_SANITIZERS "Build with maximum sanitizers" ON)
 if(ENABLE_SANITIZERS)
-    target_compile_options(run_tests PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
-    target_link_options(run_tests PRIVATE -fsanitize=address,undefined)
+    set(SAN_COMPILE
+        -fsanitize=address              # buffer overflow, use-after-free, double-free, leaks
+        -fsanitize=undefined            # null deref, signed overflow, misaligned, div-by-zero
+        -fsanitize=pointer-compare      # pointer comparison across allocations
+        -fsanitize=pointer-subtract     # pointer subtraction across allocations
+        -fno-omit-frame-pointer         # readable stack traces
+        -fno-sanitize-recover=all       # abort on first error (fail fast in CI)
+        -fstack-protector-strong        # stack smashing detection
+        -fstack-clash-protection        # stack overflow detection
+    )
+    target_compile_options(run_tests PRIVATE ${SAN_COMPILE})
+    target_link_options(run_tests PRIVATE ${SAN_COMPILE})
+    target_compile_definitions(run_tests PRIVATE
+        _GLIBCXX_ASSERTIONS             # std::vector bounds, std::optional access
+        _FORTIFY_SOURCE=3               # buffer overflow in memcpy/sprintf (glibc >=2.34)
+    )
 endif()
 
 # ── Convenience target: make test ─────────────────────────
