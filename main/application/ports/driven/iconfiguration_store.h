@@ -31,5 +31,9 @@ public:
     virtual void save_predict(const float rates[3], int idx, int count) = 0;
     virtual bool load_predict(float rates[3], int& idx, int& count) = 0;
 
+    /// Save/load burner runtime seconds (survives reboot).
+    virtual void save_burner_sec(uint32_t burner_sec, uint32_t cycle_cnt) = 0;
+    virtual bool load_burner_sec(uint32_t& burner_sec, uint32_t& cycle_cnt) = 0;
+
     virtual ~IConfigurationStore() = default;
 };

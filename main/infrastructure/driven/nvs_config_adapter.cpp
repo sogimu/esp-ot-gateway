@@ -188,3 +188,31 @@ void NvsConfigAdapter::save_predict(const float r[3], int idx, int cnt)
     nvs_set_blob(n, "dhw_hist", &b, sizeof(b));
     nvs_commit(n); nvs_close(n);
 }
+
+// ── Burner runtime persistence (stats namespace, "burn_sec" key) ──
+
+bool NvsConfigAdapter::load_burner_sec(uint32_t& burner_sec, uint32_t& cycle_cnt)
+{
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READONLY, &n) != ESP_OK) return false;
+    uint32_t bs = 0, cc = 0;
+    bool ok = false;
+    if (nvs_get_u32(n, "burn_sec", &bs) == ESP_OK) {
+        burner_sec = bs; ok = true;
+    }
+    if (nvs_get_u32(n, "cycle_cnt", &cc) == ESP_OK) {
+        cycle_cnt = cc; ok = true;
+    }
+    nvs_close(n);
+    return ok;
+}
+
+void NvsConfigAdapter::save_burner_sec(uint32_t burner_sec, uint32_t cycle_cnt)
+{
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
+    nvs_set_u32(n, "burn_sec", burner_sec);
+    nvs_set_u32(n, "cycle_cnt", cycle_cnt);
+    nvs_commit(n);
+    nvs_close(n);
+}

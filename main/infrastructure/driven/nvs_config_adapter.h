@@ -48,4 +48,7 @@ public:
     bool load_meter(IHeatingStateStore&) override;
     void save_predict(const float[3], int, int) override;
     bool load_predict(float[3], int&, int&) override;
+
+    void save_burner_sec(uint32_t burner_sec, uint32_t cycle_cnt) override;
+    bool load_burner_sec(uint32_t& burner_sec, uint32_t& cycle_cnt) override;
 };

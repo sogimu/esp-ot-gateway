@@ -32,7 +32,8 @@ void BurnCycleService::poll()
             // Flame ON: record preceding pause, then advance ring index
             flame_on_ms_ = now_ms;
             if (flame_off_ms_ > 0) {
-                uint32_t pause = (now_ms - flame_off_ms_) / 1000;
+                // Round to nearest second (was truncating)
+                uint32_t pause = (now_ms - flame_off_ms_ + 500) / 1000;
                 if (pause < 65535) {
                     pause_dur_[cycle_idx_] = static_cast<uint16_t>(pause);
                 }
@@ -43,7 +44,8 @@ void BurnCycleService::poll()
             // Flame OFF: record burn at current position (same slot as upcoming pause)
             flame_off_ms_ = now_ms;
             if (flame_on_ms_ > 0) {
-                uint32_t burn = (now_ms - flame_on_ms_) / 1000;
+                // Round to nearest second (was truncating, losing up to 0.999s per cycle)
+                uint32_t burn = (now_ms - flame_on_ms_ + 500) / 1000;
                 if (burn < 65535) {
                     burn_dur_[cycle_idx_] = static_cast<uint16_t>(burn);
                 }
