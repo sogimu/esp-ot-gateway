@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-08 15:13:15</td>
+            <td class="headerValue">2026-06-08 18:23:10</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryLo">50.0&nbsp;%</td>
@@ -93,8 +93,12 @@
 <span id="L31"><span class="lineNum">      31</span>              :     virtual void save_predict(const float rates[3], int idx, int count) = 0;</span>
 <span id="L32"><span class="lineNum">      32</span>              :     virtual bool load_predict(float rates[3], int&amp; idx, int&amp; count) = 0;</span>
 <span id="L33"><span class="lineNum">      33</span>              : </span>
-<span id="L34"><span class="lineNum">      34</span> <span class="tlaGNC tlaBgGNC">          12 :     virtual ~IConfigurationStore() = default;</span></span>
-<span id="L35"><span class="lineNum">      35</span>              : };</span>
+<span id="L34"><span class="lineNum">      34</span>              :     /// Save/load burner runtime seconds (survives reboot).</span>
+<span id="L35"><span class="lineNum">      35</span>              :     virtual void save_burner_sec(uint32_t burner_sec, uint32_t cycle_cnt) = 0;</span>
+<span id="L36"><span class="lineNum">      36</span>              :     virtual bool load_burner_sec(uint32_t&amp; burner_sec, uint32_t&amp; cycle_cnt) = 0;</span>
+<span id="L37"><span class="lineNum">      37</span>              : </span>
+<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC tlaBgGNC">          12 :     virtual ~IConfigurationStore() = default;</span></span>
+<span id="L39"><span class="lineNum">      39</span>              : };</span>
         </pre>
               </td>
             </tr>
