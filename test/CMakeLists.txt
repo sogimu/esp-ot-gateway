@@ -124,10 +124,10 @@ if(ENABLE_COVERAGE)
             COMMAND ${LCOV} --remove ${COVERAGE_DIR}/coverage.info
                 '*/test/*' '*/fakes/*' '/usr/*'
                 --output-file ${COVERAGE_DIR}/coverage.info --ignore-errors unused
-            # HTML report
+            # HTML report (ignore missing branch/function data)
             COMMAND ${GENHTML} ${COVERAGE_DIR}/coverage.info
                 --output-directory ${COVERAGE_DIR}/html
-                --title "esp-ot-gateway test coverage" --ignore-errors unmapped
+                --title "esp-ot-gateway test coverage" --ignore-errors source,empty,mismatch
             DEPENDS run_tests
             COMMENT "Generating coverage report..."
         )
