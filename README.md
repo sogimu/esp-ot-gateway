@@ -1,7 +1,7 @@
 # ESP OpenTherm Gateway
 
 [![Tests](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml/badge.svg)](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml)
-[![Coverage](https://img.shields.io/badge/coverage-lcov--html-blue)](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml?query=job%3Acoverage)
+[![Coverage](https://img.shields.io/badge/coverage-report-blue)](https://sogimu.github.io/esp-ot-gateway/coverage/)
 
 WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTherm v2.2 master stack, PID room-temperature control with external DS18B20 sensors, gas consumption estimation, DHW session prediction, and a responsive web dashboard for monitoring and control of the **Baxi Duo-tec Compact** gas boiler.
 
