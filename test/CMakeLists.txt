@@ -101,3 +101,40 @@ add_custom_target(check
     DEPENDS run_tests
     COMMENT "Running all tests..."
 )
+
+# ── Coverage ──────────────────────────────────────────────
+option(ENABLE_COVERAGE "Build with code coverage instrumentation" OFF)
+if(ENABLE_COVERAGE)
+    target_compile_options(run_tests PRIVATE -fprofile-arcs -ftest-coverage)
+    target_link_options(run_tests PRIVATE -fprofile-arcs -ftest-coverage)
+
+    find_program(LCOV lcov)
+    find_program(GENHTML genhtml)
+
+    if(LCOV AND GENHTML)
+        set(COVERAGE_DIR ${CMAKE_BINARY_DIR}/coverage)
+        add_custom_target(coverage
+            COMMAND ${CMAKE_COMMAND} -E remove_directory ${COVERAGE_DIR}
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${COVERAGE_DIR}
+            # Run tests (gcda files written on clean exit)
+            COMMAND ./run_tests > /dev/null
+            # Capture coverage data
+            COMMAND ${LCOV} --capture --directory . --output-file ${COVERAGE_DIR}/coverage.info
+            # Exclude test files and system headers from report
+            COMMAND ${LCOV} --remove ${COVERAGE_DIR}/coverage.info
+                '*/test/*' '*/fakes/*' '/usr/*'
+                --output-file ${COVERAGE_DIR}/coverage.info
+            # HTML report
+            COMMAND ${GENHTML} ${COVERAGE_DIR}/coverage.info
+                --output-directory ${COVERAGE_DIR}/html
+                --title "esp-ot-gateway test coverage"
+            DEPENDS run_tests
+            COMMENT "Generating coverage report..."
+        )
+        add_custom_target(coverage-summary
+            COMMAND ${LCOV} --list ${COVERAGE_DIR}/coverage.info
+            DEPENDS coverage
+            COMMENT "Coverage summary:"
+        )
+    endif()
+endif()
