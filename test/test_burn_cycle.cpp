@@ -48,22 +48,25 @@ TEST_CASE("BurnCycle: detects flame on→off edge", "[burn][app]") {
     REQUIRE(bcs.burner_seconds() >= 55);
 }
 
-TEST_CASE("BurnCycle: accumulates burner seconds during flame", "[burn][app]") {
+TEST_CASE("BurnCycle: accumulates burner seconds on flame-off edge", "[burn][app]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
     BurnCycleService bcs(state, time);
 
     state.set_flame(true);
-    bcs.poll(); // flame off → on edge
+    bcs.poll();  // flame on at t=0
 
-    // Poll for 5 cycles, 1.1s each
+    // Burn for ~5.5 seconds
     for (int i = 0; i < 5; i++) {
         time.advance_ms(1100);
         bcs.poll();
     }
 
-    // Should have accumulated ~5.5 seconds of burner time
-    REQUIRE(bcs.burner_seconds() >= 3);
+    // Flame off: burner_sec_ accumulates the full burn duration
+    state.set_flame(false);
+    bcs.poll();
+
+    REQUIRE(bcs.burner_seconds() >= 3); // ~5.5s burn accumulated
 }
 
 TEST_CASE("BurnCycle: no cycles counted when flame stays off", "[burn][app]") {

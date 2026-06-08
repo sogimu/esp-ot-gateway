@@ -7,11 +7,10 @@
 // BurnCycleService — known bugs verification
 // ═══════════════════════════════════════════════════════════════
 
-TEST_CASE("BurnCycleService: burner_sec_ double-counting", "[burn_cycle][bug][critical]")
+TEST_CASE("BurnCycleService: burner_sec_ no longer double-counted", "[burn_cycle]")
 {
-    // BUG: burner_sec_ is incremented both on flame-off edge (line 55)
-    // AND during every poll while flame is on (line 65).
-    // This causes burner_hours to be ~2x the actual value.
+    // FIXED: burner_sec_ now only accumulates on flame-off edge.
+    // Ongoing accumulation removed — no more double counting.
 
     FakeHeatingStateStore state;
     FakeTimeSource time;
@@ -20,83 +19,63 @@ TEST_CASE("BurnCycleService: burner_sec_ double-counting", "[burn_cycle][bug][cr
     // Flame comes on at t=60s
     time.advance_ms(60000);
     state.set_flame(true);
-    svc.poll();  // flame edge detected, flame_on_ms_ = 60000
+    svc.poll();
 
-    // Burn for 30 seconds (3 polls at ~10s each)
+    // Burn for 30 seconds (3 polls)
     for (int i = 0; i < 3; i++) {
         time.advance_ms(10000);
-        svc.poll();  // each poll adds ~10s via the ongoing accumulation (line 65)
+        svc.poll();
     }
 
-    // Flame goes off at t=90s
+    // Flame goes off
     time.advance_ms(1);
     state.set_flame(false);
-    svc.poll();  // flame off: adds full burn duration (line 55): 30s
+    svc.poll();
 
-    // Actual burn time: 30 seconds
-    // Expected burner_sec_: 30
-    // Bug behavior: edge adds 30s + each poll adds ~10s → ~60s total
-
+    // Actual burn: ~30 seconds → ~0.0083 hours
     float hours = svc.burner_hours();
-    float expected_hours = 30.0f / 3600.0f; // 30 seconds
+    float expected = 30.0f / 3600.0f;
 
-    INFO("burner_hours=" << hours << " expected=" << expected_hours);
-    // Known bug: burner_sec_ is double-counted
-    // When fixed, hours should be ~0.0083 (30s)
-    // Currently ~0.0167 (60s) due to double-counting
-    WARN("BUG: burner_hours double-counted — actual=" << hours
-         << " expected~" << expected_hours);
+    INFO("burner_hours=" << hours);
+    CHECK(hours > 0.0f);
+    CHECK(hours < 0.02f); // must be less than 72s (would be ~60s with double-count)
+    CHECK(std::abs(hours - expected) < 0.003f);
 }
 
-TEST_CASE("BurnCycleService: sizeof(burn_dur_) is pointer size", "[burn_cycle][bug][critical]")
+TEST_CASE("BurnCycleService: reset clears all data", "[burn_cycle]")
 {
-    // BUG: reset() uses sizeof(burn_dur_) which is 4 or 8 (pointer size),
-    // not RING * sizeof(uint16_t) (array size).
-    // This means reset() only clears a few bytes, leaving stale data.
+    // FIXED: reset() now uses RING * sizeof(uint16_t) instead of pointer size.
 
     FakeHeatingStateStore state;
     FakeTimeSource time;
     BurnCycleService svc(state, time);
 
-    // Generate a burn cycle to populate arrays
+    // Generate a burn cycle
     time.advance_ms(10000);
     state.set_flame(true);
     svc.poll();
-
-    time.advance_ms(30000); // 30s burn
+    time.advance_ms(30000);
     state.set_flame(false);
     svc.poll();
-
-    time.advance_ms(100000); // 100s pause
+    time.advance_ms(100000);
     state.set_flame(true);
     svc.poll();
 
-    // Before reset: cycle_total_ should be 1 (only the pause was recorded)
     int before = svc.cycle_count();
-    float avg_before = svc.avg_burn();
 
     svc.reset();
 
     int after = svc.cycle_count();
-    float avg_after = svc.avg_burn();
+    float after_avg = svc.avg_burn();
 
-    INFO("before_reset: cycle_total=" << before << " avg_burn=" << avg_before);
-    INFO("after_reset:  cycle_total=" << after << " avg_burn=" << avg_after);
-
-    // After reset: cycle_total_ should be 0
     CHECK(after == 0);
-    // After reset: avg_burn should be 0
-    // BUG: stale data may survive due to sizeof(pointer) in memset
-    WARN("BUG: sizeof(burn_dur_) clears only pointer-sized bytes, not full array");
+    CHECK(after_avg == 0.0f);
 }
 
-TEST_CASE("BurnCycleService: avg_burn uses cycle_total_ not cycle_cnt_", "[burn_cycle][bug][major]")
+TEST_CASE("BurnCycleService: avg_burn uses cycle_cnt_ correctly", "[burn_cycle]")
 {
-    // BUG: avg_burn() and median_burn() iterate over cycle_total_ entries
-    // (line 101-103), but cycle_total_ counts PAUSES (line 39), not burns.
-    // Burns are counted by cycle_cnt_ (line 56).
-    // When there are more pauses than burns (normal: flame on/off cycle),
-    // the burn array has gaps filled with zeros.
+    // FIXED: avg_burn() and median_burn() now use cycle_cnt_ (burns),
+    // not cycle_total_ (pauses).
 
     FakeHeatingStateStore state;
     FakeTimeSource time;
@@ -107,30 +86,25 @@ TEST_CASE("BurnCycleService: avg_burn uses cycle_total_ not cycle_cnt_", "[burn_
     svc.poll();
     time.advance_ms(50000);
     state.set_flame(false);
-    svc.poll();  // records 50s burn, increments cycle_cnt_
+    svc.poll();
     time.advance_ms(100000);
     state.set_flame(true);
-    svc.poll();  // records 100s pause, increments cycle_total_
+    svc.poll();
 
-    // Cycle 2: burn 30s, pause 80s
+    // Cycle 2: burn 30s
     time.advance_ms(30000);
     state.set_flame(false);
-    svc.poll();  // records 30s burn, increments cycle_cnt_
-    time.advance_ms(80000);
-    state.set_flame(true);
-    svc.poll();  // records 80s pause, increments cycle_total_
+    svc.poll();
 
-    int burns = svc.cycle_count();  // should be 2
-    float avg = svc.avg_burn();     // uses cycle_total_ for count
-    float med = svc.median_burn();  // uses cycle_total_ for count
+    int burns = svc.cycle_count();
+    float avg = svc.avg_burn();
 
-    INFO("burns=" << burns << " avg_burn=" << avg << " median_burn=" << med);
+    INFO("burns=" << burns << " avg_burn=" << avg);
 
-    // With 2 burns of 50s and 30s, average should be 40s
-    // BUG: cycle_total_ counts pauses (2), but burn array has 2 values
-    // However, the burn is stored at (cycle_idx_ - 1) which might be wrong
     CHECK(burns == 2);
-    WARN("BUG: avg_burn/median_burn use cycle_total_ (pauses) not cycle_cnt_ (burns)");
+    // 2 burns: 50s and 30s → avg = 40s
+    CHECK(avg > 30.0f);
+    CHECK(avg < 50.0f);
 }
 
 TEST_CASE("BurnCycleService: correct burn tracking with single cycle", "[burn_cycle]")

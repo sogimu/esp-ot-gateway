@@ -39,8 +39,14 @@ void ModulationStatsService::reset()
 float ModulationStatsService::percentile(float p) const
 {
     if (samples_ == 0) return 0;
-    uint32_t target = static_cast<uint32_t>(p * samples_);
-    if (target >= samples_) target = samples_ - 1;
+    if (samples_ == 1) {
+        // Single sample: return the bin containing it
+        for (int i = 0; i < BINS; i++) {
+            if (hist_[i] > 0) return static_cast<float>(i) / 10.0f;
+        }
+        return 0;
+    }
+    uint32_t target = static_cast<uint32_t>(p * (samples_ - 1));
     uint32_t cum = 0;
     for (int i = 0; i < BINS; i++) {
         cum += hist_[i];

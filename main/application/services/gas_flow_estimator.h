@@ -68,6 +68,7 @@ private:
     uint64_t ema_start_us_ = 0;
 
     uint32_t last_update_ms_ = 0;
+    int ema_tick_ = 0;
 
     static float efficiency_correction(float t_ret);
     void update_ema(float& ema, float val, float alpha);

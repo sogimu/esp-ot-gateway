@@ -79,10 +79,9 @@ void GasFlowService::poll()
     if (ring_count_ < RING_SIZE) ring_count_++;
 
     // Compute EMAs every ~10 samples
-    static int ema_tick = 0;
-    ema_tick++;
-    if (ema_tick >= 10 && ring_count_ > 0) {
-        ema_tick = 0;
+    ema_tick_++;
+    if (ema_tick_ >= 10 && ring_count_ > 0) {
+        ema_tick_ = 0;
         // Average over recent samples
         float avg = 0;
         int n = ring_count_ < 10 ? ring_count_ : 10;

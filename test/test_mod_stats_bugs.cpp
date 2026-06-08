@@ -6,40 +6,30 @@
 // ModulationStatsService — percentile and histogram bugs
 // ═══════════════════════════════════════════════════════════════
 
-TEST_CASE("ModulationStats: percentile boundary condition", "[mod_stats][bug][major]")
+TEST_CASE("ModulationStats: percentile boundary condition", "[mod_stats]")
 {
-    // BUG: percentile() uses `cum > target` instead of `cum >= target`.
-    // For exact boundary cases, this shifts the percentile by one bin.
+    // FIXED: percentile() now uses `cum >= target` for correct boundary behavior.
 
     FakeHeatingStateStore state;
     ModulationStatsService svc(state);
 
-    // Create a simple distribution: 50% at bin 30 (3.0%), 50% at bin 70 (7.0%)
+    // 50% at 3.0% modulation, 50% at 7.0%
     for (int i = 0; i < 50; i++) {
-        state.set_modulation(3.0f);  // bin 30
+        state.set_modulation(3.0f);
         svc.poll();
     }
     for (int i = 0; i < 50; i++) {
-        state.set_modulation(7.0f);  // bin 70
+        state.set_modulation(7.0f);
         svc.poll();
     }
 
     REQUIRE(svc.samples() == 100);
 
-    // P50 should be at the boundary between bin 30 and bin 70
-    // With `cum > target`: target = floor(0.50 * 100) = 50
-    // cum after bin 30 = 50, which is NOT > 50, so it moves to bin 31
-    // Correct: p50 should return 3.0 or the median value
+    // With cum >= target: p50 should return 3.0 (the median value)
+    // First 50 samples are at 3.0%, then 50 at 7.0%
     float p50 = svc.p50();
-    INFO("p50=" << p50 << " (with 50 samples at 3.0%% and 50 at 7.0%%)");
-
-    // The median should be around 7.0 (the majority-starting bin)
-    // BUG: with cum > target, p50 returns bin after the 50th sample
-    // which might be correct or off depending on interpretation
-    CHECK(p50 > 0.0f);
-
-    WARN("BUG: percentile uses cum > target instead of cum >= target — "
-         "boundary cases may shift by one bin");
+    INFO("p50=" << p50);
+    CHECK(p50 == 3.0f);
 }
 
 TEST_CASE("ModulationStats: percentile with single sample", "[mod_stats]")
@@ -57,9 +47,9 @@ TEST_CASE("ModulationStats: percentile with single sample", "[mod_stats]")
     float p50 = svc.p50();
     float p99 = svc.p99();
 
-    CHECK(p1 == p50);
-    CHECK(p50 == p99);
     CHECK(p1 == 5.5f);
+    CHECK(p50 == 5.5f);
+    CHECK(p99 == 5.5f);
 }
 
 TEST_CASE("ModulationStats: percentile clamping", "[mod_stats]")
