@@ -42,8 +42,8 @@ private:
     bool  pending_ch_enable_ = false, pending_ch_enable_val_ = false;
     bool  pending_dhw_enable_ = false, pending_dhw_enable_val_ = false;
     bool  pending_fault_reset_ = false;
-    float pending_ch_sp_ = 30.0f;  bool pending_ch_sp_dirty_ = true;
-    float pending_dhw_sp_ = 55.0f; bool pending_dhw_sp_dirty_ = true;
+    float pending_ch_sp_ = 30.0f;  bool pending_ch_sp_dirty_ = false;
+    float pending_dhw_sp_ = 55.0f; bool pending_dhw_sp_dirty_ = false;
 
     // DHW hysteresis
     bool  dhw_priority_ = false;

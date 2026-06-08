@@ -35,6 +35,23 @@ public:
                     void*, void*,
                     void*, void*) override { return false; }
 
+    void save_burner_sec(uint32_t burner_sec, uint32_t cycle_cnt) override {
+        saved_burner_sec_ = burner_sec;
+        saved_cycle_cnt_ = cycle_cnt;
+        save_burner_sec_called_ = true;
+    }
+    bool load_burner_sec(uint32_t& burner_sec, uint32_t& cycle_cnt) override {
+        if (!load_burner_sec_returns_) return false;
+        burner_sec = saved_burner_sec_;
+        cycle_cnt = saved_cycle_cnt_;
+        return true;
+    }
+    void set_burner_sec_load(uint32_t bs, uint32_t cc) {
+        load_burner_sec_returns_ = true;
+        saved_burner_sec_ = bs;
+        saved_cycle_cnt_ = cc;
+    }
+
     void save_meter(const class IHeatingStateStore&) override {}
     bool load_meter(class IHeatingStateStore&) override { return false; }
 
@@ -67,6 +84,10 @@ public:
     float saved_rates_[3] = {};
     int saved_idx_ = 0;
     int saved_count_ = 0;
+    bool save_burner_sec_called_ = false;
+    uint32_t saved_burner_sec_ = 0;
+    uint32_t saved_cycle_cnt_ = 0;
+    bool load_burner_sec_returns_ = false;
 
 private:
     bool predict_returns_ = false;

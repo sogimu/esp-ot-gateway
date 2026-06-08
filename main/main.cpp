@@ -95,6 +95,17 @@ extern "C" void app_main(void)
     DHWPredictService      dhw_predict(ca_state, nvs, ca_time);
     dhw_predict.load_history();
 
+    // Restore saved burner stats from NVS (survives reboots)
+    {
+        uint32_t saved_bs = 0, saved_cc = 0;
+        if (nvs.load_burner_sec(saved_bs, saved_cc)) {
+            *burn_cycles.burner_sec_ptr() = saved_bs;
+            *burn_cycles.cycle_cnt_ptr()  = saved_cc;
+            ESP_LOGI("main", "NVS: восстановлено burner_sec=%" PRIu32 " cycle_cnt=%" PRIu32,
+                     saved_bs, saved_cc);
+        }
+    }
+
     ca_web.set_mod_stats(&mod_stats);
     ca_web.set_burn_cycles(&burn_cycles);
     ca_web.set_gas_flow(&gas_flow);
@@ -126,10 +137,13 @@ extern "C" void app_main(void)
     http.set_gas(&gas_corr);
     http.start();
 
-    // ── Idle: CPU stats every 60s ────────────────────────
+    // ── Idle: CPU stats every 60s, periodic NVS save ─────
     static const char* TAG = "main";
+    int save_tick = 0;
+    uint32_t last_saved_burner_sec = 0;
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));
+        save_tick++;
 
         int idle0 = (int)ulTaskGetIdleRunTimePercentForCore(0);
         int idle1 = (int)ulTaskGetIdleRunTimePercentForCore(1);
@@ -139,5 +153,15 @@ extern "C" void app_main(void)
                  esp_timer_get_time() / 1000000,
                  esp_get_free_heap_size(),
                  100 - idle0, 100 - idle1, (200 - idle0 - idle1) / 2);
+
+        // Save burner runtime to NVS every 10 min (10 ticks) if changed
+        if (save_tick >= 10) {
+            save_tick = 0;
+            uint32_t bs = burn_cycles.burner_seconds();
+            if (bs != last_saved_burner_sec) {
+                nvs.save_burner_sec(bs, burn_cycles.cycle_count());
+                last_saved_burner_sec = bs;
+            }
+        }
     }
 }

@@ -514,13 +514,35 @@ void BoilerPollInteractor::do_extra_step()
         }
         break;
     }
+    case 24: {
+        auto r = boiler_.read(OT_ID_DHW_VALVE_HOURS);
+        if (r.success && !std::isnan(r.value_f88)) {
+            uint16_t v = float_to_f88(r.value_f88);
+            state_.lock_exclusive();
+            state_.set_runtime_hours(state_.get_burner_hours(), state_.get_ch_pump_hours(),
+                                      v, state_.get_dhw_burner_hours());
+            state_.unlock_exclusive();
+        }
+        break;
+    }
+    case 25: {
+        auto r = boiler_.read(OT_ID_DHW_BURNER_HOURS);
+        if (r.success && !std::isnan(r.value_f88)) {
+            uint16_t v = float_to_f88(r.value_f88);
+            state_.lock_exclusive();
+            state_.set_runtime_hours(state_.get_burner_hours(), state_.get_ch_pump_hours(),
+                                      state_.get_dhw_valve_hours(), v);
+            state_.unlock_exclusive();
+        }
+        break;
+    }
     default:
         poll_step_ = 0;
         break;
     }
 
     poll_step_++;
-    if (poll_step_ >= 24) poll_step_ = 0;
+    if (poll_step_ >= 26) poll_step_ = 0;
 }
 
 // ================================================================

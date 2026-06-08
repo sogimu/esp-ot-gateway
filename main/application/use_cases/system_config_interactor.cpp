@@ -69,7 +69,7 @@ void SystemConfigInteractor::set_ch_setpoint(float sp)
     state_.lock_exclusive();
     state_.set_ch_setpoint(sp);
     state_.unlock_exclusive();
-    // OT write is handled by BoilerPollInteractor::do_extra_step() at step 1/10
+    if (boiler_poll_) boiler_poll_->set_ch_setpoint(sp);  // notify poll task immediately
     save_and_log("Уставка CH: %.0f C", (double)sp);
 }
 
@@ -80,7 +80,7 @@ void SystemConfigInteractor::set_dhw_setpoint(float sp)
     state_.lock_exclusive();
     state_.set_dhw_setpoint(sp);
     state_.unlock_exclusive();
-    // OT write is handled by BoilerPollInteractor::do_extra_step() at step 3/6/11
+    if (boiler_poll_) boiler_poll_->set_dhw_setpoint(sp);  // notify poll task immediately
     save_and_log("Уставка ГВС: %.0f C", (double)sp);
 }
 
