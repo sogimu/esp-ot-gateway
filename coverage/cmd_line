@@ -1,0 +1,1 @@
+genhtml /home/runner/work/esp-ot-gateway/esp-ot-gateway/build/coverage/coverage.info --output-directory /home/runner/work/esp-ot-gateway/esp-ot-gateway/build/coverage/html --title 'esp-ot-gateway test coverage' --rc branch_coverage=0 --ignore-errors unused,empty,corrupt
