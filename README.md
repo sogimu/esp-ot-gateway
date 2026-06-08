@@ -1,5 +1,8 @@
 # ESP OpenTherm Gateway
 
+[![Tests](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml/badge.svg)](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml)
+[![Coverage](https://img.shields.io/badge/coverage-lcov--html-blue)](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml?query=job%3Acoverage)
+
 WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTherm v2.2 master stack, PID room-temperature control with external DS18B20 sensors, gas consumption estimation, DHW session prediction, and a responsive web dashboard for monitoring and control of the **Baxi Duo-tec Compact** gas boiler.
 
 ---
@@ -58,7 +61,7 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 
 ### 1. Set WiFi credentials
 
-Edit `main/endpoints/wifi/wifi_config.h`:
+Edit `main/infrastructure/driving/wifi_config.h`:
 
 ```
 WIFI_SSID  "your_network"
@@ -230,60 +233,63 @@ curl -X POST http://<device-ip>/api/schedule \
 
 ---
 
+## Tests
+
+```bash
+# Install Catch2 (Ubuntu)
+sudo apt-get install catch2
+
+# Build and run
+bash test/run_tests.sh
+
+# With sanitizers (default: ON)
+cmake -B build_test -S test
+cmake --build build_test && ./build_test/run_tests
+
+# Coverage report (requires lcov)
+cmake -B build_test -S test -DENABLE_SANITIZERS=OFF -DENABLE_COVERAGE=ON
+cmake --build build_test --target coverage
+# HTML report in build_test/coverage/html/index.html
+```
+
 ## Project Structure
 
 ```
 esp-ot-gateway/
-├── CMakeLists.txt              # ESP-IDF top-level build
-├── partitions.csv              # Custom partition table (nvs, phy_init, factory, coredump)
-├── sdkconfig.defaults          # Default build configuration
-├── decode_crash.sh             # Stack trace decoder (addr2line wrapper)
+├── CMakeLists.txt
+├── partitions.csv
+├── sdkconfig.defaults
+├── decode_crash.sh
+├── .github/workflows/tests.yml       # CI: sanitizers + coverage
 ├── main/
 │   ├── CMakeLists.txt
-│   ├── main.cpp                # Entry point: NVS init, services, main loop
-│   ├── model/
-│   │   ├── model.h / model.cpp # Central data store, JSON serialization, log ring buffer
-│   ├── controller/
-│   │   ├── controller.h / controller.cpp  # Orchestrator, NVS config load/save
-│   ├── interfaces/
-│   │   ├── iopentherm_observer.h          # Observer interfaces
-│   │   ├── isensors_observer.h
-│   │   └── iwebserver_observer.h
-│   ├── endpoints/
-│   │   ├── endpoints.h / endpoints.cpp    # Endpoint bundle
-│   │   ├── opentherm/
-│   │   │   ├── opentherm.c / .h           # OT v2.2 protocol (pure C, GPIO ISR + esp_timer)
-│   │   │   └── opentherm_endpoint.cpp / .h
-│   │   ├── webserver/
-│   │   │   ├── webserver_endpoint.cpp / .h # HTTP server + REST API handlers
-│   │   │   └── web_page.h                 # Embedded HTML/CSS/JS dashboard
-│   │   ├── sensors/
-│   │   │   ├── sensors.c / .h             # DS18B20 1-Wire driver (bit-banged, CRC-8)
-│   │   │   └── sensors_endpoint.cpp / .h
-│   │   ├── sntp/
-│   │   │   └── sntp_endpoint.cpp / .h
-│   │   └── wifi/
-│   │       ├── wifi_endpoint.cpp / .h
-│   │       └── wifi_config.h
-│   ├── log/
-│   │   └── log_service.cpp / .h           # Event logger
-│   ├── stats/
-│   │   └── stats_service.cpp / .h         # Modulation stats, gas estimation, NVS persistence
-│   ├── predict/
-│   │   ├── predict_service.cpp / .h       # DHW prediction (Kalman2D)
-│   │   └── kalman2d.h
-│   ├── pid/
-│   │   ├── pid_service.cpp / .h           # PID room-temperature controller
-│   │   └── pid.h                          # PID algorithm implementation
-│   └── crash/
-│       └── crash_service.cpp / .h         # Boot crash diagnostics (reset reason + coredump)
+│   ├── main.cpp                      # Composition root (8 phases)
+│   ├── domain/                       # Zero dependencies
+│   │   ├── value_objects/            # Temperature, CH_Schedule, Modulation, PidConfig, BoilerStatus
+│   │   ├── entities/                 # HeatingSystem aggregate
+│   │   └── services/                 # PidAlgorithm, Kalman1D, Kalman2D
+│   ├── application/                  # Use cases + ports, no ESP-IDF
+│   │   ├── ports/
+│   │   │   ├── driving/              # IConfigureSystem, IConfigurePid, IGasCalibration, ...
+│   │   │   └── driven/               # IHeatingStateStore, IBoilerHardware, ITimeSource, ...
+│   │   ├── use_cases/                # BoilerPoll, SensorsPoll, PidPoll, SystemConfig, GasCorrection
+│   │   └── services/                 # ModulationStats, BurnCycle, GasFlow, DHWPredict, DHWHysteresis, Schedule
+│   ├── infrastructure/
+│   │   ├── driven/                   # Adapters: OT, Sensors, NVS, EventLog, SNTP, CrashDiag, ...
+│   │   ├── driving/                  # HttpController, MainPollerTask, WifiInit, web_page.h, wifi_config.h
+│   │   └── freertos/                 # SharedMutex (read-write lock)
+│   └── c_legacy/                     # opentherm.c, sensors.c (unchanged)
+├── test/
+│   ├── CMakeLists.txt                # Host-only: Catch2, sanitizers, coverage
+│   ├── run_tests.sh
+│   ├── fakes/                        # Fake adapters for testing
+│   └── test_*.cpp                    # 129 tests, 287 assertions
 ├── docs/
-│   ├── userguideSmartOT_01e.pdf           # SmartTherm adapter user guide
-│   └── openTherm_3_0_0_*.pdf             # OpenTherm 3.0.0 spec (Russian)
+│   └── *.pdf
 └── scripts/
-    ├── setup.sh                           # ESP-IDF installer
-    ├── build.sh                           # Build wrapper
-    └── flash.sh                           # Flash
+    ├── setup.sh
+    ├── build.sh
+    └── flash.sh
 ```
 
 ---
@@ -327,7 +333,7 @@ idf.py -p /dev/ttyUSB0 flash
 
 ## Notes
 
-- WiFi credentials are stored in plaintext in `main/endpoints/wifi/wifi_config.h` — keep the device on a trusted local network.
+- WiFi credentials are stored in plaintext in `main/infrastructure/driving/wifi_config.h` — keep the device on a trusted local network.
 - HTTP endpoints have no authentication; the dashboard is intended for LAN use only.
 - The OpenTherm initialisation handshake (slave version exchange) runs at startup and repeats every 60 minutes to ensure DHW control stays active on some Baxi firmware versions.
 - **Inter-frame gap**: A minimum 100 ms pause between OpenTherm transactions is required by the spec; violating this causes `NO_RESP` errors and boiler resets on Baxi hardware.
