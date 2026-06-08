@@ -66,9 +66,16 @@ target_include_directories(run_tests PRIVATE ${INCLUDE_DIRS})
 # Link Catch2
 target_link_libraries(run_tests PRIVATE Catch2::Catch2WithMain)
 
-# Compiler flags — C++17, warnings, no RTTI/exceptions (match embedded target)
+# Compiler flags — C++17, warnings (RTTI enabled for Catch2, no exceptions)
 target_compile_features(run_tests PRIVATE cxx_std_17)
 target_compile_options(run_tests PRIVATE -Wall -Wextra -Wno-unused-parameter)
+
+# ── Sanitizers ────────────────────────────────────────
+option(ENABLE_SANITIZERS "Build with address and undefined behavior sanitizers" ON)
+if(ENABLE_SANITIZERS)
+    target_compile_options(run_tests PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(run_tests PRIVATE -fsanitize=address,undefined)
+endif()
 
 # ── Convenience target: make test ─────────────────────────
 enable_testing()
