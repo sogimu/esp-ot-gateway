@@ -23,6 +23,13 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
     if (ti.tm_year >= (2024 - 1900))
         snprintf(timebuf, sizeof(timebuf), "%02d:%02d:%02d", ti.tm_hour, ti.tm_min, ti.tm_sec);
 
+    // UTC decomposition (independent of TZ) for diagnostics
+    struct tm utc_ti;
+    gmtime_r(&now_ts, &utc_ti);
+    char utcbuf[16] = "NTP...";
+    if (utc_ti.tm_year >= (2024 - 1900))
+        snprintf(utcbuf, sizeof(utcbuf), "%02d:%02d:%02d", utc_ti.tm_hour, utc_ti.tm_min, utc_ti.tm_sec);
+
     int len = snprintf(buf, size,
         "{"
         "\"connected\":%d,\"fault\":%d,\"ch_active\":%d,\"dhw_active\":%d,\"flame\":%d,"
@@ -37,6 +44,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"slave_type\":%d,\"slave_ver\":%d,\"ot_ver\":%.1f,"
         "\"t1_temp\":%.1f,\"t2_temp\":%.1f,"
         "\"sched_on\":0,\"hour\":%d,\"time\":\"%s\",\"tz_offset\":%d,"
+        "\"utc_time\":\"%s\","
         "\"dhw_hyst_on\":%.1f,"
         "\"sntp_server0\":\"%s\",\"sntp_server1\":\"%s\","
         "\"pid_enabled\":%d,\"pid_active\":%d,\"pid_output\":%.0f,"
@@ -67,7 +75,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         state_->get_slave_type(), state_->get_slave_version(), (double)state_->get_ot_version(),
         (double)state_->get_t1_temp(), (double)state_->get_t2_temp(),
         (ti.tm_year >= (2024 - 1900)) ? ti.tm_hour : -1, timebuf,
-        state_->get_tz_offset(), (double)state_->get_dhw_hysteresis(),
+        state_->get_tz_offset(), utcbuf, (double)state_->get_dhw_hysteresis(),
         state_->get_sntp_server0(), state_->get_sntp_server1(),
         state_->get_pid_enabled() ? 1 : 0, state_->get_pid_active() ? 1 : 0,
         (double)state_->get_pid_output(),

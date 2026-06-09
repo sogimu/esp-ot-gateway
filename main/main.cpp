@@ -75,8 +75,11 @@ extern "C" void app_main(void)
     SntpTimeAdapter sntp;
 
     wifi.start();
+
+    // Sync SNTP with UTC+0 first, then apply user timezone.
+    // This prevents a wrong TZ from NVS from corrupting the system clock.
+    sntp.start();   // sets TZ=UTC+0, starts SNTP, waits for first sync
     sntp.set_timezone(ca_state.get_tz_offset());
-    sntp.start();
 
     // ── Phase 4: Use cases ───────────────────────────────
     BoilerPollInteractor  boiler_poll(ca_boiler, ca_state, ca_log, ca_time);
