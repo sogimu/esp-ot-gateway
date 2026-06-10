@@ -60,6 +60,9 @@ set(TEST_SRCS
 
     # JSON helpers (regression: missing key vs -1 value)
     test_json_parsing_missing_key.cpp
+
+    # Gas meter persistence
+    test_gas_meter_persistence.cpp
 )
 
 # ── Stubs (replace ESP-IDF-dependent implementations) ──────
@@ -77,6 +80,7 @@ set(APP_SRCS
     ${MAIN_DIR}/application/services/gas_flow_estimator.cpp
     ${MAIN_DIR}/application/use_cases/main_poller_interactor.cpp
     ${MAIN_DIR}/application/use_cases/system_config_interactor.cpp
+    ${MAIN_DIR}/application/use_cases/gas_correction_interactor.cpp
 )
 
 # ── Test executable ───────────────────────────────────────

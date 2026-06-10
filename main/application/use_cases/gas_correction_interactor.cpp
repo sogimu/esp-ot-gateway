@@ -43,7 +43,7 @@ void GasCorrectionInteractor::set_gas_meter_base(float v)
     state_.lock_exclusive();
     state_.set_gas_meter_base(v);
     state_.unlock_exclusive();
-    config_.save_config(state_);
+    config_.save_meter(state_);  // "meter" namespace, not "config"
     log_.event(ILogger::USER, "База счётчика: %.3f", (double)v);
 }
 

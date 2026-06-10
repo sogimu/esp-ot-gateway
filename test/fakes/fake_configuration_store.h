@@ -18,6 +18,13 @@ public:
         std::memset(predict_rates_, 0, sizeof(predict_rates_));
         predict_idx_ = 0;
         predict_count_ = 0;
+        burn_stats_saved_ = false;
+        std::memset(&saved_burn_, 0, sizeof(saved_burn_));
+        burn_stats_load_returns_ = false;
+        std::memset(&load_burn_, 0, sizeof(load_burn_));
+        total_uptime_saved_ = 0;
+        total_uptime_load_ = 0;
+        total_uptime_load_ok_ = false;
     }
 
     void load_all(class IHeatingStateStore&) override {}
@@ -35,21 +42,43 @@ public:
                     void*, void*,
                     void*, void*) override { return false; }
 
-    void save_burner_sec(uint32_t burner_sec, uint32_t cycle_cnt) override {
-        saved_burner_sec_ = burner_sec;
-        saved_cycle_cnt_ = cycle_cnt;
-        save_burner_sec_called_ = true;
+    void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
+                         uint32_t inter_pause_sec, uint32_t inter_cnt,
+                         uint32_t mod_pause_sec, uint32_t mod_cnt) override {
+        burn_stats_saved_ = true;
+        saved_burn_.burner_sec = burner_sec;
+        saved_burn_.total_pause_sec = total_pause_sec;
+        saved_burn_.cycle_cnt = cycle_cnt;
+        saved_burn_.inter_pause_sec = inter_pause_sec;
+        saved_burn_.inter_cnt = inter_cnt;
+        saved_burn_.mod_pause_sec = mod_pause_sec;
+        saved_burn_.mod_cnt = mod_cnt;
     }
-    bool load_burner_sec(uint32_t& burner_sec, uint32_t& cycle_cnt) override {
-        if (!load_burner_sec_returns_) return false;
-        burner_sec = saved_burner_sec_;
-        cycle_cnt = saved_cycle_cnt_;
+
+    bool load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
+                         uint32_t& inter_pause_sec, uint32_t& inter_cnt,
+                         uint32_t& mod_pause_sec, uint32_t& mod_cnt) override {
+        if (!burn_stats_load_returns_) return false;
+        burner_sec = load_burn_.burner_sec;
+        total_pause_sec = load_burn_.total_pause_sec;
+        cycle_cnt = load_burn_.cycle_cnt;
+        inter_pause_sec = load_burn_.inter_pause_sec;
+        inter_cnt = load_burn_.inter_cnt;
+        mod_pause_sec = load_burn_.mod_pause_sec;
+        mod_cnt = load_burn_.mod_cnt;
         return true;
     }
-    void set_burner_sec_load(uint32_t bs, uint32_t cc) {
-        load_burner_sec_returns_ = true;
-        saved_burner_sec_ = bs;
-        saved_cycle_cnt_ = cc;
+
+    void set_burn_stats_load(uint32_t bs, uint32_t tps, uint32_t cc,
+                             uint32_t ips, uint32_t ic, uint32_t mps, uint32_t mc) {
+        burn_stats_load_returns_ = true;
+        load_burn_.burner_sec = bs;
+        load_burn_.total_pause_sec = tps;
+        load_burn_.cycle_cnt = cc;
+        load_burn_.inter_pause_sec = ips;
+        load_burn_.inter_cnt = ic;
+        load_burn_.mod_pause_sec = mps;
+        load_burn_.mod_cnt = mc;
     }
 
     void save_meter(const class IHeatingStateStore&) override {}
@@ -70,7 +99,6 @@ public:
         return true;
     }
 
-    /// Configure what load_predict returns.
     void set_predict_history(const float rates[3], int idx, int count) {
         predict_returns_ = true;
         std::memcpy(predict_rates_, rates, 3 * sizeof(float));
@@ -78,16 +106,30 @@ public:
         predict_count_ = count;
     }
 
-    // ── Call tracking for test assertions ─────────────────
+    void save_total_uptime(uint32_t sec) override { total_uptime_saved_ = sec; }
+    bool load_total_uptime(uint32_t& sec) override {
+        if (total_uptime_load_ok_) { sec = total_uptime_load_; return true; }
+        return false;
+    }
+    void set_total_uptime_load(uint32_t sec) { total_uptime_load_ok_ = true; total_uptime_load_ = sec; }
+
+    // ── Call tracking ──────────────────────────────────
     int save_config_called_ = 0;
     int save_predict_called_ = 0;
     float saved_rates_[3] = {};
     int saved_idx_ = 0;
     int saved_count_ = 0;
-    bool save_burner_sec_called_ = false;
-    uint32_t saved_burner_sec_ = 0;
-    uint32_t saved_cycle_cnt_ = 0;
-    bool load_burner_sec_returns_ = false;
+
+    // Burn stats
+    bool burn_stats_saved_ = false;
+    struct { uint32_t burner_sec, total_pause_sec, cycle_cnt, inter_pause_sec, inter_cnt, mod_pause_sec, mod_cnt; } saved_burn_;
+    bool burn_stats_load_returns_ = false;
+    struct { uint32_t burner_sec, total_pause_sec, cycle_cnt, inter_pause_sec, inter_cnt, mod_pause_sec, mod_cnt; } load_burn_;
+
+    // Total uptime
+    uint32_t total_uptime_saved_ = 0;
+    uint32_t total_uptime_load_ = 0;
+    bool total_uptime_load_ok_ = false;
 
 private:
     bool predict_returns_ = false;

@@ -49,6 +49,13 @@ public:
     void save_predict(const float[3], int, int) override;
     bool load_predict(float[3], int&, int&) override;
 
-    void save_burner_sec(uint32_t burner_sec, uint32_t cycle_cnt) override;
-    bool load_burner_sec(uint32_t& burner_sec, uint32_t& cycle_cnt) override;
+    void save_total_uptime(uint32_t total_uptime_sec) override;
+    bool load_total_uptime(uint32_t& total_uptime_sec) override;
+
+    void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
+                         uint32_t inter_pause_sec, uint32_t inter_cnt,
+                         uint32_t mod_pause_sec, uint32_t mod_cnt) override;
+    bool load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
+                         uint32_t& inter_pause_sec, uint32_t& inter_cnt,
+                         uint32_t& mod_pause_sec, uint32_t& mod_cnt) override;
 };
