@@ -31,18 +31,18 @@
             <td class="headerValue">esp-ot-gateway test coverage</td>
             <td></td>
             <td class="headerItem">Lines:</td>
-            <td class="headerCovTableEntryHi">96.6&nbsp;%</td>
-            <td class="headerCovTableEntry">59</td>
-            <td class="headerCovTableEntry">57</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">45</td>
+            <td class="headerCovTableEntry">45</td>
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-10 03:05:32</td>
+            <td class="headerValue">2026-06-10 04:07:46</td>
             <td></td>
             <td class="headerItem">Functions:</td>
-            <td class="headerCovTableEntryMed">81.8&nbsp;%</td>
-            <td class="headerCovTableEntry">11</td>
-            <td class="headerCovTableEntry">9</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">8</td>
+            <td class="headerCovTableEntry">8</td>
           </tr>
                   <tr><td><img src="../glass.png" width=3 height=3 alt=""></td></tr>
                 </table>
@@ -63,98 +63,80 @@
 <span id="L1"><span class="lineNum">       1</span>              : #include &quot;application/services/burn_cycle_service.h&quot;</span>
 <span id="L2"><span class="lineNum">       2</span>              : #include &quot;application/ports/driven/iheating_state_store.h&quot;</span>
 <span id="L3"><span class="lineNum">       3</span>              : #include &quot;application/ports/driven/itime_source.h&quot;</span>
-<span id="L4"><span class="lineNum">       4</span>              : #include &lt;cstring&gt;</span>
-<span id="L5"><span class="lineNum">       5</span>              : #include &lt;cstdlib&gt;</span>
-<span id="L6"><span class="lineNum">       6</span>              : </span>
-<span id="L7"><span class="lineNum">       7</span> <span class="tlaGNC tlaBgGNC">          19 : BurnCycleService::BurnCycleService(IHeatingStateStore&amp; state, ITimeSource&amp; time)</span></span>
-<span id="L8"><span class="lineNum">       8</span> <span class="tlaGNC">          19 :     : state_(state), time_(time)</span></span>
-<span id="L9"><span class="lineNum">       9</span>              : {</span>
-<span id="L10"><span class="lineNum">      10</span> <span class="tlaGNC">          19 :     burn_dur_ = static_cast&lt;uint16_t*&gt;(malloc(RING * sizeof(uint16_t)));</span></span>
-<span id="L11"><span class="lineNum">      11</span> <span class="tlaGNC">          19 :     pause_dur_ = static_cast&lt;uint16_t*&gt;(malloc(RING * sizeof(uint16_t)));</span></span>
-<span id="L12"><span class="lineNum">      12</span> <span class="tlaGNC">          19 :     if (burn_dur_) std::memset(burn_dur_, 0, RING * sizeof(uint16_t));</span></span>
-<span id="L13"><span class="lineNum">      13</span> <span class="tlaGNC">          19 :     if (pause_dur_) std::memset(pause_dur_, 0, RING * sizeof(uint16_t));</span></span>
-<span id="L14"><span class="lineNum">      14</span> <span class="tlaGNC">          19 : }</span></span>
-<span id="L15"><span class="lineNum">      15</span>              : </span>
-<span id="L16"><span class="lineNum">      16</span> <span class="tlaGNC">          19 : BurnCycleService::~BurnCycleService()</span></span>
-<span id="L17"><span class="lineNum">      17</span>              : {</span>
-<span id="L18"><span class="lineNum">      18</span> <span class="tlaGNC">          19 :     free(burn_dur_);</span></span>
-<span id="L19"><span class="lineNum">      19</span> <span class="tlaGNC">          19 :     free(pause_dur_);</span></span>
-<span id="L20"><span class="lineNum">      20</span> <span class="tlaGNC">          19 : }</span></span>
-<span id="L21"><span class="lineNum">      21</span>              : </span>
-<span id="L22"><span class="lineNum">      22</span> <span class="tlaGNC">          92 : void BurnCycleService::poll()</span></span>
-<span id="L23"><span class="lineNum">      23</span>              : {</span>
-<span id="L24"><span class="lineNum">      24</span> <span class="tlaGNC">          92 :     uint32_t now_ms = static_cast&lt;uint32_t&gt;(time_.now_us() / 1000);</span></span>
-<span id="L25"><span class="lineNum">      25</span>              : </span>
-<span id="L26"><span class="lineNum">      26</span> <span class="tlaGNC">          92 :     state_.lock_shared();</span></span>
-<span id="L27"><span class="lineNum">      27</span> <span class="tlaGNC">          92 :     bool flame = state_.is_flame_on();</span></span>
-<span id="L28"><span class="lineNum">      28</span> <span class="tlaGNC">          92 :     state_.unlock_shared();</span></span>
-<span id="L29"><span class="lineNum">      29</span>              : </span>
-<span id="L30"><span class="lineNum">      30</span> <span class="tlaGNC">          92 :     if (flame != prev_flame_) {</span></span>
-<span id="L31"><span class="lineNum">      31</span> <span class="tlaGNC">          45 :         if (flame) {</span></span>
-<span id="L32"><span class="lineNum">      32</span>              :             // Flame ON: record preceding pause, then advance ring index</span>
-<span id="L33"><span class="lineNum">      33</span> <span class="tlaGNC">          23 :             flame_on_ms_ = now_ms;</span></span>
-<span id="L34"><span class="lineNum">      34</span> <span class="tlaGNC">          23 :             if (flame_off_ms_ &gt; 0) {</span></span>
-<span id="L35"><span class="lineNum">      35</span>              :                 // Round to nearest second (was truncating)</span>
-<span id="L36"><span class="lineNum">      36</span> <span class="tlaGNC">           7 :                 uint32_t pause = (now_ms - flame_off_ms_ + 500) / 1000;</span></span>
-<span id="L37"><span class="lineNum">      37</span> <span class="tlaGNC">           7 :                 if (pause &lt; 65535) {</span></span>
-<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC">           7 :                     pause_dur_[cycle_idx_] = static_cast&lt;uint16_t&gt;(pause);</span></span>
-<span id="L39"><span class="lineNum">      39</span>              :                 }</span>
-<span id="L40"><span class="lineNum">      40</span> <span class="tlaGNC">           7 :                 cycle_idx_ = (cycle_idx_ + 1) % RING;</span></span>
-<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">           7 :                 if (cycle_total_ &lt; RING) cycle_total_++;</span></span>
-<span id="L42"><span class="lineNum">      42</span>              :             }</span>
-<span id="L43"><span class="lineNum">      43</span>              :         } else {</span>
-<span id="L44"><span class="lineNum">      44</span>              :             // Flame OFF: record burn at current position (same slot as upcoming pause)</span>
-<span id="L45"><span class="lineNum">      45</span> <span class="tlaGNC">          22 :             flame_off_ms_ = now_ms;</span></span>
-<span id="L46"><span class="lineNum">      46</span> <span class="tlaGNC">          22 :             if (flame_on_ms_ &gt; 0) {</span></span>
-<span id="L47"><span class="lineNum">      47</span>              :                 // Round to nearest second (was truncating, losing up to 0.999s per cycle)</span>
-<span id="L48"><span class="lineNum">      48</span> <span class="tlaGNC">          22 :                 uint32_t burn = (now_ms - flame_on_ms_ + 500) / 1000;</span></span>
-<span id="L49"><span class="lineNum">      49</span> <span class="tlaGNC">          22 :                 if (burn &lt; 65535) {</span></span>
-<span id="L50"><span class="lineNum">      50</span> <span class="tlaGNC">          22 :                     burn_dur_[cycle_idx_] = static_cast&lt;uint16_t&gt;(burn);</span></span>
-<span id="L51"><span class="lineNum">      51</span>              :                 }</span>
-<span id="L52"><span class="lineNum">      52</span> <span class="tlaGNC">          22 :                 burner_sec_ += burn;</span></span>
-<span id="L53"><span class="lineNum">      53</span> <span class="tlaGNC">          22 :                 cycle_cnt_++;</span></span>
-<span id="L54"><span class="lineNum">      54</span>              :             }</span>
-<span id="L55"><span class="lineNum">      55</span>              :         }</span>
-<span id="L56"><span class="lineNum">      56</span> <span class="tlaGNC">          45 :         prev_flame_ = flame;</span></span>
-<span id="L57"><span class="lineNum">      57</span>              :     }</span>
+<span id="L4"><span class="lineNum">       4</span>              : </span>
+<span id="L5"><span class="lineNum">       5</span> <span class="tlaGNC tlaBgGNC">          19 : BurnCycleService::BurnCycleService(IHeatingStateStore&amp; state, ITimeSource&amp; time)</span></span>
+<span id="L6"><span class="lineNum">       6</span> <span class="tlaGNC">          19 :     : state_(state), time_(time)</span></span>
+<span id="L7"><span class="lineNum">       7</span>              : {</span>
+<span id="L8"><span class="lineNum">       8</span> <span class="tlaGNC">          19 : }</span></span>
+<span id="L9"><span class="lineNum">       9</span>              : </span>
+<span id="L10"><span class="lineNum">      10</span> <span class="tlaGNC">         107 : void BurnCycleService::poll()</span></span>
+<span id="L11"><span class="lineNum">      11</span>              : {</span>
+<span id="L12"><span class="lineNum">      12</span> <span class="tlaGNC">         107 :     uint32_t now_ms = static_cast&lt;uint32_t&gt;(time_.now_us() / 1000);</span></span>
+<span id="L13"><span class="lineNum">      13</span>              : </span>
+<span id="L14"><span class="lineNum">      14</span> <span class="tlaGNC">         107 :     state_.lock_shared();</span></span>
+<span id="L15"><span class="lineNum">      15</span> <span class="tlaGNC">         107 :     bool flame = state_.is_flame_on();</span></span>
+<span id="L16"><span class="lineNum">      16</span> <span class="tlaGNC">         107 :     state_.unlock_shared();</span></span>
+<span id="L17"><span class="lineNum">      17</span>              : </span>
+<span id="L18"><span class="lineNum">      18</span> <span class="tlaGNC">         107 :     if (flame != prev_flame_) {</span></span>
+<span id="L19"><span class="lineNum">      19</span> <span class="tlaGNC">          48 :         if (flame) {</span></span>
+<span id="L20"><span class="lineNum">      20</span>              :             // Flame ON: record preceding pause, classify by threshold</span>
+<span id="L21"><span class="lineNum">      21</span> <span class="tlaGNC">          24 :             flame_on_ms_ = now_ms;</span></span>
+<span id="L22"><span class="lineNum">      22</span> <span class="tlaGNC">          24 :             if (flame_off_ms_ &gt; 0) {</span></span>
+<span id="L23"><span class="lineNum">      23</span> <span class="tlaGNC">           9 :                 uint32_t pause = (now_ms - flame_off_ms_ + 500) / 1000;</span></span>
+<span id="L24"><span class="lineNum">      24</span> <span class="tlaGNC">           9 :                 total_pause_sec_ += pause;</span></span>
+<span id="L25"><span class="lineNum">      25</span> <span class="tlaGNC">           9 :                 if (pause &gt; INTER_SESSION_THRESHOLD_SEC) {</span></span>
+<span id="L26"><span class="lineNum">      26</span> <span class="tlaGNC">           2 :                     inter_session_pause_sec_ += pause;</span></span>
+<span id="L27"><span class="lineNum">      27</span> <span class="tlaGNC">           2 :                     inter_session_cnt_++;</span></span>
+<span id="L28"><span class="lineNum">      28</span>              :                 } else {</span>
+<span id="L29"><span class="lineNum">      29</span> <span class="tlaGNC">           7 :                     modulation_pause_sec_ += pause;</span></span>
+<span id="L30"><span class="lineNum">      30</span> <span class="tlaGNC">           7 :                     modulation_cnt_++;</span></span>
+<span id="L31"><span class="lineNum">      31</span>              :                 }</span>
+<span id="L32"><span class="lineNum">      32</span>              :             }</span>
+<span id="L33"><span class="lineNum">      33</span>              :         } else {</span>
+<span id="L34"><span class="lineNum">      34</span>              :             // Flame OFF: record burn duration</span>
+<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC">          24 :             flame_off_ms_ = now_ms;</span></span>
+<span id="L36"><span class="lineNum">      36</span> <span class="tlaGNC">          24 :             if (flame_on_ms_ &gt; 0) {</span></span>
+<span id="L37"><span class="lineNum">      37</span> <span class="tlaGNC">          24 :                 uint32_t burn = (now_ms - flame_on_ms_ + 500) / 1000;</span></span>
+<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC">          24 :                 burner_sec_ += burn;</span></span>
+<span id="L39"><span class="lineNum">      39</span> <span class="tlaGNC">          24 :                 cycle_cnt_++;</span></span>
+<span id="L40"><span class="lineNum">      40</span>              :             }</span>
+<span id="L41"><span class="lineNum">      41</span>              :         }</span>
+<span id="L42"><span class="lineNum">      42</span> <span class="tlaGNC">          48 :         prev_flame_ = flame;</span></span>
+<span id="L43"><span class="lineNum">      43</span>              :     }</span>
+<span id="L44"><span class="lineNum">      44</span> <span class="tlaGNC">         107 : }</span></span>
+<span id="L45"><span class="lineNum">      45</span>              : </span>
+<span id="L46"><span class="lineNum">      46</span> <span class="tlaGNC">           2 : void BurnCycleService::reset()</span></span>
+<span id="L47"><span class="lineNum">      47</span>              : {</span>
+<span id="L48"><span class="lineNum">      48</span> <span class="tlaGNC">           2 :     burner_sec_ = 0;</span></span>
+<span id="L49"><span class="lineNum">      49</span> <span class="tlaGNC">           2 :     total_pause_sec_ = 0;</span></span>
+<span id="L50"><span class="lineNum">      50</span> <span class="tlaGNC">           2 :     cycle_cnt_ = 0;</span></span>
+<span id="L51"><span class="lineNum">      51</span> <span class="tlaGNC">           2 :     inter_session_pause_sec_ = 0;</span></span>
+<span id="L52"><span class="lineNum">      52</span> <span class="tlaGNC">           2 :     inter_session_cnt_ = 0;</span></span>
+<span id="L53"><span class="lineNum">      53</span> <span class="tlaGNC">           2 :     modulation_pause_sec_ = 0;</span></span>
+<span id="L54"><span class="lineNum">      54</span> <span class="tlaGNC">           2 :     modulation_cnt_ = 0;</span></span>
+<span id="L55"><span class="lineNum">      55</span> <span class="tlaGNC">           2 : }</span></span>
+<span id="L56"><span class="lineNum">      56</span>              : </span>
+<span id="L57"><span class="lineNum">      57</span>              : // ── Averages ────────────────────────────────────────────</span>
 <span id="L58"><span class="lineNum">      58</span>              : </span>
-<span id="L59"><span class="lineNum">      59</span> <span class="tlaGNC">          92 :     last_tick_ms_ = now_ms;</span></span>
-<span id="L60"><span class="lineNum">      60</span> <span class="tlaGNC">          92 : }</span></span>
-<span id="L61"><span class="lineNum">      61</span>              : </span>
-<span id="L62"><span class="lineNum">      62</span> <span class="tlaGNC">           2 : void BurnCycleService::reset()</span></span>
-<span id="L63"><span class="lineNum">      63</span>              : {</span>
-<span id="L64"><span class="lineNum">      64</span> <span class="tlaGNC">           2 :     std::memset(burn_dur_, 0, RING * sizeof(uint16_t));</span></span>
-<span id="L65"><span class="lineNum">      65</span> <span class="tlaGNC">           2 :     std::memset(pause_dur_, 0, RING * sizeof(uint16_t));</span></span>
-<span id="L66"><span class="lineNum">      66</span> <span class="tlaGNC">           2 :     cycle_idx_ = 0;</span></span>
-<span id="L67"><span class="lineNum">      67</span> <span class="tlaGNC">           2 :     cycle_total_ = 0;</span></span>
-<span id="L68"><span class="lineNum">      68</span> <span class="tlaGNC">           2 :     burner_sec_ = 0;</span></span>
-<span id="L69"><span class="lineNum">      69</span> <span class="tlaGNC">           2 :     cycle_cnt_ = 0;</span></span>
-<span id="L70"><span class="lineNum">      70</span> <span class="tlaGNC">           2 : }</span></span>
-<span id="L71"><span class="lineNum">      71</span>              : </span>
-<span id="L72"><span class="lineNum">      72</span> <span class="tlaGNC">           4 : float BurnCycleService::median(uint16_t* arr, int count)</span></span>
-<span id="L73"><span class="lineNum">      73</span>              : {</span>
-<span id="L74"><span class="lineNum">      74</span> <span class="tlaGNC">           4 :     if (count == 0) return 0;</span></span>
-<span id="L75"><span class="lineNum">      75</span>              :     // Copy and sort</span>
-<span id="L76"><span class="lineNum">      76</span>              :     uint16_t sorted[RING];</span>
-<span id="L77"><span class="lineNum">      77</span> <span class="tlaGNC">           3 :     for (int i = 0; i &lt; count; i++) sorted[i] = arr[i];</span></span>
-<span id="L78"><span class="lineNum">      78</span> <span class="tlaGNC">           1 :     std::sort(sorted, sorted + count);</span></span>
-<span id="L79"><span class="lineNum">      79</span> <span class="tlaGNC">           1 :     if (count % 2 == 0)</span></span>
-<span id="L80"><span class="lineNum">      80</span> <span class="tlaGNC">           1 :         return (sorted[count/2 - 1] + sorted[count/2]) / 2.0f;</span></span>
-<span id="L81"><span class="lineNum">      81</span> <span class="tlaUNC tlaBgUNC">           0 :     return static_cast&lt;float&gt;(sorted[count/2]);</span></span>
-<span id="L82"><span class="lineNum">      82</span>              : }</span>
-<span id="L83"><span class="lineNum">      83</span>              : </span>
-<span id="L84"><span class="lineNum">      84</span> <span class="tlaGNC tlaBgGNC">           4 : float BurnCycleService::average(uint16_t* arr, int count)</span></span>
-<span id="L85"><span class="lineNum">      85</span>              : {</span>
-<span id="L86"><span class="lineNum">      86</span> <span class="tlaGNC">           4 :     if (count == 0) return 0;</span></span>
-<span id="L87"><span class="lineNum">      87</span> <span class="tlaGNC">           2 :     uint32_t sum = 0;</span></span>
-<span id="L88"><span class="lineNum">      88</span> <span class="tlaGNC">           5 :     for (int i = 0; i &lt; count; i++) sum += arr[i];</span></span>
-<span id="L89"><span class="lineNum">      89</span> <span class="tlaGNC">           2 :     return static_cast&lt;float&gt;(sum) / count;</span></span>
-<span id="L90"><span class="lineNum">      90</span>              : }</span>
-<span id="L91"><span class="lineNum">      91</span>              : </span>
-<span id="L92"><span class="lineNum">      92</span> <span class="tlaGNC">           3 : float BurnCycleService::median_burn()  const { return median(const_cast&lt;uint16_t*&gt;(burn_dur_), cycle_cnt_); }</span></span>
-<span id="L93"><span class="lineNum">      93</span> <span class="tlaGNC">           1 : float BurnCycleService::median_pause() const { return median(const_cast&lt;uint16_t*&gt;(pause_dur_), cycle_total_); }</span></span>
-<span id="L94"><span class="lineNum">      94</span> <span class="tlaGNC">           4 : float BurnCycleService::avg_burn()     const { return average(const_cast&lt;uint16_t*&gt;(burn_dur_), cycle_cnt_); }</span></span>
-<span id="L95"><span class="lineNum">      95</span> <span class="tlaUNC tlaBgUNC">           0 : float BurnCycleService::avg_pause()    const { return average(const_cast&lt;uint16_t*&gt;(pause_dur_), cycle_total_); }</span></span>
+<span id="L59"><span class="lineNum">      59</span> <span class="tlaGNC">           5 : float BurnCycleService::burner_hours() const {</span></span>
+<span id="L60"><span class="lineNum">      60</span> <span class="tlaGNC">           5 :     return static_cast&lt;float&gt;(burner_sec_) / 3600.0f;</span></span>
+<span id="L61"><span class="lineNum">      61</span>              : }</span>
+<span id="L62"><span class="lineNum">      62</span>              : </span>
+<span id="L63"><span class="lineNum">      63</span> <span class="tlaGNC">           5 : float BurnCycleService::avg_burn_sec() const {</span></span>
+<span id="L64"><span class="lineNum">      64</span> <span class="tlaGNC">           5 :     return cycle_cnt_ ? static_cast&lt;float&gt;(burner_sec_) / cycle_cnt_ : 0;</span></span>
+<span id="L65"><span class="lineNum">      65</span>              : }</span>
+<span id="L66"><span class="lineNum">      66</span>              : </span>
+<span id="L67"><span class="lineNum">      67</span> <span class="tlaGNC">           2 : float BurnCycleService::avg_pause_sec() const {</span></span>
+<span id="L68"><span class="lineNum">      68</span> <span class="tlaGNC">           2 :     return cycle_cnt_ ? static_cast&lt;float&gt;(total_pause_sec_) / cycle_cnt_ : 0;</span></span>
+<span id="L69"><span class="lineNum">      69</span>              : }</span>
+<span id="L70"><span class="lineNum">      70</span>              : </span>
+<span id="L71"><span class="lineNum">      71</span> <span class="tlaGNC">           1 : float BurnCycleService::avg_inter_session_pause_sec() const {</span></span>
+<span id="L72"><span class="lineNum">      72</span> <span class="tlaGNC">           1 :     return inter_session_cnt_ ? static_cast&lt;float&gt;(inter_session_pause_sec_) / inter_session_cnt_ : 0;</span></span>
+<span id="L73"><span class="lineNum">      73</span>              : }</span>
+<span id="L74"><span class="lineNum">      74</span>              : </span>
+<span id="L75"><span class="lineNum">      75</span> <span class="tlaGNC">           1 : float BurnCycleService::avg_modulation_pause_sec() const {</span></span>
+<span id="L76"><span class="lineNum">      76</span> <span class="tlaGNC">           1 :     return modulation_cnt_ ? static_cast&lt;float&gt;(modulation_pause_sec_) / modulation_cnt_ : 0;</span></span>
+<span id="L77"><span class="lineNum">      77</span>              : }</span>
         </pre>
               </td>
             </tr>
