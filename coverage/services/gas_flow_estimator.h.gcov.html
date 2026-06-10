@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-10 04:07:46</td>
+            <td class="headerValue">2026-06-10 08:18:05</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
@@ -84,7 +84,7 @@
 <span id="L22"><span class="lineNum">      22</span>              : </span>
 <span id="L23"><span class="lineNum">      23</span>              :     // Accessors</span>
 <span id="L24"><span class="lineNum">      24</span> <span class="tlaGNC tlaBgGNC">           8 :     float instant_flow()     const { return latest_flow_; }</span></span>
-<span id="L25"><span class="lineNum">      25</span> <span class="tlaGNC">          12 :     float integral_m3()      const { return integral_m3_; }</span></span>
+<span id="L25"><span class="lineNum">      25</span> <span class="tlaGNC">          55 :     float integral_m3()      const { return integral_m3_; }</span></span>
 <span id="L26"><span class="lineNum">      26</span>              :     float avg_1h()           const { return ema_1h_; }</span>
 <span id="L27"><span class="lineNum">      27</span>              :     float avg_3h()           const { return ema_3h_; }</span>
 <span id="L28"><span class="lineNum">      28</span>              :     float avg_12h()          const { return ema_12h_; }</span>
@@ -96,7 +96,7 @@
 <span id="L34"><span class="lineNum">      34</span>              :     float t_ret_filtered()   const { return t_ret_filtered_val; }</span>
 <span id="L35"><span class="lineNum">      35</span>              :     float k_calib()          const { return k_calib_; }</span>
 <span id="L36"><span class="lineNum">      36</span>              :     void  set_k_calib(float v) { k_calib_ = v; }</span>
-<span id="L37"><span class="lineNum">      37</span> <span class="tlaGNC">           5 :     void  set_integral(float v) { integral_m3_ = v; }</span></span>
+<span id="L37"><span class="lineNum">      37</span> <span class="tlaGNC">          47 :     void  set_integral(float v) { integral_m3_ = v; }</span></span>
 <span id="L38"><span class="lineNum">      38</span>              : </span>
 <span id="L39"><span class="lineNum">      39</span>              :     // EMA setters for NVS restore</span>
 <span id="L40"><span class="lineNum">      40</span>              :     void set_ema_1h(float v)  { ema_1h_ = v; }</span>
