@@ -189,30 +189,62 @@ void NvsConfigAdapter::save_predict(const float r[3], int idx, int cnt)
     nvs_commit(n); nvs_close(n);
 }
 
-// ── Burner runtime persistence (stats namespace, "burn_sec" key) ──
+// ── Burner stats persistence (stats namespace) ──
 
-bool NvsConfigAdapter::load_burner_sec(uint32_t& burner_sec, uint32_t& cycle_cnt)
+bool NvsConfigAdapter::load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
+                                        uint32_t& inter_pause_sec, uint32_t& inter_cnt,
+                                        uint32_t& mod_pause_sec, uint32_t& mod_cnt)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READONLY, &n) != ESP_OK) return false;
-    uint32_t bs = 0, cc = 0;
     bool ok = false;
-    if (nvs_get_u32(n, "burn_sec", &bs) == ESP_OK) {
-        burner_sec = bs; ok = true;
-    }
-    if (nvs_get_u32(n, "cycle_cnt", &cc) == ESP_OK) {
-        cycle_cnt = cc; ok = true;
-    }
+    uint32_t v;
+    if (nvs_get_u32(n, "burn_sec", &v) == ESP_OK) { burner_sec = v; ok = true; }
+    if (nvs_get_u32(n, "pause_sec", &v) == ESP_OK) { total_pause_sec = v; ok = true; }
+    if (nvs_get_u32(n, "cycle_cnt", &v) == ESP_OK) { cycle_cnt = v; ok = true; }
+    if (nvs_get_u32(n, "inter_ps", &v) == ESP_OK) { inter_pause_sec = v; ok = true; }
+    if (nvs_get_u32(n, "inter_cn", &v) == ESP_OK) { inter_cnt = v; ok = true; }
+    if (nvs_get_u32(n, "mod_ps", &v) == ESP_OK) { mod_pause_sec = v; ok = true; }
+    if (nvs_get_u32(n, "mod_cn", &v) == ESP_OK) { mod_cnt = v; ok = true; }
     nvs_close(n);
     return ok;
 }
 
-void NvsConfigAdapter::save_burner_sec(uint32_t burner_sec, uint32_t cycle_cnt)
+void NvsConfigAdapter::save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
+                                        uint32_t inter_pause_sec, uint32_t inter_cnt,
+                                        uint32_t mod_pause_sec, uint32_t mod_cnt)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
     nvs_set_u32(n, "burn_sec", burner_sec);
+    nvs_set_u32(n, "pause_sec", total_pause_sec);
     nvs_set_u32(n, "cycle_cnt", cycle_cnt);
+    nvs_set_u32(n, "inter_ps", inter_pause_sec);
+    nvs_set_u32(n, "inter_cn", inter_cnt);
+    nvs_set_u32(n, "mod_ps", mod_pause_sec);
+    nvs_set_u32(n, "mod_cn", mod_cnt);
+    nvs_commit(n);
+    nvs_close(n);
+}
+
+// ── Total uptime persistence (stats namespace, "uptime" key) ──
+
+bool NvsConfigAdapter::load_total_uptime(uint32_t& total_uptime_sec)
+{
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READONLY, &n) != ESP_OK) return false;
+    uint32_t v = 0;
+    bool ok = (nvs_get_u32(n, "uptime", &v) == ESP_OK);
+    if (ok) total_uptime_sec = v;
+    nvs_close(n);
+    return ok;
+}
+
+void NvsConfigAdapter::save_total_uptime(uint32_t total_uptime_sec)
+{
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
+    nvs_set_u32(n, "uptime", total_uptime_sec);
     nvs_commit(n);
     nvs_close(n);
 }

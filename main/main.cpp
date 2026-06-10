@@ -69,6 +69,7 @@ extern "C" void app_main(void)
     ca_web.set_logger(&ca_log);
 
     nvs.load_all(ca_state);  // restore persisted config into state
+    nvs.load_meter(ca_state); // restore gas meter base reading
 
     // ── Phase 3: Network ─────────────────────────────────
     WifiInitAdapter wifi;
@@ -98,16 +99,41 @@ extern "C" void app_main(void)
     DHWPredictService      dhw_predict(ca_state, nvs, ca_time);
     dhw_predict.load_history();
 
-    // Restore saved burner stats from NVS (survives reboots)
+    // Restore saved burner stats from NVS
     {
-        uint32_t saved_bs = 0, saved_cc = 0;
-        if (nvs.load_burner_sec(saved_bs, saved_cc)) {
-            *burn_cycles.burner_sec_ptr() = saved_bs;
-            *burn_cycles.cycle_cnt_ptr()  = saved_cc;
-            ESP_LOGI("main", "NVS: восстановлено burner_sec=%" PRIu32 " cycle_cnt=%" PRIu32,
-                     saved_bs, saved_cc);
+        uint32_t bs = 0, tps = 0, cc = 0, ips = 0, ic = 0, mps = 0, mc = 0;
+        if (nvs.load_burn_stats(bs, tps, cc, ips, ic, mps, mc)) {
+            *burn_cycles.burner_sec_ptr()      = bs;
+            *burn_cycles.total_pause_sec_ptr() = tps;
+            *burn_cycles.cycle_cnt_ptr()       = cc;
+            *burn_cycles.inter_pause_sec_ptr() = ips;
+            *burn_cycles.inter_cnt_ptr()       = ic;
+            *burn_cycles.mod_pause_sec_ptr()   = mps;
+            *burn_cycles.mod_cnt_ptr()         = mc;
+            ESP_LOGI("main", "NVS: восстановлена burn-статистика (burner_sec=%" PRIu32 ")", bs);
         }
     }
+
+    // Restore modulation histogram from NVS (NvsHistBlob)
+    {
+        NvsHistBlob hist_blob;
+        memset(&hist_blob, 0, sizeof(hist_blob));
+        float saved_integ_m3 = 0;
+        uint32_t saved_burner_sec_hist = 0;
+        if (nvs.load_stats(saved_burner_sec_hist, saved_integ_m3,
+                           &hist_blob, nullptr, nullptr, nullptr)) {
+            *mod_stats.samples_ptr() = hist_blob.samples;
+            memcpy(mod_stats.hist_ptr(), hist_blob.hist, HIST_BINS * sizeof(uint16_t));
+            gas_flow.set_integral(saved_integ_m3);
+            ESP_LOGI("main", "NVS: восстановлена гистограмма (samples=%" PRIu32 ") и integral_m3=%.3f",
+                     hist_blob.samples, (double)saved_integ_m3);
+        }
+    }
+
+    // Restore total uptime (cumulative across reboots)
+    uint32_t total_uptime_base_sec = 0;
+    nvs.load_total_uptime(total_uptime_base_sec);
+    ca_web.set_total_uptime_base(total_uptime_base_sec);
 
     ca_web.set_mod_stats(&mod_stats);
     ca_web.set_burn_cycles(&burn_cycles);
@@ -157,12 +183,29 @@ extern "C" void app_main(void)
                  esp_get_free_heap_size(),
                  100 - idle0, 100 - idle1, (200 - idle0 - idle1) / 2);
 
-        // Save burner runtime to NVS every 10 min (10 ticks) if changed
+        // Save stats to NVS every 10 min (10 ticks) if burner_sec changed
         if (save_tick >= 10) {
             save_tick = 0;
             uint32_t bs = burn_cycles.burner_seconds();
             if (bs != last_saved_burner_sec) {
-                nvs.save_burner_sec(bs, burn_cycles.cycle_count());
+                nvs.save_burn_stats(bs,
+                                    burn_cycles.total_pause_seconds(),
+                                    burn_cycles.cycle_count(),
+                                    burn_cycles.inter_session_pause_sec(),
+                                    burn_cycles.inter_session_cnt(),
+                                    burn_cycles.modulation_pause_sec(),
+                                    burn_cycles.modulation_cnt());
+                // Save modulation histogram
+                NvsHistBlob hist_blob;
+                hist_blob.samples = mod_stats.samples();
+                memcpy(hist_blob.hist, mod_stats.hist_ptr(), HIST_BINS * sizeof(uint16_t));
+                nvs.save_stats(ca_state, 0, gas_flow.integral_m3(),
+                               &hist_blob, nullptr, nullptr, nullptr);
+                // Save total uptime
+                nvs.save_total_uptime(total_uptime_base_sec +
+                                      (uint32_t)(esp_timer_get_time() / 1000000));
+                // Save gas meter base
+                nvs.save_meter(ca_state);
                 last_saved_burner_sec = bs;
             }
         }

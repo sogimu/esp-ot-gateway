@@ -46,7 +46,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"slave_type\":%d,\"slave_ver\":%d,\"ot_ver\":%.1f,"
         "\"t1_temp\":%.1f,\"t2_temp\":%.1f,"
         "\"sched_on\":0,\"hour\":%d,\"time\":\"%s\",\"tz_offset\":%d,"
-        "\"utc_time\":\"%s\",\"uptime_sec\":%lu,"
+        "\"utc_time\":\"%s\",\"uptime_sec\":%lu,\"total_uptime_sec\":%lu,"
         "\"dhw_hyst_on\":%.1f,"
         "\"sntp_server0\":\"%s\",\"sntp_server1\":\"%s\","
         "\"pid_enabled\":%d,\"pid_active\":%d,\"pid_output\":%.0f,"
@@ -79,6 +79,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         (ti.tm_year >= (2024 - 1900)) ? ti.tm_hour : -1, timebuf,
         state_->get_tz_offset(), utcbuf,
         (unsigned long)(esp_timer_get_time() / 1000000),
+        (unsigned long)(total_uptime_base_ + (esp_timer_get_time() / 1000000)),
         (double)state_->get_dhw_hysteresis(),
         state_->get_sntp_server0(), state_->get_sntp_server1(),
         state_->get_pid_enabled() ? 1 : 0, state_->get_pid_active() ? 1 : 0,
@@ -137,9 +138,10 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         "\"p1\":%.1f,\"p10\":%.1f,\"p25\":%.1f,\"p50\":%.1f,"
         "\"p75\":%.1f,\"p90\":%.1f,\"p99\":%.1f,"
         "\"cycles\":%u,"
-        "\"med_burn\":%.0f,\"med_pause\":%.0f,"
-        "\"avg_burn\":%.0f,\"avg_pause\":%.0f,"
-        "\"burner_h\":%.1f,"
+        "\"avg_burn\":%.0f,"
+        "\"avg_inter_session_pause\":%.0f,\"avg_modulation_pause\":%.0f,"
+        "\"inter_session_cnt\":%u,\"modulation_cnt\":%u,"
+        "\"burner_h\":%.1f,\"total_pause_h\":%.1f,"
         "\"p90_max\":%.1f,\"p10_p50\":%.1f,\"p99_p90\":%.1f,"
         "\"instant_flow\":%.4f,\"integral_m3\":%.3f,"
         "\"avg_1h\":%.4f,\"avg_3h\":%.4f,\"avg_12h\":%.4f,"
@@ -154,9 +156,13 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         (double)mod_stats_->p25(), (double)mod_stats_->p50(),
         (double)mod_stats_->p75(), (double)mod_stats_->p90(), (double)mod_stats_->p99(),
         (unsigned)burn_cycles_->cycle_count(),
-        (double)burn_cycles_->median_burn(), (double)burn_cycles_->median_pause(),
-        (double)burn_cycles_->avg_burn(), (double)burn_cycles_->avg_pause(),
+        (double)burn_cycles_->avg_burn_sec(),
+        (double)burn_cycles_->avg_inter_session_pause_sec(),
+        (double)burn_cycles_->avg_modulation_pause_sec(),
+        (unsigned)burn_cycles_->inter_session_cnt(),
+        (unsigned)burn_cycles_->modulation_cnt(),
         (double)burn_cycles_->burner_hours(),
+        (double)(burn_cycles_->total_pause_seconds() / 3600.0f),
         (double)mod_stats_->p90(), (double)p10p50,
         (double)(mod_stats_->p99() - mod_stats_->p90()),
         (double)gas_flow_->instant_flow(), (double)gas_flow_->integral_m3(),

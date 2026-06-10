@@ -1,22 +1,10 @@
 #include "application/services/burn_cycle_service.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/itime_source.h"
-#include <cstring>
-#include <cstdlib>
 
 BurnCycleService::BurnCycleService(IHeatingStateStore& state, ITimeSource& time)
     : state_(state), time_(time)
 {
-    burn_dur_ = static_cast<uint16_t*>(malloc(RING * sizeof(uint16_t)));
-    pause_dur_ = static_cast<uint16_t*>(malloc(RING * sizeof(uint16_t)));
-    if (burn_dur_) std::memset(burn_dur_, 0, RING * sizeof(uint16_t));
-    if (pause_dur_) std::memset(pause_dur_, 0, RING * sizeof(uint16_t));
-}
-
-BurnCycleService::~BurnCycleService()
-{
-    free(burn_dur_);
-    free(pause_dur_);
 }
 
 void BurnCycleService::poll()
@@ -29,67 +17,61 @@ void BurnCycleService::poll()
 
     if (flame != prev_flame_) {
         if (flame) {
-            // Flame ON: record preceding pause, then advance ring index
+            // Flame ON: record preceding pause, classify by threshold
             flame_on_ms_ = now_ms;
             if (flame_off_ms_ > 0) {
-                // Round to nearest second (was truncating)
                 uint32_t pause = (now_ms - flame_off_ms_ + 500) / 1000;
-                if (pause < 65535) {
-                    pause_dur_[cycle_idx_] = static_cast<uint16_t>(pause);
+                total_pause_sec_ += pause;
+                if (pause > INTER_SESSION_THRESHOLD_SEC) {
+                    inter_session_pause_sec_ += pause;
+                    inter_session_cnt_++;
+                } else {
+                    modulation_pause_sec_ += pause;
+                    modulation_cnt_++;
                 }
-                cycle_idx_ = (cycle_idx_ + 1) % RING;
-                if (cycle_total_ < RING) cycle_total_++;
             }
         } else {
-            // Flame OFF: record burn at current position (same slot as upcoming pause)
+            // Flame OFF: record burn duration
             flame_off_ms_ = now_ms;
             if (flame_on_ms_ > 0) {
-                // Round to nearest second (was truncating, losing up to 0.999s per cycle)
                 uint32_t burn = (now_ms - flame_on_ms_ + 500) / 1000;
-                if (burn < 65535) {
-                    burn_dur_[cycle_idx_] = static_cast<uint16_t>(burn);
-                }
                 burner_sec_ += burn;
                 cycle_cnt_++;
             }
         }
         prev_flame_ = flame;
     }
-
-    last_tick_ms_ = now_ms;
 }
 
 void BurnCycleService::reset()
 {
-    std::memset(burn_dur_, 0, RING * sizeof(uint16_t));
-    std::memset(pause_dur_, 0, RING * sizeof(uint16_t));
-    cycle_idx_ = 0;
-    cycle_total_ = 0;
     burner_sec_ = 0;
+    total_pause_sec_ = 0;
     cycle_cnt_ = 0;
+    inter_session_pause_sec_ = 0;
+    inter_session_cnt_ = 0;
+    modulation_pause_sec_ = 0;
+    modulation_cnt_ = 0;
 }
 
-float BurnCycleService::median(uint16_t* arr, int count)
-{
-    if (count == 0) return 0;
-    // Copy and sort
-    uint16_t sorted[RING];
-    for (int i = 0; i < count; i++) sorted[i] = arr[i];
-    std::sort(sorted, sorted + count);
-    if (count % 2 == 0)
-        return (sorted[count/2 - 1] + sorted[count/2]) / 2.0f;
-    return static_cast<float>(sorted[count/2]);
+// ── Averages ────────────────────────────────────────────
+
+float BurnCycleService::burner_hours() const {
+    return static_cast<float>(burner_sec_) / 3600.0f;
 }
 
-float BurnCycleService::average(uint16_t* arr, int count)
-{
-    if (count == 0) return 0;
-    uint32_t sum = 0;
-    for (int i = 0; i < count; i++) sum += arr[i];
-    return static_cast<float>(sum) / count;
+float BurnCycleService::avg_burn_sec() const {
+    return cycle_cnt_ ? static_cast<float>(burner_sec_) / cycle_cnt_ : 0;
 }
 
-float BurnCycleService::median_burn()  const { return median(const_cast<uint16_t*>(burn_dur_), cycle_cnt_); }
-float BurnCycleService::median_pause() const { return median(const_cast<uint16_t*>(pause_dur_), cycle_total_); }
-float BurnCycleService::avg_burn()     const { return average(const_cast<uint16_t*>(burn_dur_), cycle_cnt_); }
-float BurnCycleService::avg_pause()    const { return average(const_cast<uint16_t*>(pause_dur_), cycle_total_); }
+float BurnCycleService::avg_pause_sec() const {
+    return cycle_cnt_ ? static_cast<float>(total_pause_sec_) / cycle_cnt_ : 0;
+}
+
+float BurnCycleService::avg_inter_session_pause_sec() const {
+    return inter_session_cnt_ ? static_cast<float>(inter_session_pause_sec_) / inter_session_cnt_ : 0;
+}
+
+float BurnCycleService::avg_modulation_pause_sec() const {
+    return modulation_cnt_ ? static_cast<float>(modulation_pause_sec_) / modulation_cnt_ : 0;
+}
