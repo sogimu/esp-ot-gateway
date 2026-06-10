@@ -6,11 +6,16 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$SCRIPT_DIR/.."
 
-# Проверить что ESP-IDF активирован
+# Автоматически активировать ESP-IDF, если ещё не
 if [ -z "$IDF_PATH" ]; then
-    echo "[!] ESP-IDF не активирован. Выполните:"
-    echo "    source ~/esp/esp-idf/export.sh"
-    exit 1
+    IDF_SCRIPT=~/esp/esp-idf/export.sh
+    if [ -f "$IDF_SCRIPT" ]; then
+        echo "[*] Активация ESP-IDF..."
+        . "$IDF_SCRIPT" > /dev/null 2>&1
+    else
+        echo "[!] ESP-IDF не найден ($IDF_SCRIPT)"
+        exit 1
+    fi
 fi
 
 echo "=== Сборка gas_boiler (ESP32) ==="

@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * OpenTherm master для ESP32 + SmartTherm adapter
  *
@@ -20,6 +24,7 @@
  */
 #define GPIO_OT_TX   4
 #define GPIO_OT_RX   16
+#define GPIO_RELAY   23   /* реле SmartTherm (HF33F-005-ZS3, NO-контакт) */
 
 /* OpenTherm Data IDs */
 #define OT_ID_STATUS            0
@@ -64,7 +69,7 @@
 #define OT_MASTER_CH_ENABLE   (1 << 0)
 #define OT_MASTER_DHW_ENABLE  (1 << 1)
 #define OT_MASTER_CH2_ENABLE  (1 << 4)
-#define OT_MASTER_DHW_BLOCK   (1 << 6)  /* DHW Blocking: просим котёл удерживать CH пока активен DHW */
+#define OT_MASTER_DHW_BLOCK   (1 << 6)  /* DHW Blocking (не используется — котёл сам управляет приоритетом) */
 
 /* Флаги статуса — котёл (младший байт ID=0) */
 #define OT_SLAVE_FAULT      (1 << 0)
@@ -73,27 +78,27 @@
 #define OT_SLAVE_FLAME      (1 << 3)
 
 #define OT_RESPONSE_TIMEOUT_MS  800
-#define OT_POLL_INTERVAL_MS    1000
+#define OT_MIN_GAP_MS           100   /* межфреймовая пауза (спецификация OpenTherm) */
+#define OT_POLL_INTERVAL_MS    1100
 
 /*
- * Гистерезис приоритета нагрева бойлера КН (°C)
+ * Гистерезис нагрева бойлера КН (°C)
  *
- * ID=26 — это датчик самого котла. Котёл останавливает нагрев БКН
- * когда его датчик достигает dhw_setpoint. Мы используем тот же датчик.
+ * Котёл Baxi НЕ принимает запись DHW setpoint (ID=56) по OpenTherm —
+ * использует собственную уставку с передней панели.
+ * Управление осцилляцией — через флаг DHW_ENABLE в STATUS:
  *
- * Когда dhw_temp опускается ниже (dhw_setpoint - DHW_HYST_ON):
- *   → CH временно отключается, котёл греет только БКН.
+ * Когда dhw_temp опускается ниже (dhw_setpoint - dhw_hysteresis):
+ *   → DHW_ENABLE=1 в STATUS, котёл греет БКН до своей внутренней уставки.
  * Когда dhw_temp достигает dhw_setpoint:
- *   → CH восстанавливается (котёл в этот момент сам завершает нагрев БКН).
+ *   → DHW_ENABLE=0, котёл заблокирован на CH.
  *
- * Пример при setpoint=55°C:
- *   приоритет ON  когда temp < 53°C
- *   приоритет OFF когда temp >= 55°C
+ * Пример при setpoint=55°C, dhw_hysteresis=2:
+ *   БКН разрешён  когда temp < 53°C
+ *   БКН запрещён  когда temp >= 55°C (только CH)
  *
- * Управление только по температуре, без реакции на флаг dhw_active —
- * это исключает осцилляцию у уставки.
+ * Значение настраивается через веб-интерфейс, сохраняется в NVS.
  */
-#define DHW_HYST_ON   2.0f   /* включить приоритет: упало на 2°C ниже уставки   */
 
 /* Фрейм OpenTherm */
 typedef struct {
@@ -109,8 +114,11 @@ typedef struct {
  * 3-ходовой клапан управляется котлом автоматически:
  *   dhw_active=false → клапан на отопление (CH)
  *   dhw_active=true  → клапан на змеевик БКН (DHW)
- * Решение о переключении котёл принимает самостоятельно:
- *   если dhw_enable=1 И t_бойлера < dhw_setpoint → переключить на БКН
+ *
+ * Управление осцилляцией — через DHW_ENABLE в STATUS:
+ *   dhw_priority=true  → DHW_ENABLE=1 (котёл может греть БКН)
+ *   dhw_priority=false → DHW_ENABLE=0 (котёл заблокирован на CH)
+ * Котёл использует собственную уставку БКН (ID=56 не принимается).
  */
 typedef struct {
     bool     connected;
@@ -127,6 +135,8 @@ typedef struct {
     float    return_temp;     /* обратка первичного контура */
     float    dhw_temp;        /* температура в баке БКН (датчик NTC) */
     float    outside_temp;
+    float    t1_temp;         /* DS18B20 на GPIO15 */
+    float    t2_temp;         /* DS18B20 на GPIO26 */
 
     /* Параметры работы */
     float    modulation;      /* % мощности горелки */
@@ -163,15 +173,26 @@ typedef struct {
     bool     ch_enable;
     bool     dhw_enable;      /* разрешить нагрев БКН */
     bool     fault_reset;     /* однократный сброс аварии (через LB STATUS) */
-    bool     dhw_priority;    /* приоритет БКН активен (CH временно подавлен) */
+    bool     dhw_priority;    /* гистерезис БКН: true=DHW_ENABLE=1 (греем), false=DHW_ENABLE=0 (блок) */
+    float    dhw_hysteresis;  /* гистерезис: разница включения ниже уставки, °C */
+
+    /* Сессия нагрева БКН */
+    uint32_t dhw_session_start_ms;  /* timestamp начала сессии (мс) */
+    float    dhw_session_min_temp;  /* минимальная t БКН за сессию (база для оценки) */
+    int      dhw_last_session_sec;  /* длительность последней завершённой сессии (сек), 0=нет */
 } OT_State;
 
 /* Инициализация (GPIO + esp_timer) */
 void OT_Init(void);
 
-/* Опрос котла — вызывать каждые OT_POLL_INTERVAL_MS мс */
-void OT_Poll(OT_State *state);
+/* Низкоуровневая транзакция: отправить фрейм, получить ответ.
+   Возвращает true если ответ получен и корректен. */
+bool OT_Transaction(const OT_Frame *request, OT_Frame *response);
 
 /* Вспомогательные функции формата f8.8 */
 float    OT_f88_to_float(uint16_t v);
 uint16_t OT_float_to_f88(float f);
+
+#ifdef __cplusplus
+}
+#endif

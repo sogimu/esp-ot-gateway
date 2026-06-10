@@ -215,6 +215,14 @@ static void IRAM_ATTR ot_rx_isr(void *arg)
 
 /* ── Public API ────────────────────────────────────────────────────────────── */
 
+/* Forward declaration for ot_transaction (defined below) */
+static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp);
+
+bool OT_Transaction(const OT_Frame *request, OT_Frame *response)
+{
+    return ot_transaction(request, response);
+}
+
 float OT_f88_to_float(uint16_t v)
 {
     int8_t  i = (int8_t)(v >> 8);
@@ -257,6 +265,17 @@ void OT_Init(void)
     gpio_install_isr_service(0);
     gpio_isr_handler_add(GPIO_OT_RX, ot_rx_isr, NULL);
 
+    /* Реле — выход, HIGH = замкнут (NO контакт) */
+    gpio_config_t relay_cfg = {
+        .pin_bit_mask = 1ULL << GPIO_RELAY,
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    gpio_config(&relay_cfg);
+    gpio_set_level(GPIO_RELAY, 1);   /* замкнуть при старте */
+
     /* Семафор для ожидания завершения транзакции */
     ot_done_sem = xSemaphoreCreateBinary();
 
@@ -275,10 +294,102 @@ void OT_Init(void)
     ESP_LOGI(TAG, "RX idle level = %d  (ожидается 0 если котёл подключён и включён)", OT_RX_READ());
 }
 
+/* ── Читаемое логирование OT-сообщений ──────────────────────────────────── */
+
+static const char *ot_id_name(uint8_t id)
+{
+    switch (id) {
+    case 0:   return "STATUS";
+    case 1:   return "CH_sp";
+    case 2:   return "MasterCfg";
+    case 3:   return "SlaveCfg";
+    case 5:   return "Faults";
+    case 17:  return "Modulation";
+    case 25:  return "CH_temp";
+    case 26:  return "DHW_temp";
+    case 28:  return "Return";
+    case 48:  return "DHW_bounds";
+    case 49:  return "CH_bounds";
+    case 56:  return "DHW_sp";
+    case 57:  return "MaxCH_sp";
+    case 115: return "OEM_diag";
+    case 124: return "OT_ver";
+    case 125: return "Slave_ver";
+    case 126: return "Master_ver";
+    default:  return "?";
+    }
+}
+
+static const char *ot_msg_name(uint8_t type)
+{
+    switch (type) {
+    case OT_MSG_READ_DATA:    return "READ";
+    case OT_MSG_WRITE_DATA:   return "WRITE";
+    case OT_MSG_READ_ACK:     return "READ_ACK";
+    case OT_MSG_WRITE_ACK:    return "WRITE_ACK";
+    case OT_MSG_DATA_INVALID: return "INVALID";
+    case OT_MSG_UNKNOWN_ID:   return "UNKNOWN";
+    default:                  return "?";
+    }
+}
+
+/* Формат значения для лога (двузначное — используется в TX и RX) */
+static void ot_fmt_val(char *buf, size_t len, uint8_t id, uint16_t val)
+{
+    switch (id) {
+    case 1:  case 56: case 57:          /* setpoints */
+    case 25: case 26: case 28: case 124:/* temperatures, OT version */
+        snprintf(buf, len, "%.1f°C", (double)OT_f88_to_float(val));
+        break;
+    case 17:                             /* modulation */
+        snprintf(buf, len, "%.1f%%", (double)OT_f88_to_float(val));
+        break;
+    case 0:  case 2: case 3: case 5:
+    case 48: case 49: case 115:
+    case 125: case 126:
+        snprintf(buf, len, "0x%04X", val);
+        break;
+    default:
+        snprintf(buf, len, "%u", val);
+        break;
+    }
+}
+
+/* Формат мастер-байта STATUS (ID=0, HB) для TX-лога */
+static void ot_fmt_status_master(char *buf, size_t len, uint8_t m)
+{
+    int pos = 0;
+    if (m & OT_MASTER_CH_ENABLE)  pos += snprintf(buf + pos, len - pos, " CH=1");
+    else                          pos += snprintf(buf + pos, len - pos, " CH=0");
+    if (m & OT_MASTER_DHW_ENABLE) pos += snprintf(buf + pos, len - pos, " DHW=1");
+    else                          pos += snprintf(buf + pos, len - pos, " DHW=0");
+    if (m & OT_MASTER_CH2_ENABLE) pos += snprintf(buf + pos, len - pos, " CH2=1");
+    if (m & OT_MASTER_DHW_BLOCK)  pos += snprintf(buf + pos, len - pos, " BLOCK=1");
+    (void)len;
+}
+
+/* Формат слейв-байта STATUS (ID=0, LB) для RX-лога */
+static void ot_fmt_status_slave(char *buf, size_t len, uint8_t sl)
+{
+    int pos = 0;
+    pos += snprintf(buf + pos, len - pos, " fault=%d", (sl >> 0) & 1);
+    pos += snprintf(buf + pos, len - pos, " ch=%d",   (sl >> 1) & 1);
+    pos += snprintf(buf + pos, len - pos, " dhw=%d",  (sl >> 2) & 1);
+    pos += snprintf(buf + pos, len - pos, " flame=%d",(sl >> 3) & 1);
+    (void)len;
+}
+
 /* Одна транзакция мастер → котёл → мастер.
-   Возвращает true если ответ получен и корректен. */
+   Возвращает true если ответ получен и корректен.
+   Гарантирует межфреймовую паузу ≥ 100 мс (требование спецификации OpenTherm). */
 static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
 {
+    /* Межфреймовая пауза: ≥ 100 мс от конца предыдущего ответа */
+    static uint32_t last_txn_ms = 0;
+    uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    int32_t wait = OT_MIN_GAP_MS - (int32_t)(now_ms - last_txn_ms);
+    if (wait > 0) vTaskDelay(pdMS_TO_TICKS(wait));
+
     /* Дождаться idle */
     uint32_t t0 = xTaskGetTickCount();
     while (ot_state != OT_S_IDLE) {
@@ -286,15 +397,11 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
         vTaskDelay(1);
     }
 
-    /* ── Отладка перед TX ── */
-    int rx_idle = OT_RX_READ();
-    uint64_t tx_frame_dbg = build_frame(req);
-    ESP_LOGI(TAG, ">>> TX ID=%d type=%d frame=0x%09llX  RX_idle=%d  ISR=%lu TX_done=%lu RX_done=%lu TMOUT=%lu",
-             req->data_id, req->msg_type, tx_frame_dbg,
-             rx_idle, dbg_isr_count, dbg_tx_done, dbg_rx_done, dbg_timeout);
+    /* ── TX ── */
+    uint64_t tx_frame = build_frame(req);
 
-    /* Подготовить фрейм */
-    ot_tx_frame = tx_frame_dbg;
+    /* ── Подготовить фрейм ── */
+    ot_tx_frame = tx_frame;
     ot_tx_idx   = 0;
     ot_tx_half  = 0;
     ot_state    = OT_S_TX;
@@ -303,15 +410,17 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
     if (xSemaphoreTake(ot_done_sem, pdMS_TO_TICKS(OT_RESPONSE_TIMEOUT_MS + 200))
             != pdTRUE) {
         ot_state = OT_S_IDLE;
-        ESP_LOGW(TAG, "    TIMEOUT ID=%d  ISR=%lu TX_done=%lu",
-                 req->data_id, dbg_isr_count, dbg_tx_done);
+        last_txn_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        ESP_LOGW(TAG, "OT %-5s %-10s(%d)  |  TIMEOUT",
+                 ot_msg_name(req->msg_type), ot_id_name(req->data_id), req->data_id);
         return false;
     }
 
     if (ot_state == OT_S_ERROR) {
         ot_state = OT_S_IDLE;
-        ESP_LOGW(TAG, "    NO_RESP ID=%d  ISR=%lu TX_done=%lu  last_raw=0x%09llX",
-                 req->data_id, dbg_isr_count, dbg_tx_done, dbg_last_raw);
+        last_txn_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        ESP_LOGW(TAG, "OT %-5s %-10s(%d)  |  NO_RESP",
+                 ot_msg_name(req->msg_type), ot_id_name(req->data_id), req->data_id);
         return false;
     }
 
@@ -319,8 +428,37 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
     parse_frame(raw, rsp);
     ot_state = OT_S_IDLE;
 
-    ESP_LOGI(TAG, "    <<< ID=%d raw=0x%09llX rsp_type=%d rsp_id=%d val=0x%04X",
-             req->data_id, raw, rsp->msg_type, rsp->data_id, rsp->data_value);
+    last_txn_ms = (uint32_t)(esp_timer_get_time() / 1000);
+
+    /* ── Лог: TX → RX одним сообщением ── */
+    {
+        char tx_val[32] = "";
+        char rx_val[64] = "";
+        uint8_t id = req->data_id;
+        uint16_t txv = req->data_value;
+
+        if (id == 0) {
+            ot_fmt_status_master(tx_val, sizeof(tx_val), (uint8_t)(txv >> 8));
+        } else if (req->msg_type == OT_MSG_WRITE_DATA) {
+            ot_fmt_val(tx_val, sizeof(tx_val), id, txv);
+            memmove(tx_val + 2, tx_val, strlen(tx_val) + 1);
+            tx_val[0] = '='; tx_val[1] = ' ';
+        }
+
+        if (rsp->data_id == 0 && rsp->msg_type == OT_MSG_READ_ACK) {
+            ot_fmt_status_slave(rx_val, sizeof(rx_val), (uint8_t)(rsp->data_value & 0xFF));
+        } else if (rsp->msg_type == OT_MSG_WRITE_ACK || rsp->msg_type == OT_MSG_READ_ACK) {
+            ot_fmt_val(rx_val, sizeof(rx_val), rsp->data_id, rsp->data_value);
+            memmove(rx_val + 2, rx_val, strlen(rx_val) + 1);
+            rx_val[0] = '='; rx_val[1] = ' ';
+        } else {
+            snprintf(rx_val, sizeof(rx_val), "%s", ot_msg_name(rsp->msg_type));
+        }
+
+        ESP_LOGI(TAG, "OT %-5s %-10s(%d) %-24s -> %s",
+                 ot_msg_name(req->msg_type), ot_id_name(id), id,
+                 tx_val, rx_val);
+    }
 
     /* Проверка: ID ответа должен совпадать */
     if (rsp->data_id != req->data_id) {
@@ -425,7 +563,7 @@ static void ot_handshake(void)
  *
  * ВАЖНО: STATUS (ID=0) отправляется КАЖДЫЙ цикл опроса (~1 сек).
  */
-#define POLL_EXTRA_STEPS 11  /* количество доп. запросов (шаги 0..10) */
+#define POLL_EXTRA_STEPS 18  /* количество доп. запросов (шаги 0..17, приоритетный цикл) */
 static int poll_extra = 0;
 
 /* Отправка STATUS (ID=0) — вызывается каждый цикл */
@@ -436,12 +574,14 @@ static void poll_status(OT_State *s)
     req.data_id  = OT_ID_STATUS;
     {
         uint8_t m = 0;
-        /* CH разрешён пользователем И приоритет БКН не активен */
-        if (s->ch_enable && !s->dhw_priority) m |= OT_MASTER_CH_ENABLE;
-        if (s->dhw_enable) m |= OT_MASTER_DHW_ENABLE;
-        if (s->dhw_enable) m |= OT_MASTER_CH2_ENABLE;  /* CH2 = нагрев бойлера КН (косвенный) */
-        /* DHW Blocking: стандартный OT-сигнал — просим котёл удерживать CH пока греется БКН */
-        if (s->dhw_priority)  m |= OT_MASTER_DHW_BLOCK;
+        /* CH всегда разрешён когда пользователь его включил.
+         * DHW разрешён только когда dhw_priority=true (гистерезис:
+         * БКН ниже уставки → греем, достиг уставки → запрещаем).
+         * CH2 необходим котлу для переключения 3-ход. клапана на БКН,
+         * несмотря на SlaveConfig CH2=0. */
+        if (s->ch_enable)  m |= OT_MASTER_CH_ENABLE;
+        if (s->dhw_enable && s->dhw_priority) m |= OT_MASTER_DHW_ENABLE;
+        if (s->dhw_enable && s->dhw_priority) m |= OT_MASTER_CH2_ENABLE;
         uint8_t lb = 0;
         if (s->fault_reset) lb = 1;  /* бит 0 LB = сброс аварии */
         req.data_value = (uint16_t)((m << 8) | lb);
@@ -454,186 +594,7 @@ static void poll_status(OT_State *s)
         s->ch_active  = (sl & OT_SLAVE_CH_ACTIVE) != 0;
         s->dhw_active = (sl & OT_SLAVE_DHW_ACTIVE)!= 0;
         s->flame      = (sl & OT_SLAVE_FLAME)     != 0;
-        s->connected  = true;
+s->connected  = true;
         s->last_response_ms = (uint32_t)(esp_timer_get_time() / 1000);
-    }
-}
-
-void OT_Poll(OT_State *s)
-{
-    OT_Frame req = {0}, rsp = {0};
-    bool ok;
-
-    /* ── Handshake при старте и каждые 60 минут ── */
-    {
-        hs_state = s;
-        uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
-        if (!ot_initialized || (now_ms - ot_init_time_ms > OT_REINIT_INTERVAL_MS)) {
-            ot_handshake();
-        }
-    }
-
-    /* ── Приоритет нагрева бойлера КН с гистерезисом ──────────────────────────
-     * Управление только по температуре датчика котла (ID=26).
-     * Флаг dhw_active намеренно не используется: реакция на него у уставки
-     * приводила к быстрой осцилляции (котёл ещё показывал dhw_active=1
-     * при 54.9°C сразу после снятия приоритета на 55°C).
-     *
-     * ON:  dhw_temp < setpoint - DHW_HYST_ON  (temp < 53°C при setpoint=55°C)
-     * OFF: dhw_temp >= setpoint               (temp >= 55°C)
-     *
-     * Зоны не перекрываются → осцилляция исключена.
-     */
-    if (s->dhw_enable && s->dhw_temp > 5.0f) {
-        if (!s->dhw_priority && s->dhw_temp < s->dhw_setpoint - DHW_HYST_ON) {
-            s->dhw_priority = true;
-            ESP_LOGI(TAG, "DHW priority ON:  temp=%.1f  setpoint=%.1f  (CH подавлен)",
-                     (double)s->dhw_temp, (double)s->dhw_setpoint);
-        } else if (s->dhw_priority && s->dhw_temp >= s->dhw_setpoint) {
-            s->dhw_priority = false;
-            ESP_LOGI(TAG, "DHW priority OFF: temp=%.1f  setpoint=%.1f  (CH восстановлен)",
-                     (double)s->dhw_temp, (double)s->dhw_setpoint);
-        }
-    } else {
-        s->dhw_priority = false;
-    }
-
-    /* ── Всегда сначала STATUS ── */
-    poll_status(s);
-
-    /* ── Затем один дополнительный запрос по кругу ── */
-    switch (poll_extra) {
-
-    /* ── Максимальная уставка CH (ID=57) — ПЕРВЫМ, иначе котёл зажимает CH setpoint ── */
-    case 0:
-        req.msg_type   = OT_MSG_WRITE_DATA;
-        req.data_id    = OT_ID_MAX_CH_SETPOINT;
-        req.data_value = OT_float_to_f88(80.0f);
-        ot_transaction(&req, &rsp);
-        break;
-
-    /* ── Уставка CH ── */
-    case 1: {
-            req.msg_type   = OT_MSG_WRITE_DATA;
-        req.data_id    = OT_ID_CH_SETPOINT;
-        req.data_value = OT_float_to_f88(s->ch_setpoint);
-        ot_transaction(&req, &rsp);
-        break;
-    }
-
-    /* ── Модуляция ── */
-    case 2:
-        req.msg_type   = OT_MSG_READ_DATA;
-        req.data_id    = OT_ID_MODULATION;
-        ok = ot_transaction(&req, &rsp);
-        if (ok && rsp.msg_type == OT_MSG_READ_ACK)
-            s->modulation = OT_f88_to_float(rsp.data_value);
-        break;
-
-    /* ── Температура подачи CH ── */
-    case 3:
-        req.msg_type   = OT_MSG_READ_DATA;
-        req.data_id    = OT_ID_CH_TEMP;
-        ok = ot_transaction(&req, &rsp);
-        if (ok && rsp.msg_type == OT_MSG_READ_ACK)
-            s->ch_temp = OT_f88_to_float(rsp.data_value);
-        break;
-
-    /* ── Температура БКН (датчик NTC в баке, ID=26) ── */
-    case 4:
-        req.msg_type   = OT_MSG_READ_DATA;
-        req.data_id    = OT_ID_DHW_TEMP;
-        ok = ot_transaction(&req, &rsp);
-        if (ok && rsp.msg_type == OT_MSG_READ_ACK)
-            s->dhw_temp = OT_f88_to_float(rsp.data_value);
-        break;
-
-    /* ── Температура обратки ── */
-    case 5:
-        req.msg_type   = OT_MSG_READ_DATA;
-        req.data_id    = OT_ID_RETURN_TEMP;
-        ok = ot_transaction(&req, &rsp);
-        if (ok && rsp.msg_type == OT_MSG_READ_ACK)
-            s->return_temp = OT_f88_to_float(rsp.data_value);
-        break;
-
-    /* ── Уставка ГВС (DHW, ID=56) ── */
-    case 6:
-        req.msg_type   = OT_MSG_WRITE_DATA;
-        req.data_id    = OT_ID_DHW_SETPOINT;
-        req.data_value = OT_float_to_f88(s->dhw_setpoint);
-        ok = ot_transaction(&req, &rsp);
-        if (ok && rsp.msg_type == OT_MSG_WRITE_ACK)
-            s->dhw_setpoint = OT_f88_to_float(rsp.data_value);
-        break;
-
-    /* ── Границы уставки БКН (ID=48) ── */
-    case 7:
-        req.msg_type   = OT_MSG_READ_DATA;
-        req.data_id    = OT_ID_DHW_BOUNDS;
-        req.data_value = 0;
-        ok = ot_transaction(&req, &rsp);
-        if (ok && rsp.msg_type == OT_MSG_READ_ACK) {
-            float hi = (float)((rsp.data_value >> 8) & 0xFF);
-            float lo = (float)((rsp.data_value     ) & 0xFF);
-            if (hi > lo && hi > 0) {
-                s->dhw_setpoint_max = hi;
-                s->dhw_setpoint_min = lo;
-                if (s->dhw_setpoint > hi) s->dhw_setpoint = hi;
-                if (s->dhw_setpoint < lo) s->dhw_setpoint = lo;
-            }
-        }
-        break;
-
-    /* ── Границы уставки CH (ID=49) ── */
-    case 8:
-        req.msg_type   = OT_MSG_READ_DATA;
-        req.data_id    = OT_ID_CH_BOUNDS;
-        req.data_value = 0;
-        ok = ot_transaction(&req, &rsp);
-        if (ok && rsp.msg_type == OT_MSG_READ_ACK) {
-            float hi = (float)((rsp.data_value >> 8) & 0xFF);
-            float lo = (float)((rsp.data_value     ) & 0xFF);
-            if (hi > lo && hi > 0) {
-                s->ch_setpoint_max = hi;
-                s->ch_setpoint_min = lo;
-            }
-        }
-        break;
-
-    /* ── Коды ошибок (ID=5) ── */
-    case 9:
-        req.msg_type   = OT_MSG_READ_DATA;
-        req.data_id    = OT_ID_ASF_FLAGS;
-        req.data_value = 0;
-        ok = ot_transaction(&req, &rsp);
-        if (ok && rsp.msg_type == OT_MSG_READ_ACK) {
-            s->asf_flags      = (uint8_t)(rsp.data_value >> 8);
-            s->oem_fault_code = (uint8_t)(rsp.data_value & 0xFF);
-        }
-        break;
-
-    /* ── OEM диагностика (ID=115) ── */
-    case 10:
-        req.msg_type   = OT_MSG_READ_DATA;
-        req.data_id    = OT_ID_OEM_DIAGNOSTIC;
-        req.data_value = 0;
-        ok = ot_transaction(&req, &rsp);
-        if (ok && rsp.msg_type == OT_MSG_READ_ACK)
-            s->oem_diagnostic = rsp.data_value;
-        break;
-
-    }
-
-    poll_extra++;
-    if (poll_extra >= POLL_EXTRA_STEPS) poll_extra = 0;
-
-    /* Проверить таймаут связи */
-    {
-        uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
-        if (now - s->last_response_ms > 10000) {
-            s->connected = false;
-            ESP_LOGW(TAG, "Котёл не отвечает > 10 сек");
-        }
     }
 }

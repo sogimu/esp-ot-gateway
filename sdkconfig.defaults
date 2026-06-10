@@ -1,10 +1,14 @@
 # ESP32 конфигурация по умолчанию для gas_boiler
 
+# FreeRTOS trace + runtime stats (для CPU load в главном цикле)
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+
 # Частота CPU — максимальная производительность
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 
 # Размер стека задач
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
 
 # WiFi
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
@@ -17,8 +21,21 @@ CONFIG_HTTPD_MAX_URI_LEN=512
 # esp_timer ISR dispatch (нужен для OpenTherm таймера с минимальной задержкой)
 CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD=y
 
+# GPIO функции в IRAM (нужно для OT таймера: во время NVS flash-записи кеш отключён,
+# но 500мкс ISR вызывает gpio_set_level — без IRAM будет panic)
+CONFIG_GPIO_CTRL_FUNC_IN_IRAM=y
+
 # Логирование
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Кастомная таблица разделов (добавлен coredump раздел)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Core dump to flash — сохраняет crash-инфо (стектрейс, причина) на flash
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_LOGGING=n
 
 # Оптимизация Flash: сжатие и скорость
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y

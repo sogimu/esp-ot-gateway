@@ -1,10 +1,48 @@
 idf_component_register(
     SRCS
-        "main.c"
-        "opentherm.c"
-        "http_server.c"
+        "main.cpp"
+        "c_legacy/opentherm.c"
+        "c_legacy/sensors.c"
+        "infrastructure/driving/http_controller_adapter.cpp"
+        "infrastructure/driven/sntp_time_adapter.cpp"
+        "infrastructure/driving/wifi_init_adapter.cpp"
+        "infrastructure/driven/crash_diagnostics_adapter.cpp"
+        "infrastructure/driven/event_log_adapter.cpp"
+        "infrastructure/driven/heating_state_adapter.cpp"
+        "infrastructure/driven/ot_hardware_adapter.cpp"
+        "infrastructure/driven/boiler_opentherm_adapter.cpp"
+        "infrastructure/driven/temperature_sensor_adapter.cpp"
+        "infrastructure/driven/web_presenter_adapter.cpp"
+        "infrastructure/driven/esp_timer_adapter.cpp"
+        "infrastructure/driven/nvs_config_adapter.cpp"
+        "infrastructure/driving/main_poller_task_adapter.cpp"
+        "infrastructure/freertos/shared_mutex.c"
+        "application/use_cases/main_poller_interactor.cpp"
+        "application/use_cases/boiler_poll_interactor.cpp"
+        "application/use_cases/sensors_poll_interactor.cpp"
+        "application/use_cases/pid_poll_interactor.cpp"
+        "application/use_cases/system_config_interactor.cpp"
+        "application/use_cases/gas_correction_interactor.cpp"
+        "application/services/modulation_stats_service.cpp"
+        "application/services/burn_cycle_service.cpp"
+        "application/services/gas_flow_estimator.cpp"
+        "application/services/dhw_hysteresis_service.cpp"
+	    "application/services/dhw_predict_service.cpp"
+        "application/services/schedule_service.cpp"
     INCLUDE_DIRS
+        "application/use_cases"
+        "application/services"
+        "infrastructure/driven"
+        "infrastructure/driving"
         "."
+        "domain"
+        "domain/value_objects"
+        "domain/entities"
+        "domain/services"
+        "application/ports/driving"
+        "application/ports/driven"
+        "infrastructure/freertos"
+        "c_legacy"
     REQUIRES
         esp_wifi
         esp_http_server
@@ -14,4 +52,5 @@ idf_component_register(
         esp_timer
         esp_event
         log
+        espcoredump
 )
