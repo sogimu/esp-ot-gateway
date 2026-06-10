@@ -8,6 +8,8 @@
 #include "domain/value_objects/ch_schedule.h"
 #include <cstdio>
 #include <ctime>
+#include <inttypes.h>
+#include "esp_timer.h"
 
 int WebPresenterAdapter::render_status(char* buf, size_t size)
 {
@@ -44,7 +46,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"slave_type\":%d,\"slave_ver\":%d,\"ot_ver\":%.1f,"
         "\"t1_temp\":%.1f,\"t2_temp\":%.1f,"
         "\"sched_on\":0,\"hour\":%d,\"time\":\"%s\",\"tz_offset\":%d,"
-        "\"utc_time\":\"%s\","
+        "\"utc_time\":\"%s\",\"uptime_sec\":%lu,"
         "\"dhw_hyst_on\":%.1f,"
         "\"sntp_server0\":\"%s\",\"sntp_server1\":\"%s\","
         "\"pid_enabled\":%d,\"pid_active\":%d,\"pid_output\":%.0f,"
@@ -75,7 +77,9 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         state_->get_slave_type(), state_->get_slave_version(), (double)state_->get_ot_version(),
         (double)state_->get_t1_temp(), (double)state_->get_t2_temp(),
         (ti.tm_year >= (2024 - 1900)) ? ti.tm_hour : -1, timebuf,
-        state_->get_tz_offset(), utcbuf, (double)state_->get_dhw_hysteresis(),
+        state_->get_tz_offset(), utcbuf,
+        (unsigned long)(esp_timer_get_time() / 1000000),
+        (double)state_->get_dhw_hysteresis(),
         state_->get_sntp_server0(), state_->get_sntp_server1(),
         state_->get_pid_enabled() ? 1 : 0, state_->get_pid_active() ? 1 : 0,
         (double)state_->get_pid_output(),

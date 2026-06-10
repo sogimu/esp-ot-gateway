@@ -15,7 +15,7 @@ public:
         connected_ = true;
         read_responses_.clear();
         write_calls_.clear();
-        status_flags_ = 0;
+        status_master_ = 0;
         fault_reset_called_ = false;
     }
 

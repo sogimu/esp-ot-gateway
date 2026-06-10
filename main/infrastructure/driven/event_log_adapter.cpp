@@ -67,22 +67,40 @@ const char* EventLogAdapter::to_json()
     int start = (count_snap < LOG_RING_SIZE) ? 0 : head_snap;
     int total = count_snap;
 
+    int last_yday = -1;  // track day changes for date markers
+    bool first = true;    // comma separator control
+
     for (int i = 0; i < total && pos < (int)sizeof(buf) - 128; i++) {
         int idx = (start + i) % LOG_RING_SIZE;
         const LogEntry& e = ring_[idx];
 
         struct tm ti;
         char tbuf[16] = "??:??:??";
+        int yday = -1;
         if (e.time_sec > 0) {
             time_t t = (time_t)e.time_sec;
             localtime_r(&t, &ti);
             snprintf(tbuf, sizeof(tbuf), "%02d:%02d:%02d",
                      ti.tm_hour, ti.tm_min, ti.tm_sec);
+            yday = ti.tm_yday;
+        }
+
+        // Emit date marker when day changes (or first valid event)
+        if (yday >= 0 && yday != last_yday) {
+            char datebuf[32];
+            snprintf(datebuf, sizeof(datebuf), "%02d.%02d.%04d",
+                     ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900);
+            pos += snprintf(buf + pos, sizeof(buf) - pos,
+                            "%s{\"date\":\"%s\"}",
+                            first ? "" : ",", datebuf);
+            first = false;
+            last_yday = yday;
         }
 
         pos += snprintf(buf + pos, sizeof(buf) - pos,
                         "%s{\"t\":\"%s\",\"c\":%d,\"m\":\"",
-                        i ? "," : "", tbuf, e.category);
+                        first ? "" : ",", tbuf, e.category);
+        first = false;
 
         for (const char* s = e.msg; *s && pos < (int)sizeof(buf) - 4; s++) {
             if (*s == '"' || *s == '\\') buf[pos++] = '\\';
