@@ -7,6 +7,9 @@
 #include <ctime>
 #include <cstring>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 const char* SntpTimeAdapter::TAG = "sntp";
 
 SntpTimeAdapter::SntpTimeAdapter()
@@ -25,25 +28,51 @@ void SntpTimeAdapter::start()
     if (started_) return;
     started_ = true;
 
-    ESP_LOGI(TAG, "Инициализация SNTP...");
+    // Start with UTC+0 so SNTP sets the system clock to correct UTC,
+    // unaffected by any wrong timezone that may be stored in NVS.
+    set_timezone(0);
+
+    ESP_LOGI(TAG, "Инициализация SNTP (серверы: %s, %s)...", srv0_, srv1_);
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, srv0_);
     esp_sntp_setservername(1, srv1_);
     esp_sntp_init();
 
-    set_timezone(tz_offset_);
-
-    ESP_LOGI(TAG, "SNTP запущен, серверы: %s, %s", srv0_, srv1_);
+    // Wait for first sync (max 15 seconds). The RTC may retain a wrong
+    // time from a previous boot, so sntp_get_sync_status() alone is not
+    // enough — we also verify the time is >= build timestamp, meaning SNTP
+    // has actually adjusted the clock forward from the retained value.
+    ESP_LOGI(TAG, "Ожидание синхронизации SNTP...");
+    time_t build_ts = 0;
+    {
+        // Use __DATE__ __TIME__ as lower bound: any SNTP-corrected time
+        // must be >= firmware build time. RTC may have an older wrong value.
+        struct tm build_tm = {};
+        strptime(__DATE__ " " __TIME__, "%b %d %Y %H:%M:%S", &build_tm);
+        build_ts = mktime(&build_tm);
+    }
+    for (int i = 0; i < 300; i++) {
+        time_t now;
+        std::time(&now);
+        if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED
+            && now >= build_ts) {
+            ESP_LOGI(TAG, "SNTP синхронизирован, UTC: %lld", (long long)now);
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
 }
 
 void SntpTimeAdapter::set_timezone(int tz)
 {
     tz_offset_ = tz;
     char tz_str[32];
-    snprintf(tz_str, sizeof(tz_str), "UTC%s%d", tz >= 0 ? "+" : "", tz);
+    // ESP-IDF newlib uses POSIX TZ format where the sign means WEST of UTC.
+    // So UTC+7 (Tomsk) must be written as "UTC-7" (negative = east of UTC).
+    snprintf(tz_str, sizeof(tz_str), "UTC%s%d", tz >= 0 ? "-" : "+", tz >= 0 ? tz : -tz);
     setenv("TZ", tz_str, 1);
     tzset();
-    ESP_LOGI(TAG, "Часовой пояс: %s", tz_str);
+    ESP_LOGI(TAG, "Часовой пояс: UTC%+d (TZ=%s)", tz, tz_str);
 }
 
 void SntpTimeAdapter::set_servers(const char* srv0, const char* srv1)

@@ -211,7 +211,7 @@ void BoilerPollInteractor::do_dhw_hysteresis()
             state_.lock_exclusive();
             state_.set_dhw_session_finished(dur, dhw_session_min_temp_);
             state_.unlock_exclusive();
-            log_.event(ILogger::MODE, "ГВС нагрев завершён: %lu с с %.1f C",
+            log_.event(ILogger::MODE, "ГВС нагрев завершён: %lu с, с %.1f C",
                        (unsigned long)(dur / 1000), (double)dhw_session_min_temp_);
             dhw_session_start_ms_ = 0;
         }

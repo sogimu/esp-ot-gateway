@@ -19,6 +19,8 @@ set(INCLUDE_DIRS
     ${MAIN_DIR}/application/ports/driven
     ${MAIN_DIR}/application/services
     ${MAIN_DIR}/application/use_cases
+    ${MAIN_DIR}/infrastructure/driving
+    ${MAIN_DIR}/infrastructure/driven
     ${TEST_DIR}/fakes
 )
 
@@ -46,6 +48,23 @@ set(TEST_SRCS
     test_gas_flow_bugs.cpp
     test_pid_algorithm_bugs.cpp
     test_hysteresis_bugs.cpp
+
+    # Burn cycle rounding
+    test_burn_cycle_rounding.cpp
+
+    # Config store persistence
+    test_config_store_persistence.cpp
+
+    # Timezone persistence
+    test_timezone_persistence.cpp
+
+    # JSON helpers (regression: missing key vs -1 value)
+    test_json_parsing_missing_key.cpp
+)
+
+# ── Stubs (replace ESP-IDF-dependent implementations) ──────
+set(STUB_SRCS
+    ${TEST_DIR}/fakes/stub_boiler_poll_interactor.cpp
 )
 
 # ── Application .cpp files (compiled into test binary) ────
@@ -57,10 +76,11 @@ set(APP_SRCS
     ${MAIN_DIR}/application/services/dhw_predict_service.cpp
     ${MAIN_DIR}/application/services/gas_flow_estimator.cpp
     ${MAIN_DIR}/application/use_cases/main_poller_interactor.cpp
+    ${MAIN_DIR}/application/use_cases/system_config_interactor.cpp
 )
 
 # ── Test executable ───────────────────────────────────────
-add_executable(run_tests ${TEST_SRCS} ${APP_SRCS})
+add_executable(run_tests ${TEST_SRCS} ${APP_SRCS} ${STUB_SRCS})
 target_include_directories(run_tests PRIVATE ${INCLUDE_DIRS})
 
 # Link Catch2
