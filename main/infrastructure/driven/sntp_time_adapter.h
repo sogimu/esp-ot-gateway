@@ -2,8 +2,9 @@
 
 #include "application/ports/driven/itime_source.h"
 
+class ILogger;
+
 /// Standalone ITimeSource — NTP-synced wall clock via lwip SNTP.
-/// No dependency on old SntpEndpoint.
 class SntpTimeAdapter : public ITimeSource {
 public:
     SntpTimeAdapter();
@@ -12,6 +13,7 @@ public:
     void start();
     void set_timezone(int tz_offset) override;
     void set_servers(const char* srv0, const char* srv1);
+    void set_logger(ILogger* log) { logger_ = log; }
 
     uint64_t now_us() const override;
     uint32_t now_sec() const override;
@@ -21,5 +23,6 @@ private:
     char srv0_[64] = {};
     char srv1_[64] = {};
     bool started_ = false;
+    ILogger* logger_ = nullptr;
     static const char* TAG;
 };

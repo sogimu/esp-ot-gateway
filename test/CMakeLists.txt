@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 project(esp_ot_gateway_tests LANGUAGES CXX)
 
+# ── Build type: Debug by default ──────────────────────────
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type (Debug, Release, etc.)" FORCE)
+endif()
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
 # ── Catch2 (system-installed) ─────────────────────────────
 find_package(Catch2 3 REQUIRED)
 
@@ -63,6 +69,12 @@ set(TEST_SRCS
 
     # Gas meter persistence
     test_gas_meter_persistence.cpp
+
+    # NVS nullptr safety regression
+    test_nvs_nullptr_safety.cpp
+
+    # Gas correction orchestration (read + save paths)
+    test_gas_correction_orchestration.cpp
 )
 
 # ── Stubs (replace ESP-IDF-dependent implementations) ──────
@@ -93,6 +105,20 @@ target_link_libraries(run_tests PRIVATE Catch2::Catch2WithMain)
 # Compiler flags — C++17, warnings (RTTI enabled for Catch2, no exceptions)
 target_compile_features(run_tests PRIVATE cxx_std_17)
 target_compile_options(run_tests PRIVATE -Wall -Wextra -Wno-unused-parameter)
+
+# ── Debug-build hardening (ABI-compatible, safe with prebuilt Catch2) ──
+target_compile_definitions(run_tests PRIVATE
+    $<$<CONFIG:Debug>:
+        _GLIBCXX_ASSERTIONS         # std::vector bounds, std::optional access (ABI-safe)
+        DEBUG                       # application-level debug paths
+    >
+)
+target_compile_options(run_tests PRIVATE
+    $<$<CONFIG:Debug>:
+        -g3                         # max debug info (includes macros)
+        -O0                         # no optimisation — predictable debuggable code
+    >
+)
 
 # ── Sanitizers ────────────────────────────────────────
 option(ENABLE_SANITIZERS "Build with maximum sanitizers" ON)
