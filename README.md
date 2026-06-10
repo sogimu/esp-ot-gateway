@@ -283,7 +283,7 @@ esp-ot-gateway/
 │   ├── CMakeLists.txt                # Host-only: Catch2, sanitizers, coverage
 │   ├── run_tests.sh
 │   ├── fakes/                        # Fake adapters for testing
-│   └── test_*.cpp                    # 129 tests, 287 assertions
+│   └── test_*.cpp                    # 181 tests, 443 assertions
 ├── docs/
 │   └── *.pdf
 └── scripts/
