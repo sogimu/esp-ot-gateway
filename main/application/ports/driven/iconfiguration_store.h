@@ -23,9 +23,10 @@ public:
                              void* hist_blob, void* cycles_blob,
                              void* ema_blob, void* calib_blob) = 0;
 
-    /// Save/load meter correction log.
-    virtual void save_meter(const class IHeatingStateStore& state) = 0;
-    virtual bool load_meter(class IHeatingStateStore& state) = 0;
+    /// Save meter correction log. Pass optional blob (NvsMeterBlob*) for full log persistence.
+    virtual void save_meter(const class IHeatingStateStore& state, const void* blob = nullptr) = 0;
+    /// Load meter correction log. Pass optional blob (NvsMeterBlob*) to restore full log.
+    virtual bool load_meter(class IHeatingStateStore& state, void* blob = nullptr) = 0;
 
     /// Save/load DHW prediction history.
     virtual void save_predict(const float rates[3], int idx, int count) = 0;

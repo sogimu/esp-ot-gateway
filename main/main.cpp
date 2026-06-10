@@ -79,6 +79,7 @@ extern "C" void app_main(void)
 
     // Sync SNTP with UTC+0 first, then apply user timezone.
     // This prevents a wrong TZ from NVS from corrupting the system clock.
+    sntp.set_logger(&ca_log);
     sntp.start();   // sets TZ=UTC+0, starts SNTP, waits for first sync
     sntp.set_timezone(ca_state.get_tz_offset());
 
@@ -98,6 +99,10 @@ extern "C" void app_main(void)
     GasFlowService         gas_flow(ca_state, ca_time);
     DHWPredictService      dhw_predict(ca_state, nvs, ca_time);
     dhw_predict.load_history();
+
+    // Wire gas correction interactor to gas flow service and restore correction log
+    gas_corr.set_gas_flow(&gas_flow);
+    gas_corr.init();
 
     // Restore saved burner stats from NVS
     {
@@ -138,6 +143,7 @@ extern "C" void app_main(void)
     ca_web.set_mod_stats(&mod_stats);
     ca_web.set_burn_cycles(&burn_cycles);
     ca_web.set_gas_flow(&gas_flow);
+    ca_web.set_gas_correction(&gas_corr);
 
     // ── Phase 6: Main poller ─────────────────────────────
     MainPollerInteractor main_poller;
@@ -166,10 +172,9 @@ extern "C" void app_main(void)
     http.set_gas(&gas_corr);
     http.start();
 
-    // ── Idle: CPU stats every 60s, periodic NVS save ─────
+    // ── Idle: CPU stats every 60s, periodic NVS save every 10 min ──
     static const char* TAG = "main";
     int save_tick = 0;
-    uint32_t last_saved_burner_sec = 0;
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(60000));
         save_tick++;
@@ -183,31 +188,28 @@ extern "C" void app_main(void)
                  esp_get_free_heap_size(),
                  100 - idle0, 100 - idle1, (200 - idle0 - idle1) / 2);
 
-        // Save stats to NVS every 10 min (10 ticks) if burner_sec changed
+        // Save all persistent state to NVS every 10 min (10 ticks)
         if (save_tick >= 10) {
             save_tick = 0;
             uint32_t bs = burn_cycles.burner_seconds();
-            if (bs != last_saved_burner_sec) {
-                nvs.save_burn_stats(bs,
-                                    burn_cycles.total_pause_seconds(),
-                                    burn_cycles.cycle_count(),
-                                    burn_cycles.inter_session_pause_sec(),
-                                    burn_cycles.inter_session_cnt(),
-                                    burn_cycles.modulation_pause_sec(),
-                                    burn_cycles.modulation_cnt());
-                // Save modulation histogram
-                NvsHistBlob hist_blob;
-                hist_blob.samples = mod_stats.samples();
-                memcpy(hist_blob.hist, mod_stats.hist_ptr(), HIST_BINS * sizeof(uint16_t));
-                nvs.save_stats(ca_state, 0, gas_flow.integral_m3(),
-                               &hist_blob, nullptr, nullptr, nullptr);
-                // Save total uptime
-                nvs.save_total_uptime(total_uptime_base_sec +
-                                      (uint32_t)(esp_timer_get_time() / 1000000));
-                // Save gas meter base
-                nvs.save_meter(ca_state);
-                last_saved_burner_sec = bs;
-            }
+            nvs.save_burn_stats(bs,
+                                burn_cycles.total_pause_seconds(),
+                                burn_cycles.cycle_count(),
+                                burn_cycles.inter_session_pause_sec(),
+                                burn_cycles.inter_session_cnt(),
+                                burn_cycles.modulation_pause_sec(),
+                                burn_cycles.modulation_cnt());
+            // Save modulation histogram
+            NvsHistBlob hist_blob;
+            hist_blob.samples = mod_stats.samples();
+            memcpy(hist_blob.hist, mod_stats.hist_ptr(), HIST_BINS * sizeof(uint16_t));
+            nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
+                           &hist_blob, nullptr, nullptr, nullptr);
+            // Save total uptime
+            nvs.save_total_uptime(total_uptime_base_sec +
+                                  (uint32_t)(esp_timer_get_time() / 1000000));
+            // Save gas meter blob (includes correction log)
+            nvs.save_meter(ca_state, &gas_corr.meter_blob());
         }
     }
 }

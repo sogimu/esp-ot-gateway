@@ -4,6 +4,7 @@
 #include "nvs_flash.h"
 #include <cstring>
 #include <cstdlib>
+#include <cassert>
 
 // ── init ─────────────────────────────────────────────────────
 
@@ -115,10 +116,10 @@ bool NvsConfigAdapter::load_stats(uint32_t& bs, float& im3,
     uint32_t u32=0; if (nvs_get_u32(n, "burn_sec", &u32)==ESP_OK) bs=u32;
     float fv=0; size_t sz=sizeof(fv);
     if (nvs_get_blob(n, "integ_m3", &fv, &sz)==ESP_OK) im3=fv;
-    sz=sizeof(NvsGasEmaBlob); nvs_get_blob(n, "gas_ema", e, &sz);
-    sz=sizeof(NvsHistBlob); nvs_get_blob(n, "hist", h, &sz);
-    sz=sizeof(NvsCycleBlob); nvs_get_blob(n, "cycles", c, &sz);
-    sz=sizeof(NvsCalibBlob); nvs_get_blob(n, "calib", cal, &sz);
+    if (e)   { sz=sizeof(NvsGasEmaBlob); nvs_get_blob(n, "gas_ema", e, &sz); }
+    if (h)   { sz=sizeof(NvsHistBlob);   nvs_get_blob(n, "hist", h, &sz); }
+    if (c)   { sz=sizeof(NvsCycleBlob);  nvs_get_blob(n, "cycles", c, &sz); }
+    if (cal) { sz=sizeof(NvsCalibBlob);  nvs_get_blob(n, "calib", cal, &sz); }
     nvs_close(n); return true;
 }
 
@@ -131,37 +132,58 @@ void NvsConfigAdapter::save_stats(const IHeatingStateStore&,
     if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
     nvs_set_u32(n, "burn_sec", bs);
     nvs_set_blob(n, "integ_m3", &im3, sizeof(im3));
-    nvs_set_blob(n, "gas_ema", e, sizeof(NvsGasEmaBlob));
-    nvs_set_blob(n, "hist", h, sizeof(NvsHistBlob));
-    nvs_set_blob(n, "cycles", c, sizeof(NvsCycleBlob));
-    nvs_set_blob(n, "calib", cal, sizeof(NvsCalibBlob));
+    if (e) {
+        assert(sizeof(NvsGasEmaBlob) == 28); // 5 floats + uint64_t — must match on-disk blob size
+        nvs_set_blob(n, "gas_ema", e, sizeof(NvsGasEmaBlob));
+    }
+    if (h) {
+        assert(sizeof(NvsHistBlob) == 2004); // 4 + 1000*2
+        nvs_set_blob(n, "hist", h, sizeof(NvsHistBlob));
+    }
+    if (c) {
+        assert(sizeof(NvsCycleBlob) == 1040); // 4+4+4+4 + 256*2 + 256*2
+        nvs_set_blob(n, "cycles", c, sizeof(NvsCycleBlob));
+    }
+    if (cal) {
+        assert(sizeof(NvsCalibBlob) == 12); // 3 floats
+        nvs_set_blob(n, "calib", cal, sizeof(NvsCalibBlob));
+    }
     nvs_commit(n); nvs_close(n);
 }
 
 // ── "meter" namespace ────────────────────────────────────────
 
-bool NvsConfigAdapter::load_meter(IHeatingStateStore& s)
+bool NvsConfigAdapter::load_meter(IHeatingStateStore& s, void* blob)
 {
     nvs_handle_t n;
     if (nvs_open("meter", NVS_READONLY, &n) != ESP_OK) return false;
     NvsMeterBlob b;
     memset(&b, 0, sizeof(b));
     size_t sz = sizeof(b);
-    if (nvs_get_blob(n, "data", &b, &sz) == ESP_OK) {
+    bool ok = (nvs_get_blob(n, "data", &b, &sz) == ESP_OK);
+    nvs_close(n);
+    if (ok) {
         s.lock_exclusive();
         s.set_gas_meter_base(b.base_reading);
         s.unlock_exclusive();
+        if (blob) memcpy(blob, &b, sizeof(NvsMeterBlob));
     }
-    nvs_close(n); return true;
+    return ok;
 }
 
-void NvsConfigAdapter::save_meter(const IHeatingStateStore& s)
+void NvsConfigAdapter::save_meter(const IHeatingStateStore& s, const void* blob)
 {
     nvs_handle_t n;
     if (nvs_open("meter", NVS_READWRITE, &n) != ESP_OK) return;
     NvsMeterBlob b;
-    memset(&b, 0, sizeof(b));
-    b.base_reading = s.get_gas_meter_base();
+    if (blob) {
+        memcpy(&b, blob, sizeof(NvsMeterBlob));
+        // Ensure base_reading in blob matches state (state is authoritative)
+        b.base_reading = s.get_gas_meter_base();
+    } else {
+        memset(&b, 0, sizeof(b));
+        b.base_reading = s.get_gas_meter_base();
+    }
     nvs_set_blob(n, "data", &b, sizeof(b));
     nvs_commit(n); nvs_close(n);
 }

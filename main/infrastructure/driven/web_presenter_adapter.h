@@ -8,6 +8,7 @@ class ILogger;
 class ModulationStatsService;
 class BurnCycleService;
 class GasFlowService;
+class GasCorrectionInteractor;
 
 /// JSON rendering from CA state + services.
 /// Writes into caller-provided buffer — no heap, thread-safe.
@@ -18,6 +19,7 @@ public:
     void set_mod_stats(ModulationStatsService* m) { mod_stats_ = m; }
     void set_burn_cycles(BurnCycleService* b)    { burn_cycles_ = b; }
     void set_gas_flow(GasFlowService* g)         { gas_flow_ = g; }
+    void set_gas_correction(GasCorrectionInteractor* g) { gas_corr_ = g; }
     void set_total_uptime_base(uint32_t sec)     { total_uptime_base_ = sec; }
 
     /// Render status JSON into buf, returns length (excluding null terminator).
@@ -38,5 +40,6 @@ private:
     ModulationStatsService*   mod_stats_ = nullptr;
     BurnCycleService*         burn_cycles_ = nullptr;
     GasFlowService*           gas_flow_ = nullptr;
+    GasCorrectionInteractor*  gas_corr_ = nullptr;
     uint32_t                  total_uptime_base_ = 0;
 };

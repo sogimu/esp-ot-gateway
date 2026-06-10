@@ -4,6 +4,7 @@
 #include "application/services/modulation_stats_service.h"
 #include "application/services/burn_cycle_service.h"
 #include "application/services/gas_flow_estimator.h"
+#include "application/use_cases/gas_correction_interactor.h"
 #include "infrastructure/driven/event_log_adapter.h"
 #include "domain/value_objects/ch_schedule.h"
 #include <cstdio>
@@ -132,7 +133,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
 
     float p10p50 = (mod_stats_->p50() > 0) ? mod_stats_->p10() / mod_stats_->p50() : 0;
 
-    return snprintf(buf, size,
+    int pos = snprintf(buf, size,
         "{"
         "\"samples\":%u,"
         "\"p1\":%.1f,\"p10\":%.1f,\"p25\":%.1f,\"p50\":%.1f,"
@@ -149,8 +150,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         "\"mod_filt\":%.1f,\"t_ret_filt\":%.1f,"
         "\"k_calib\":%.3f,\"p_max\":%.1f,\"gas_cal\":%.1f,"
         "\"gas_meter_base\":%.3f,\"gas_meter_total\":%.3f,"
-        "\"corrections\":[]"
-        "}",
+        "\"corrections\":[",
         (unsigned)mod_stats_->samples(),
         (double)mod_stats_->p1(), (double)mod_stats_->p10(),
         (double)mod_stats_->p25(), (double)mod_stats_->p50(),
@@ -175,4 +175,31 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         (double)state_->get_gas_meter_base(),
         (double)(state_->get_gas_meter_base() + gas_flow_->integral_m3())
     );
+
+    // Render correction log from the interactor
+    // Field names must match JS in web_page.h: ts, t, ar, et, diff, pct, pk, nk
+    if (gas_corr_ && pos < (int)size - 4) {
+        const NvsMeterBlob& blob = gas_corr_->meter_blob();
+        int cnt = blob.corrections_count;
+        int head = blob.corrections_head;
+        for (int i = 0; i < cnt && pos < (int)size - 100; i++) {
+            // Ring buffer: oldest first
+            int idx = (head - cnt + i + CORRECTION_LOG_SIZE) % CORRECTION_LOG_SIZE;
+            const NvsCorrLogEntry& e = blob.corrections[idx];
+            float pct = (e.estimated_total > 0.001f)
+                ? (e.difference / e.estimated_total * 100.0f) : 0.0f;
+            pos += snprintf(buf + pos, size - pos,
+                "%s{\"ts\":%u,\"t\":\"%u\",\"ar\":%.3f,\"et\":%.3f,"
+                "\"diff\":%.3f,\"pct\":%.1f,\"pk\":%.3f,\"nk\":%.3f}",
+                (i > 0) ? "," : "",
+                (unsigned)e.timestamp,
+                (unsigned)e.timestamp,
+                (double)e.actual_reading, (double)e.estimated_total,
+                (double)e.difference, (double)pct,
+                (double)e.prev_k_calib, (double)e.new_k_calib);
+        }
+    }
+    pos += snprintf(buf + pos, size - pos, "]}");
+
+    return pos;
 }
