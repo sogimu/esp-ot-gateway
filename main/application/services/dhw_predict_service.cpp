@@ -38,7 +38,7 @@ void DHWPredictService::load_history()
 
 uint32_t DHWPredictService::now_ms() const
 {
-    return static_cast<uint32_t>(time_.now_us() / 1000);
+    return static_cast<uint32_t>(time_.monotonic_ms());
 }
 
 // ── Session history ────────────────────────────────────────────

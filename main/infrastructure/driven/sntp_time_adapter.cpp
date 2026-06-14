@@ -69,8 +69,12 @@ void SntpTimeAdapter::start()
         std::time(&now);
         if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
             gpio_set_level(SNTP_LED_GPIO, 0);  // LED off
+            // Compute offset from boot time to real Unix epoch
+            uint64_t real_us = (uint64_t)now * 1000000ULL;
+            uint64_t boot_us = esp_timer_get_time();
+            boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
             ESP_LOGI(TAG, "SNTP синхронизирован, UTC: %lld", (long long)now);
-            if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: sync OK, UTC %lld",
+            if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: синхр. OK, UNIX-время %lld с",
                                         (long long)now);
             break;
         }
@@ -101,14 +105,16 @@ void SntpTimeAdapter::set_servers(const char* srv0, const char* srv1)
     if (srv1 && srv1[0]) strncpy(srv1_, srv1, sizeof(srv1_) - 1);
 }
 
-uint64_t SntpTimeAdapter::now_us() const
+uint64_t SntpTimeAdapter::monotonic_us() const
 {
     return esp_timer_get_time();
 }
 
-uint32_t SntpTimeAdapter::now_sec() const
+ITimeSource::time_point SntpTimeAdapter::now() const
 {
-    time_t now;
-    time(&now);
-    return static_cast<uint32_t>(now > 0 ? now : 0);
+    auto since_boot = microseconds(esp_timer_get_time());
+    if (boot_offset_us_.count() == 0) {
+        return clock::from_time_t(::time(nullptr)) + (since_boot % seconds(1));
+    }
+    return time_point(since_boot + boot_offset_us_);
 }

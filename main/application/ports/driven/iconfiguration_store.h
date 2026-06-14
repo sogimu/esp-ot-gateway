@@ -44,5 +44,8 @@ public:
     virtual void save_total_uptime(uint32_t total_uptime_sec) = 0;
     virtual bool load_total_uptime(uint32_t& total_uptime_sec) = 0;
 
+    /// Persist gas integral separately (called after correction resets it to 0).
+    virtual void save_integral(float value) = 0;
+
     virtual ~IConfigurationStore() = default;
 };

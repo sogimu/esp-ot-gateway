@@ -1,6 +1,7 @@
 #include "infrastructure/driven/web_presenter_adapter.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/ilogger.h"
+#include "application/ports/driven/itime_source.h"
 #include "application/services/modulation_stats_service.h"
 #include "application/services/burn_cycle_service.h"
 #include "application/services/gas_flow_estimator.h"
@@ -8,9 +9,34 @@
 #include "infrastructure/driven/event_log_adapter.h"
 #include "domain/value_objects/ch_schedule.h"
 #include <cstdio>
-#include <ctime>
+#include <chrono>
 #include <inttypes.h>
-#include "esp_timer.h"
+
+// Chrono-based calendar decomposition (no <ctime> needed)
+namespace {
+struct ChronoDate { int year, mon, day, hour, min, sec; };
+
+ChronoDate civil_from_seconds(int64_t secs) {
+    // Convert Unix seconds to civil date using Howard Hinnant's algorithm
+    // (public domain, basis for C++20 std::chrono calendar)
+    int64_t z = secs / 86400 + 719468;
+    int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+    int64_t doe = z - era * 146097;
+    int64_t yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+    int64_t y = yoe + era * 400;
+    int64_t doy = doe - (365*yoe + yoe/4 - yoe/100);
+    int64_t mp = (5*doy + 2) / 153;
+    int d = doy - (153*mp + 2)/5 + 1;
+    int m = mp + (mp < 10 ? 3 : -9);
+    y += (m <= 2);
+    int64_t sod = secs % 86400;
+    if (sod < 0) sod += 86400;
+    return {static_cast<int>(y), m, d,
+            static_cast<int>(sod / 3600),
+            static_cast<int>((sod % 3600) / 60),
+            static_cast<int>(sod % 60)};
+}
+} // namespace
 
 int WebPresenterAdapter::render_status(char* buf, size_t size)
 {
@@ -18,20 +44,25 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
 
     state_->lock_shared();
 
-    struct tm ti;
-    time_t now_ts;
-    time(&now_ts);
-    localtime_r(&now_ts, &ti);
     char timebuf[16] = "NTP...";
-    if (ti.tm_year >= (2024 - 1900))
-        snprintf(timebuf, sizeof(timebuf), "%02d:%02d:%02d", ti.tm_hour, ti.tm_min, ti.tm_sec);
-
-    // UTC decomposition (independent of TZ) for diagnostics
-    struct tm utc_ti;
-    gmtime_r(&now_ts, &utc_ti);
     char utcbuf[16] = "NTP...";
-    if (utc_ti.tm_year >= (2024 - 1900))
-        snprintf(utcbuf, sizeof(utcbuf), "%02d:%02d:%02d", utc_ti.tm_hour, utc_ti.tm_min, utc_ti.tm_sec);
+    int sched_hour = -1;
+    if (time_) {
+        auto local = time_->local_now().time_since_epoch();
+        auto lh = std::chrono::duration_cast<std::chrono::hours>(local) % 24;
+        sched_hour = (int)lh.count();
+        auto lm = std::chrono::duration_cast<std::chrono::minutes>(local % std::chrono::hours(1));
+        auto ls = std::chrono::duration_cast<std::chrono::seconds>(local % std::chrono::minutes(1));
+        snprintf(timebuf, sizeof(timebuf), "%02d:%02d:%02d",
+                 (int)lh.count(), (int)lm.count(), (int)ls.count());
+        // UTC time
+        auto utc = time_->now().time_since_epoch();
+        auto uh = std::chrono::duration_cast<std::chrono::hours>(utc) % 24;
+        auto um = std::chrono::duration_cast<std::chrono::minutes>(utc % std::chrono::hours(1));
+        auto us = std::chrono::duration_cast<std::chrono::seconds>(utc % std::chrono::minutes(1));
+        snprintf(utcbuf, sizeof(utcbuf), "%02d:%02d:%02d",
+                 (int)uh.count(), (int)um.count(), (int)us.count());
+    }
 
     int len = snprintf(buf, size,
         "{"
@@ -68,7 +99,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         (double)state_->get_ch_setpoint(), (double)state_->get_dhw_setpoint(),
         (double)state_->get_dhw_sp_min(), (double)state_->get_dhw_sp_max(),
         (double)state_->get_ch_sp_min(), (double)state_->get_ch_sp_max(),
-        state_->is_ch_enabled() ? 1 : 0, state_->get_ch_mode(),
+        state_->is_ch_enabled() ? 1 : 0, static_cast<int>(state_->get_ch_mode()),
         state_->is_dhw_enabled() ? 1 : 0,
         state_->get_dhw_pred_active() ? 1 : 0,
         state_->get_dhw_pred_remaining_sec(), state_->get_dhw_pred_uncertainty_sec(),
@@ -77,10 +108,10 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         state_->get_asf_flags(), state_->get_oem_fault_code(), state_->get_oem_diagnostic(),
         state_->get_slave_type(), state_->get_slave_version(), (double)state_->get_ot_version(),
         (double)state_->get_t1_temp(), (double)state_->get_t2_temp(),
-        (ti.tm_year >= (2024 - 1900)) ? ti.tm_hour : -1, timebuf,
+        sched_hour, timebuf,
         state_->get_tz_offset(), utcbuf,
-        (unsigned long)(esp_timer_get_time() / 1000000),
-        (unsigned long)(total_uptime_base_ + (esp_timer_get_time() / 1000000)),
+        (unsigned long)(time_ ? time_->monotonic_us() / 1000000 : 0),
+        (unsigned long)(total_uptime_base_ + (time_ ? time_->monotonic_us() / 1000000 : 0)),
         (double)state_->get_dhw_hysteresis(),
         state_->get_sntp_server0(), state_->get_sntp_server1(),
         state_->get_pid_enabled() ? 1 : 0, state_->get_pid_active() ? 1 : 0,
@@ -117,6 +148,32 @@ int WebPresenterAdapter::render_schedule(char* buf, size_t size)
     return pos;
 }
 
+int WebPresenterAdapter::render_pid_schedule(char* buf, size_t size)
+{
+    if (!state_) return snprintf(buf, size, "{}");
+
+    state_->lock_shared();
+    PID_Schedule sched;
+    state_->get_pid_schedule(&sched);
+
+    // Current local hour from ITimeSource
+    int hour = -1;
+    if (time_) {
+        auto local = time_->local_now().time_since_epoch();
+        hour = std::chrono::duration_cast<std::chrono::hours>(local).count() % 24;
+    }
+
+    int pos = snprintf(buf, size, "{\"enabled\":%d,\"hour\":%d,\"temps\":[",
+                       sched.enabled ? 1 : 0, hour);
+    for (int h = 0; h < 24 && pos < (int)size - 10; h++) {
+        pos += snprintf(buf + pos, size - pos, "%.1f%s",
+                        (double)sched.temps[h], (h < 23) ? "," : "");
+    }
+    pos += snprintf(buf + pos, size - pos, "]}");
+    state_->unlock_shared();
+    return pos;
+}
+
 int WebPresenterAdapter::render_log(char* buf, size_t size)
 {
     if (logger_) {
@@ -124,6 +181,15 @@ int WebPresenterAdapter::render_log(char* buf, size_t size)
         return snprintf(buf, size, "%s", elog->to_json());
     }
     return snprintf(buf, size, "{\"count\":0,\"events\":[]}");
+}
+
+const char* WebPresenterAdapter::log_json()
+{
+    if (logger_) {
+        auto* elog = static_cast<EventLogAdapter*>(logger_);
+        return elog->to_json();
+    }
+    return nullptr;
 }
 
 int WebPresenterAdapter::render_stats(char* buf, size_t size)
@@ -177,7 +243,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
     );
 
     // Render correction log from the interactor
-    // Field names must match JS in web_page.h: ts, t, ar, et, diff, pct, pk, nk
+    // Field names must match JS in web_page.h: ts, t, ar, et, diff, pk, nk
     if (gas_corr_ && pos < (int)size - 4) {
         const NvsMeterBlob& blob = gas_corr_->meter_blob();
         int cnt = blob.corrections_count;
@@ -186,16 +252,23 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
             // Ring buffer: oldest first
             int idx = (head - cnt + i + CORRECTION_LOG_SIZE) % CORRECTION_LOG_SIZE;
             const NvsCorrLogEntry& e = blob.corrections[idx];
-            float pct = (e.estimated_total > 0.001f)
-                ? (e.difference / e.estimated_total * 100.0f) : 0.0f;
+            // Format timestamp as HH:MM:SS + date
+            char tbuf[16] = "--:--:--";
+            char dbuf[16] = "";
+            if (e.timestamp > 0) {
+                int64_t secs = e.timestamp + time_->tz_offset() * 3600LL;
+                auto cd = civil_from_seconds(secs);
+                snprintf(tbuf, sizeof(tbuf), "%02d:%02d:%02d", cd.hour, cd.min, cd.sec);
+                snprintf(dbuf, sizeof(dbuf), "%02d.%02d", cd.day, cd.mon);
+            }
             pos += snprintf(buf + pos, size - pos,
-                "%s{\"ts\":%u,\"t\":\"%u\",\"ar\":%.3f,\"et\":%.3f,"
-                "\"diff\":%.3f,\"pct\":%.1f,\"pk\":%.3f,\"nk\":%.3f}",
+                "%s{\"ts\":%u,\"t\":\"%s\",\"d\":\"%s\",\"ar\":%.3f,\"et\":%.3f,"
+                "\"diff\":%.3f,\"pk\":%.4f,\"nk\":%.4f}",
                 (i > 0) ? "," : "",
                 (unsigned)e.timestamp,
-                (unsigned)e.timestamp,
+                tbuf, dbuf,
                 (double)e.actual_reading, (double)e.estimated_total,
-                (double)e.difference, (double)pct,
+                (double)e.difference,
                 (double)e.prev_k_calib, (double)e.new_k_calib);
         }
     }

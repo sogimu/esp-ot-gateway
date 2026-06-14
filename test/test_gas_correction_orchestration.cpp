@@ -14,6 +14,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdarg>
+#include <ctime>
 
 using Catch::Approx;
 
@@ -152,13 +153,14 @@ TEST_CASE("GasCorrection: add_meter_correction persists to store", "[gas][orches
     // Correction computation:
     //   estimated = base(100) + integral(50) = 150
     //   diff = actual(155) - estimated(150) = +5
-    //   new_k = prev_k(1.0) * (150/155) ≈ 0.9677...
+    //   new_k = prev_k(1.0) * (155/150) ≈ 1.0333...
 
     REQUIRE(config.meter_save_called_ == true);
     REQUIRE(config.save_config_called_ > 0); // k_calib change saved
 
     // Verify saved blob
-    REQUIRE(config.saved_meter_blob_.base_reading == Approx(100.0f));
+    // base updated to actual reading (155.0) after correction
+    REQUIRE(config.saved_meter_blob_.base_reading == Approx(155.0f));
     REQUIRE(config.saved_meter_blob_.corrections_count == 1);
     REQUIRE(config.saved_meter_blob_.corrections_head == 1); // next slot
 
@@ -167,10 +169,10 @@ TEST_CASE("GasCorrection: add_meter_correction persists to store", "[gas][orches
     REQUIRE(e.estimated_total == Approx(150.0f));
     REQUIRE(e.difference == Approx(5.0f));
     REQUIRE(e.prev_k_calib == Approx(1.0f));
-    REQUIRE(e.new_k_calib == Approx(0.96774f).margin(0.01f));
+    REQUIRE(e.new_k_calib == Approx(1.03333f).margin(0.01f));
 
     // k_calib should be updated in state
-    REQUIRE(state.get_k_calib() == Approx(0.96774f).margin(0.01f));
+    REQUIRE(state.get_k_calib() == Approx(1.03333f).margin(0.01f));
 
     // Log event should contain key values
     REQUIRE(log.event_count_ > 0);
@@ -324,10 +326,10 @@ TEST_CASE("GasCorrection: new_k_calib is clamped to [0.1, 10.0]", "[gas][orchest
     GasCorrectionInteractor gas(state, config, log);
     gas.set_gas_flow(&gas_flow_svc);
 
-    // actual reading = 10 (way below estimate) → k would go >10
-    gas.add_meter_correction(10.0f);
+    // actual reading = 100000 (way above estimate) → k would go >10
+    gas.add_meter_correction(100000.0f);
 
-    // estimated/actual = 1000/10 = 100, prev_k=10 → 10*100=1000 → clamped to 10
+    // actual/estimated = 100000/1000 = 100, prev_k=10 → 10*100=1000 → clamped to 10
     REQUIRE(state.get_k_calib() <= 10.0f);
     REQUIRE(state.get_k_calib() >= 0.1f);
 }
@@ -348,8 +350,8 @@ TEST_CASE("GasCorrection: add_meter_correction at lower k_calib boundary", "[gas
     GasCorrectionInteractor gas(state, config, log);
     gas.set_gas_flow(&gas_flow_svc);
 
-    // actual = 20000 (way above estimate) → k would go <0.1
-    gas.add_meter_correction(20000.0f);
+    // actual = 1 (way below estimate) → k * (1/200) = 0.1*0.005 → <0.1 → clamped to 0.1
+    gas.add_meter_correction(1.0f);
 
     REQUIRE(state.get_k_calib() >= 0.1f);
 }
@@ -399,7 +401,8 @@ TEST_CASE("GasCorrection: periodic save_meter without blob preserves corrections
     gas.add_meter_correction(260.0f);
     REQUIRE(config.meter_save_called_ == true);
     REQUIRE(config.saved_meter_blob_.corrections_count == 1);
-    REQUIRE(config.saved_meter_blob_.base_reading == Approx(200.0f));
+    // base updated to actual reading (260.0) after correction
+    REQUIRE(config.saved_meter_blob_.base_reading == Approx(260.0f));
 
     // Simulate periodic save WITHOUT blob (like old buggy main.cpp)
     config.save_meter(state, nullptr);
@@ -409,7 +412,8 @@ TEST_CASE("GasCorrection: periodic save_meter without blob preserves corrections
     // (this is the expected behavior for backward compat — but
     //  main.cpp now always passes the interactor's blob, so it never
     //  hits this path in production)
-    REQUIRE(config.saved_meter_blob_.base_reading == Approx(200.0f));
+    // base was updated to reading (260.0) by correction
+    REQUIRE(config.saved_meter_blob_.base_reading == Approx(260.0f));
 }
 
 TEST_CASE("GasCorrection: periodic save WITH blob preserves full correction log", "[gas][regression]")
@@ -443,7 +447,8 @@ TEST_CASE("GasCorrection: periodic save WITH blob preserves full correction log"
 
     // After periodic save with blob, corrections must NOT be wiped
     REQUIRE(config.saved_meter_blob_.corrections_count == 2);
-    REQUIRE(config.saved_meter_blob_.base_reading == Approx(300.0f));
+    // base updated to last reading (505.0) after second correction
+    REQUIRE(config.saved_meter_blob_.base_reading == Approx(505.0f));
     REQUIRE(config.saved_meter_blob_.corrections[0].actual_reading == Approx(410.0f));
     REQUIRE(config.saved_meter_blob_.corrections[1].actual_reading == Approx(505.0f));
 }
@@ -503,3 +508,249 @@ TEST_CASE("GasCorrection: load_meter returns false on empty NVS — graceful def
     REQUIRE(gas.meter_blob().corrections_count == 0);
     REQUIRE(gas.meter_blob().base_reading == Approx(0.0f));
 }
+
+// ── После коррекции расчётное = фактическое ──────────────────────
+
+TEST_CASE("GasCorrection: after correction base equals reading and integral is zero", "[gas][correction][sync]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource time;
+
+    state.set_k_calib(1.0f);
+    state.set_gas_meter_base(100.0f);
+
+    GasFlowService gas_flow_svc(state, time);
+    gas_flow_svc.set_integral(50.0f); // estimated = 100 + 50 = 150
+
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+
+    // User enters reading=155
+    gas.add_meter_correction(155.0f);
+
+    // After correction: base should be updated to actual reading
+    REQUIRE(state.get_gas_meter_base() == Approx(155.0f));
+    // Integral should be reset to 0
+    REQUIRE(gas_flow_svc.integral_m3() == Approx(0.0f));
+    // So calculated = base + integral = 155 + 0 = 155 == reading
+}
+
+TEST_CASE("GasCorrection: after correction calculated equals reading even with zero integral before", "[gas][correction][sync]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource time;
+
+    state.set_k_calib(1.0f);
+    state.set_gas_meter_base(200.0f);
+
+    GasFlowService gas_flow_svc(state, time);
+    gas_flow_svc.set_integral(0.0f); // estimated = 200 + 0 = 200
+
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+
+    gas.add_meter_correction(200.0f);
+
+    // Base stays at reading, integral stays at 0
+    REQUIRE(state.get_gas_meter_base() == Approx(200.0f));
+    REQUIRE(gas_flow_svc.integral_m3() == Approx(0.0f));
+}
+
+// ── Сброс журнала коррекций и K ─────────────────────────────────
+
+TEST_CASE("GasCorrection: reset_corrections clears log and resets k_calib to 1.0", "[gas][reset]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource time;
+
+    state.set_k_calib(0.85f); // нестандартный K
+    state.set_gas_meter_base(300.0f);
+
+    GasFlowService gas_flow_svc(state, time);
+    gas_flow_svc.set_integral(100.0f);
+
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+
+    // Добавляем пару коррекций
+    gas.add_meter_correction(410.0f);
+    gas_flow_svc.set_integral(50.0f);
+    gas.add_meter_correction(360.0f);
+
+    REQUIRE(gas.meter_blob().corrections_count == 2);
+
+    // Сбрасываем
+    gas.reset_corrections();
+
+    // Журнал очищен
+    REQUIRE(gas.meter_blob().corrections_count == 0);
+    REQUIRE(gas.meter_blob().corrections_head == 0);
+    // K сброшен в 1.0
+    REQUIRE(state.get_k_calib() == Approx(1.0f));
+    // base_reading сохранён
+    REQUIRE(gas.meter_blob().base_reading == Approx(360.0f));
+    // Лог содержит сообщение о сбросе
+    REQUIRE(log.event_count_ > 0);
+    REQUIRE(strstr(log.last_msg_, "сброшены") != nullptr);
+}
+
+TEST_CASE("GasCorrection: reset_corrections on empty log works without crash", "[gas][reset]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+
+    state.set_k_calib(1.0f);
+    state.set_gas_meter_base(500.0f);
+
+    GasCorrectionInteractor gas(state, config, log);
+
+    REQUIRE(gas.meter_blob().corrections_count == 0);
+    REQUIRE_NOTHROW(gas.reset_corrections());
+    REQUIRE(gas.meter_blob().corrections_count == 0);
+    REQUIRE(state.get_k_calib() == Approx(1.0f));
+}
+
+// ── Timestamp содержит дату ─────────────────────────────────────
+
+TEST_CASE("GasCorrection: correction timestamp includes date from ITimeSource", "[gas][timestamp]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource time;
+
+    // Set a known Unix timestamp: 2026-06-12 15:30:45 UTC
+    // 2026-06-12T15:30:45 = Unix timestamp for a specific known date
+    // Use a large us value that maps to a known date
+    uint64_t known_us = 1781609445000000ULL; // ~2026-06-12 15:30:45 UTC
+    time.set_us(known_us);
+
+    state.set_k_calib(1.0f);
+    state.set_gas_meter_base(100.0f);
+
+    GasFlowService gas_flow_svc(state, time);
+    gas_flow_svc.set_integral(50.0f);
+
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+    gas.set_time_source(&time);
+
+    gas.add_meter_correction(155.0f);
+
+    REQUIRE(config.saved_meter_blob_.corrections_count == 1);
+    uint32_t ts = config.saved_meter_blob_.corrections[0].timestamp;
+    // Timestamp must be non-zero (date was recorded)
+    REQUIRE(ts > 0);
+
+    // Convert to tm and verify date components
+    time_t t = static_cast<time_t>(ts);
+    struct tm ti;
+    gmtime_r(&t, &ti);
+    // Year must be reasonable (>= 2026)
+    REQUIRE(ti.tm_year + 1900 >= 2026);
+    // Month and day must be valid
+    REQUIRE(ti.tm_mon >= 0);
+    REQUIRE(ti.tm_mon <= 11);
+    REQUIRE(ti.tm_mday >= 1);
+    REQUIRE(ti.tm_mday <= 31);
+    // Time components
+    REQUIRE(ti.tm_hour >= 0);
+    REQUIRE(ti.tm_hour <= 23);
+}
+
+// ── Регрессия: сброс интеграла персистентен ────────────────────
+
+TEST_CASE("GasCorrection: correction persists integral reset to NVS", "[gas][regression][integral]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource fake_time;
+
+    state.set_k_calib(1.0f);
+    state.set_gas_meter_base(100.0f);
+
+    GasFlowService gas_flow_svc(state, fake_time);
+    gas_flow_svc.set_integral(50.0f); // was 50 m³ accumulated
+
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+
+    // Record correction
+    gas.add_meter_correction(160.0f);
+
+    // Integral was reset to 0
+    REQUIRE(gas_flow_svc.integral_m3() == Approx(0.0f));
+    // save_integral was called with 0
+    REQUIRE(config.save_integral_called_ == true);
+    REQUIRE(config.saved_integral_ == Approx(0.0f));
+}
+
+// ── Timestamp ──────────────────────────────────────────────────
+
+TEST_CASE("GasCorrection: timestamp from ITimeSource is non-decreasing", "[gas][timestamp]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource fake_time;
+
+    state.set_k_calib(1.0f);
+    state.set_gas_meter_base(200.0f);
+
+    GasFlowService gas_flow_svc(state, fake_time);
+    gas_flow_svc.set_integral(10.0f);
+
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+    gas.set_time_source(&fake_time);
+
+    fake_time.set_us(1782000000000000ULL);
+    gas.add_meter_correction(210.0f);
+    uint32_t ts1 = config.saved_meter_blob_.corrections[0].timestamp;
+
+    fake_time.set_us(1782000001000000ULL); // 1000s later
+    gas_flow_svc.set_integral(20.0f);
+    gas.add_meter_correction(215.0f);
+    uint32_t ts2 = config.saved_meter_blob_.corrections[1].timestamp;
+
+    // Second timestamp > first
+    REQUIRE(ts2 > ts1);
+    // Both must be reasonable
+    REQUIRE(ts1 > 1700000000);
+    REQUIRE(ts2 > 1700000000);
+}
+
+TEST_CASE("GasCorrection: timestamp uses wall-clock time from ITimeSource", "[gas][timestamp]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource fake_time;
+
+    state.set_k_calib(1.0f);
+    state.set_gas_meter_base(300.0f);
+
+    GasFlowService gas_flow_svc(state, fake_time);
+    gas_flow_svc.set_integral(10.0f);
+
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+    gas.set_time_source(&fake_time);
+
+    // Set fake time to a known Unix timestamp (~2026-06-12)
+    fake_time.set_us(1782000000000000ULL);
+    gas.add_meter_correction(310.0f);
+
+    uint32_t ts = config.saved_meter_blob_.corrections[0].timestamp;
+    // Should be ~1782000000 (the Unix second)
+    REQUIRE(ts == Approx(1782000000).margin(1));
+}
+

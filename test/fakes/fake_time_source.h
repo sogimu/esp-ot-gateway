@@ -8,9 +8,15 @@ class FakeTimeSource : public ITimeSource {
 public:
     FakeTimeSource() : us_(1000000ULL) {}  // start at 1s to avoid zero-time edge cases
 
-    uint64_t now_us() const override { return us_; }
-    uint32_t now_sec() const override { return static_cast<uint32_t>(us_ / 1000000ULL); }
-    void set_timezone(int) override {}  // no-op in fake
+    time_point now() const override {
+        return time_point(microseconds(us_));
+    }
+    uint64_t monotonic_us() const override { return us_; }
+    int tz_offset() const override { return 0; }
+    using ITimeSource::now_us;
+    using ITimeSource::now_ms;
+    using ITimeSource::now_s;
+    void set_timezone(int) override {}
 
     /// Advance time by given microseconds.
     void advance_us(uint64_t delta_us) { us_ += delta_us; }

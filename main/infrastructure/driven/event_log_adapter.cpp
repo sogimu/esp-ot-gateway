@@ -1,8 +1,28 @@
 #include "infrastructure/driven/event_log_adapter.h"
+#include "application/ports/driven/itime_source.h"
 
 #include <cstdio>
 #include <cstring>
-#include <ctime>
+#include <chrono>
+
+namespace {
+struct ChronoDate { int year, mon, day, hour, min, sec; };
+ChronoDate civil_from_seconds(int64_t secs) {
+    int64_t z = secs / 86400 + 719468;
+    int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+    int64_t doe = z - era * 146097;
+    int64_t yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+    int64_t y = yoe + era * 400;
+    int64_t doy = doe - (365*yoe + yoe/4 - yoe/100);
+    int64_t mp = (5*doy + 2) / 153;
+    int d = doy - (153*mp + 2)/5 + 1;
+    int m = mp + (mp < 10 ? 3 : -9);
+    y += (m <= 2);
+    int64_t sod = secs % 86400;
+    if (sod < 0) sod += 86400;
+    return {static_cast<int>(y), m, d, static_cast<int>(sod/3600), static_cast<int>((sod%3600)/60), static_cast<int>(sod%60)};
+}
+}
 #include <cstdarg>
 #include <cstdlib>
 
@@ -21,11 +41,9 @@ void EventLogAdapter::event(Category cat, const char* fmt, ...)
 {
     if (!ring_) return;
 
-    time_t now;
-    time(&now);
-    uint32_t ts = static_cast<uint32_t>(now > 0 ? now : 0);
+    uint32_t ts = time_ ? time_->now_s() : 0;
 
-    char buf[48];
+    char buf[100];
     va_list args;
     va_start(args, fmt);
     vsnprintf(buf, sizeof(buf), fmt, args);
@@ -60,7 +78,7 @@ const char* EventLogAdapter::to_json()
     count_snap = count_;
     portEXIT_CRITICAL(&spinlock_);
 
-    static char buf[24576];
+    static char buf[65536];
     int pos = 0;
     pos += snprintf(buf + pos, sizeof(buf) - pos, "{\"count\":%d,\"events\":[", count_snap);
 
@@ -74,22 +92,31 @@ const char* EventLogAdapter::to_json()
         int idx = (start + i) % LOG_RING_SIZE;
         const LogEntry& e = ring_[idx];
 
-        struct tm ti;
         char tbuf[16] = "??:??:??";
+        // Compute yday for date separators (simplified: use day-of-year from civil date)
         int yday = -1;
         if (e.time_sec > 0) {
-            time_t t = (time_t)e.time_sec;
-            localtime_r(&t, &ti);
-            snprintf(tbuf, sizeof(tbuf), "%02d:%02d:%02d",
-                     ti.tm_hour, ti.tm_min, ti.tm_sec);
-            yday = ti.tm_yday;
+            int64_t local_secs = e.time_sec + time_->tz_offset() * 3600LL;
+            auto cd = civil_from_seconds(local_secs);
+            snprintf(tbuf, sizeof(tbuf), "%02d:%02d:%02d", cd.hour, cd.min, cd.sec);
+            // Approximate yday from month/day
+            int mdays[] = {0,31,59,90,120,151,181,212,243,273,304,334};
+            yday = mdays[cd.mon - 1] + cd.day - 1;
+            if (cd.mon > 2 && (cd.year % 4 == 0 && (cd.year % 100 != 0 || cd.year % 400 == 0)))
+                yday++;
         }
 
         // Emit date marker when day changes (or first valid event)
         if (yday >= 0 && yday != last_yday) {
             char datebuf[32];
-            snprintf(datebuf, sizeof(datebuf), "%02d.%02d.%04d",
-                     ti.tm_mday, ti.tm_mon + 1, ti.tm_year + 1900);
+            if (e.time_sec > 0) {
+                int64_t local_secs = e.time_sec + time_->tz_offset() * 3600LL;
+                auto cd = civil_from_seconds(local_secs);
+                snprintf(datebuf, sizeof(datebuf), "%02d.%02d.%04d",
+                         cd.day, cd.mon, cd.year);
+            } else {
+                snprintf(datebuf, sizeof(datebuf), "??.??.????");
+            }
             pos += snprintf(buf + pos, sizeof(buf) - pos,
                             "%s{\"date\":\"%s\"}",
                             first ? "" : ",", datebuf);

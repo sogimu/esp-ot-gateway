@@ -7,8 +7,8 @@
 ModulationStatsService::ModulationStatsService(IHeatingStateStore& state)
     : state_(state)
 {
-    hist_ = static_cast<uint16_t*>(malloc(BINS * sizeof(uint16_t)));
-    if (hist_) std::memset(hist_, 0, BINS * sizeof(uint16_t));
+    hist_ = static_cast<uint32_t*>(malloc(BINS * sizeof(uint32_t)));
+    if (hist_) std::memset(hist_, 0, BINS * sizeof(uint32_t));
 }
 
 ModulationStatsService::~ModulationStatsService()

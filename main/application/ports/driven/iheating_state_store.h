@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "domain/value_objects/ch_mode.h"
 
 /// Read-write-locked in-memory state store.
 /// Single synchronization point for poll task (writer) and HTTP handlers (readers).
@@ -131,12 +132,16 @@ public:
     virtual float get_pid_hysteresis()         const = 0;
 
     // ── CH mode ────────────────────────────────────────
-    virtual void set_ch_mode(int v) = 0;
-    virtual int  get_ch_mode() const = 0;
+    virtual void set_ch_mode(CHMode v) = 0;
+    virtual CHMode get_ch_mode() const = 0;
 
     // ── Schedule ───────────────────────────────────────
     virtual void set_schedule(const void* sched) = 0; // CH_Schedule*
     virtual void get_schedule(void* sched) const = 0;
+
+    // ── PID Schedule ───────────────────────────────────
+    virtual void set_pid_schedule(const void* sched) = 0; // PID_Schedule*
+    virtual void get_pid_schedule(void* sched) const = 0;
 
     // ── Hysteresis ─────────────────────────────────────
     virtual void  set_dhw_hysteresis(float v) = 0;

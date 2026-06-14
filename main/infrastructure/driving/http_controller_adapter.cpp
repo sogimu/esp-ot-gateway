@@ -3,6 +3,7 @@
 #include "infrastructure/driving/web_page.h"
 #include "infrastructure/driving/json_helpers.h"
 #include "application/ports/driving/iconfigure_system.h"
+#include "domain/value_objects/ch_mode.h"
 #include "application/ports/driving/iconfigure_pid.h"
 #include "application/ports/driving/igas_calibration.h"
 #include "application/ports/driving/ifault_reset.h"
@@ -22,7 +23,7 @@ HttpControllerAdapter::~HttpControllerAdapter() { stop(); s_self = nullptr; }
 void HttpControllerAdapter::start()
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers    = 8;
+    config.max_uri_handlers    = 12;
     config.lru_purge_enable    = true;
     config.stack_size          = 10240;
 
@@ -31,14 +32,18 @@ void HttpControllerAdapter::start()
         return;
     }
     static const httpd_uri_t routes[] = {
-        { .uri = "/",              .method = HTTP_GET,  .handler = handler_root,    .user_ctx = NULL },
-        { .uri = "/api/status",    .method = HTTP_GET,  .handler = handler_status,  .user_ctx = NULL },
-        { .uri = "/api/control",   .method = HTTP_POST, .handler = handler_control, .user_ctx = NULL },
-        { .uri = "/api/log",       .method = HTTP_GET,  .handler = handler_log,     .user_ctx = NULL },
-        { .uri = "/api/stats",     .method = HTTP_GET,  .handler = handler_stats,   .user_ctx = NULL },
-        { .uri = "/api/schedule", .method = HTTP_GET,  .handler = handler_schedule, .user_ctx = NULL },
+        { .uri = "/",                  .method = HTTP_GET,  .handler = handler_root,          .user_ctx = NULL },
+        { .uri = "/api/status",        .method = HTTP_GET,  .handler = handler_status,        .user_ctx = NULL },
+        { .uri = "/api/control",       .method = HTTP_POST, .handler = handler_control,       .user_ctx = NULL },
+        { .uri = "/api/log",           .method = HTTP_GET,  .handler = handler_log,           .user_ctx = NULL },
+        { .uri = "/api/stats",         .method = HTTP_GET,  .handler = handler_stats,         .user_ctx = NULL },
+        { .uri = "/api/schedule",      .method = HTTP_GET,  .handler = handler_schedule,      .user_ctx = NULL },
+        { .uri = "/api/schedule",      .method = HTTP_POST, .handler = handler_schedule,      .user_ctx = NULL },
+        { .uri = "/api/pid_schedule",  .method = HTTP_GET,  .handler = handler_pid_schedule,  .user_ctx = NULL },
+        { .uri = "/api/pid_schedule",  .method = HTTP_POST, .handler = handler_pid_schedule,  .user_ctx = NULL },
     };
-    for (int i = 0; i < 6; i++)
+    int route_count = sizeof(routes) / sizeof(routes[0]);
+    for (int i = 0; i < route_count; i++)
         httpd_register_uri_handler(server_, &routes[i]);
     ESP_LOGI(TAG, "HTTP сервер запущен на порту %d", config.server_port);
 }
@@ -71,7 +76,7 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
     int v; float f;
     if (self->cfg_) {
         v = json_get_int(body, "\"ch_enable\""); if (v >= 0) self->cfg_->set_ch_enable(v != 0);
-        v = json_get_int(body, "\"ch_mode\"");   if (v >= 0) self->cfg_->set_ch_mode(v);
+        v = json_get_int(body, "\"ch_mode\"");   if (v >= 0) self->cfg_->set_ch_mode(static_cast<CHMode>(v));
         v = json_get_int(body, "\"dhw_enable\""); if (v >= 0) self->cfg_->set_dhw_enable(v != 0);
         f = json_get_float(body, "\"ch_setpoint\"");
         if (f > -1e37f) { if (f < 20) f = 20; if (f > 80) f = 80; self->cfg_->set_ch_setpoint(f); }
@@ -106,7 +111,13 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
         if (hyst > -1e37f) self->pid_->set_pid_hysteresis(hyst);
     }
     if (self->fault_) { v = json_get_int(body, "\"fault_reset\""); if (v > 0) self->fault_->reset(); }
+    if (self->cfg_) {
+        v = json_get_int(body, "\"reset_mod_stats\""); if (v > 0) self->cfg_->reset_modulation_stats();
+        v = json_get_int(body, "\"reset_cycle_stats\""); if (v > 0) self->cfg_->reset_cycle_stats();
+        v = json_get_int(body, "\"reset_gas_stats\""); if (v > 0) self->cfg_->reset_gas_stats();
+    }
     if (self->gas_) {
+        v = json_get_int(body, "\"reset_corrections\""); if (v > 0) self->gas_->reset_corrections();
         f = json_get_float(body, "\"k_calib\""); if (f > -1e37f) self->gas_->set_k_calib(f);
         f = json_get_float(body, "\"gas_meter_base\""); if (f > -1e37f) self->gas_->set_gas_meter_base(f);
         f = json_get_float(body, "\"gas_meter_correct\""); if (f > -1e37f) self->gas_->add_meter_correction(f);
@@ -118,17 +129,98 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
 esp_err_t HttpControllerAdapter::handler_log(httpd_req_t* req) {
     auto* self = s_self;
     if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{\"count\":0,\"events\":[]}"); return ESP_FAIL; }
-    static char buf[4096];  // static: off stack, single-threaded (httpd serializes handlers)
-    self->presenter_->render_log(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
-    return httpd_resp_sendstr(req, buf);
+    const char* json = self->presenter_->log_json();
+    return httpd_resp_sendstr(req, json ? json : "{\"count\":0,\"events\":[]}");
 }
 
 esp_err_t HttpControllerAdapter::handler_schedule(httpd_req_t* req) {
     auto* self = s_self;
     if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{}"); return ESP_FAIL; }
-    static char buf[512];  // static: off stack
+
+    if (req->method == HTTP_POST) {
+        // Read body and parse schedule JSON
+        char body[512] = {0};
+        int recv_len = httpd_req_recv(req, body, sizeof(body)-1);
+        if (recv_len <= 0) {
+            httpd_resp_sendstr(req, "{\"ok\":false}");
+            return ESP_FAIL;
+        }
+        // Parse "enabled" and "temps" array from JSON
+        int en = json_get_int(body, "\"enabled\"");
+        if (en < 0) en = 1;
+        CH_Schedule sched;
+        sched.enabled = (en != 0);
+        // Parse temps array
+        const char* p = strstr(body, "\"temps\"");
+        if (p) {
+            p = strchr(p, '[');
+            if (p) {
+                p++;
+                for (int h = 0; h < 24; h++) {
+                    while (*p == ' ' || *p == ',') p++;
+                    float v = static_cast<float>(atof(p));
+                    if (v < 20) v = 20;
+                    if (v > 80) v = 80;
+                    sched.temps[h] = v;
+                    // skip to next number or end
+                    while (*p && *p != ',' && *p != ']') p++;
+                    if (*p == ']') break;
+                    if (*p == ',') p++;
+                }
+            }
+        }
+        if (self->cfg_) self->cfg_->set_schedule(sched);
+        httpd_resp_set_type(req, "application/json");
+        return httpd_resp_sendstr(req, "{\"ok\":true}");
+    }
+
+    // GET
+    static char buf[512];
     self->presenter_->render_schedule(buf, sizeof(buf));
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, buf);
+}
+
+esp_err_t HttpControllerAdapter::handler_pid_schedule(httpd_req_t* req) {
+    auto* self = s_self;
+    if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{}"); return ESP_FAIL; }
+
+    if (req->method == HTTP_POST) {
+        char body[512] = {0};
+        int recv_len = httpd_req_recv(req, body, sizeof(body)-1);
+        if (recv_len <= 0) {
+            httpd_resp_sendstr(req, "{\"ok\":false}");
+            return ESP_FAIL;
+        }
+        int en = json_get_int(body, "\"enabled\"");
+        if (en < 0) en = 1;
+        PID_Schedule sched;
+        sched.enabled = (en != 0);
+        const char* p = strstr(body, "\"temps\"");
+        if (p) {
+            p = strchr(p, '[');
+            if (p) {
+                p++;
+                for (int h = 0; h < 24; h++) {
+                    while (*p == ' ' || *p == ',') p++;
+                    float v = static_cast<float>(atof(p));
+                    if (v < 16) v = 16;
+                    if (v > 28) v = 28;
+                    sched.temps[h] = v;
+                    while (*p && *p != ',' && *p != ']') p++;
+                    if (*p == ']') break;
+                    if (*p == ',') p++;
+                }
+            }
+        }
+        if (self->cfg_) self->cfg_->set_pid_schedule(sched);
+        httpd_resp_set_type(req, "application/json");
+        return httpd_resp_sendstr(req, "{\"ok\":true}");
+    }
+
+    static char buf[512];
+    self->presenter_->render_pid_schedule(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, buf);
 }

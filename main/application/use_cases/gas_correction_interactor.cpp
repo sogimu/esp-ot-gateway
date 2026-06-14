@@ -2,6 +2,7 @@
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/iconfiguration_store.h"
 #include "application/ports/driven/ilogger.h"
+#include "application/ports/driven/itime_source.h"
 #include "application/services/gas_flow_estimator.h"
 #include <cstdio>
 #include <cmath>
@@ -81,7 +82,7 @@ void GasCorrectionInteractor::add_meter_correction(float reading)
     }
 
     float prev_k = state_.get_k_calib();
-    float new_k = prev_k * (estimated / reading);
+    float new_k = prev_k * (reading / estimated);
     if (new_k < 0.1f) new_k = 0.1f;
     if (new_k > 10.0f) new_k = 10.0f;
 
@@ -94,7 +95,7 @@ void GasCorrectionInteractor::add_meter_correction(float reading)
     // Add entry to correction log (ring buffer)
     int idx = meter_blob_.corrections_head;
     NvsCorrLogEntry& e = meter_blob_.corrections[idx];
-    e.timestamp = 0; // Will be set if we have time source; 0 = unknown
+    e.timestamp = time_ ? time_->now_s() : 0;
     e.actual_reading = reading;
     e.estimated_total = estimated;
     e.difference = diff;
@@ -114,7 +115,33 @@ void GasCorrectionInteractor::add_meter_correction(float reading)
     config_.save_meter(state_, &meter_blob_);
     config_.save_config(state_);
 
+    // Sync: reset integral and set base to actual reading
+    // so "Текущее расчётное" == "Показание счётчика" after correction
+    if (gas_flow_) {
+        gas_flow_->set_integral(0);
+        config_.save_integral(0);  // persist immediately so reboot doesn't restore old value
+    }
+    state_.lock_exclusive();
+    state_.set_gas_meter_base(reading);
+    state_.unlock_exclusive();
+    meter_blob_.base_reading = reading;
+    config_.save_meter(state_, &meter_blob_);
+
     log_.event(ILogger::USER,
-               "Сверка: K%.2f>%.2f diff=%.1f",
+               "Сверка: K%.4f>%.4f откл=%.3f",
                (double)prev_k, (double)new_k, (double)diff);
+}
+
+void GasCorrectionInteractor::reset_corrections()
+{
+    // Clear correction log ring buffer
+    memset(&meter_blob_, 0, sizeof(meter_blob_));
+    meter_blob_.base_reading = state_.get_gas_meter_base();
+    // Reset k_calib to 1.0
+    state_.lock_exclusive();
+    state_.set_k_calib(1.0f);
+    state_.unlock_exclusive();
+    config_.save_meter(state_, &meter_blob_);
+    config_.save_config(state_);
+    log_.event(ILogger::USER, "Журнал сверки и K сброшены");
 }

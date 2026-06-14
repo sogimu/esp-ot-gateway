@@ -22,7 +22,7 @@ public:
     void reset();
 
     uint32_t samples() const { return samples_; }
-    const uint16_t* hist() const { return hist_; }
+    const uint32_t* hist() const { return hist_; }
     float p1()  const;
     float p10() const;
     float p25() const;
@@ -31,11 +31,11 @@ public:
     float p90() const;
     float p99() const;
     uint32_t* samples_ptr() { return &samples_; }
-    uint16_t* hist_ptr() { return hist_; }
+    uint32_t* hist_ptr() { return hist_; }
 
 private:
     IHeatingStateStore& state_;
-    uint16_t* hist_; // malloc'd
+    uint32_t* hist_; // malloc'd
     uint32_t samples_ = 0;
     float percentile(float p) const;
 };

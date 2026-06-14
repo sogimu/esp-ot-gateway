@@ -13,7 +13,6 @@ idf_component_register(
         "infrastructure/driven/boiler_opentherm_adapter.cpp"
         "infrastructure/driven/temperature_sensor_adapter.cpp"
         "infrastructure/driven/web_presenter_adapter.cpp"
-        "infrastructure/driven/esp_timer_adapter.cpp"
         "infrastructure/driven/nvs_config_adapter.cpp"
         "infrastructure/driving/main_poller_task_adapter.cpp"
         "infrastructure/freertos/shared_mutex.c"

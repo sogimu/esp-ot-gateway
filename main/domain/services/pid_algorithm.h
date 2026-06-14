@@ -41,11 +41,15 @@ static inline float pid_step(PidAlgoCfg* cfg, PidAlgoState* s, float setpoint, f
 
     float output_raw = p + i_raw + s->d_filt;
     float output = output_raw;
-    if (output < cfg->out_min) output = cfg->out_min;
-    if (output > cfg->out_max) output = cfg->out_max;
+    bool at_min = false, at_max = false;
+    if (output < cfg->out_min) { output = cfg->out_min; at_min = true; }
+    if (output > cfg->out_max) { output = cfg->out_max; at_max = true; }
 
-    // Anti-windup: only integrate if not saturated
-    if (output_raw == output) {
+    // Anti-windup: freeze integral only if saturated AND integral pushes further out.
+    // If at min but error>0 (need more heat), integral MUST grow to raise output.
+    // If at max but error<0 (need less heat), integral MUST shrink to lower output.
+    bool freeze = (at_min && error < 0) || (at_max && error > 0);
+    if (!freeze) {
         s->integral = i_raw;
     }
 

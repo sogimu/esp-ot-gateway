@@ -3,6 +3,8 @@
 #include "application/ports/driven/iboiler_hardware.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/ports/driven/ilogger.h"
+#include "domain/value_objects/ch_schedule.h"
+#include "domain/value_objects/ch_mode.h"
 #include <cmath>
 #include <cstdio>
 
@@ -15,11 +17,53 @@ PidPollInteractor::PidPollInteractor(IHeatingStateStore& state, IBoilerHardware&
                                        ITimeSource& time, ILogger& log)
     : state_(state), boiler_(boiler), time_(time), log_(log)
 {
+    if (is_pid_mode(state_.get_ch_mode()))
+        enable();
+    else
+        disable();
+}
+
+void PidPollInteractor::enable()
+{
+    bool was_enabled = state_.get_pid_enabled();
+    prev_flame_ = false;
+    cycle_locked_ = false;
+    lockout_logged_ = false;
+    overheat_logged_ = false;
+    clamped_logged_ = false;
+    last_flame_off_ms_ = 0;
+    pid_inited_ = false;
+    state_.lock_exclusive();
+    state_.set_pid_state(true, state_.get_pid_active(), state_.get_pid_output(),
+                          state_.get_pid_p(), state_.get_pid_i(), state_.get_pid_d(),
+                          state_.get_pid_room_temp(), state_.get_pid_target_room(),
+                          state_.get_pid_cycle_locked(), state_.get_pid_remaining_lockout(),
+                          state_.get_pid_ch_enabled_by_pid());
+    state_.unlock_exclusive();
+    if (!was_enabled)
+        log_.event(ILogger::MODE, "PID включён");
+}
+
+void PidPollInteractor::disable()
+{
+    bool was_enabled = state_.get_pid_enabled();
+    prev_flame_ = false;
+    cycle_locked_ = false;
+    lockout_logged_ = false;
+    overheat_logged_ = false;
+    clamped_logged_ = false;
+    last_flame_off_ms_ = 0;
+    pid_inited_ = false;
+    state_.lock_exclusive();
+    state_.set_pid_state(false, false, 0, 0, 0, 0, 0, 0, false, 0, false);
+    state_.unlock_exclusive();
+    if (was_enabled)
+        log_.event(ILogger::MODE, "PID выключен");
 }
 
 void PidPollInteractor::poll()
 {
-    uint32_t now = static_cast<uint32_t>(time_.now_us() / 1000);
+    uint32_t now = static_cast<uint32_t>(time_.monotonic_ms());
     if (last_compute_ms_ == 0) last_compute_ms_ = now;
 
     // Load latest config from state store
@@ -31,6 +75,23 @@ void PidPollInteractor::poll()
         state_.set_pid_state(false, false, 0, 0, 0, 0, 0, 0, false, 0, false);
         state_.unlock_exclusive();
         return;
+    }
+
+    // If PID+schedule mode, update room target from schedule
+    if (state_.get_ch_mode() == CHMode::PID_Sched) {
+        PID_Schedule ps;
+        state_.get_pid_schedule(&ps);
+        if (ps.enabled) {
+            auto hours = std::chrono::duration_cast<std::chrono::hours>(
+                time_.local_now().time_since_epoch());
+            int local_hour = hours.count() % 24;
+            float sched_target = ps.get_for_hour(local_hour);
+            state_.lock_exclusive();
+            state_.set_pid_config(state_.get_pid_kp(), state_.get_pid_ki(), state_.get_pid_kd(),
+                                  state_.get_pid_dt_sec(), state_.get_pid_room_sensor(),
+                                  sched_target, state_.get_pid_lockout_sec());
+            state_.unlock_exclusive();
+        }
     }
 
     // Read room temp — from sensor 0 (T1) or 1 (T2) depending on config
@@ -128,6 +189,12 @@ void PidPollInteractor::poll()
         state_.unlock_exclusive();
     }
 
+    log_.event(ILogger::MODE,
+        "PID: SP=%.0f°C цель=%.1f°C комн=%.1f°C CH=%s (P=%.1f I=%.1f)",
+        (double)output, (double)target, (double)room,
+        ch_on ? "вкл" : "выкл",
+        (double)state_.get_pid_p(), (double)state_.get_pid_i());
+
     last_compute_ms_ = now;
 }
 
@@ -167,6 +234,23 @@ void PidPollInteractor::compute_pid()
 
     float out = pid_step(&pid_cfg_, &pid_state_, target, room, dt);
     pid_cfg_.ki = saved_ki;
+
+    if (out <= pid_cfg_.out_min || out >= pid_cfg_.out_max) {
+        if (!clamped_logged_) {
+            float error = target - room;
+            float p_term = pid_cfg_.kp * error;
+            float raw = p_term + pid_state_.integral + pid_state_.d_filt;
+            log_.event(ILogger::MODE,
+                "PID: расч.%.1f < мин.%.0f°C (цель=%.1f комн=%.1f Δ=%.1f Kp=%.1f P=%.1f I=%.1f dt=%d)",
+                (double)raw, (double)pid_cfg_.out_min,
+                (double)target, (double)room, (double)error,
+                (double)pid_cfg_.kp, (double)p_term, (double)pid_state_.integral,
+                dt);
+            clamped_logged_ = true;
+        }
+    } else {
+        clamped_logged_ = false;
+    }
 
     float p_term = pid_cfg_.kp * (target - room);
     float i_term = pid_state_.integral;

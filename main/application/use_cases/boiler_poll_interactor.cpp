@@ -61,7 +61,7 @@ BoilerPollInteractor::BoilerPollInteractor(IBoilerHardware& boiler, IHeatingStat
 
 uint32_t BoilerPollInteractor::now_ms() const
 {
-    return static_cast<uint32_t>(time_.now_us() / 1000);
+    return static_cast<uint32_t>(time_.monotonic_ms());
 }
 
 float BoilerPollInteractor::f88_to_float(uint16_t v)
