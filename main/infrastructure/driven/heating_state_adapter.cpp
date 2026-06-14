@@ -1,5 +1,6 @@
 #include "infrastructure/driven/heating_state_adapter.h"
 #include "domain/value_objects/ch_schedule.h"
+#include "domain/value_objects/ch_mode.h"
 #include <cstring>
 
 // No-op: single writer (poll task), atomic reads (ESP32 word-aligned)
@@ -66,7 +67,8 @@ bool HeatingStateAdapter::is_dhw_enabled() const { return state_.dhw_enable_; }
   void HeatingStateAdapter::set_##name(type v) { state_.name##_ = v; } \
   type HeatingStateAdapter::get_##name() const { return state_.name##_; }
 
-IMPL_GETSET_I(int, ch_mode)
+void HeatingStateAdapter::set_ch_mode(CHMode v) { state_.ch_mode_ = v; }
+CHMode HeatingStateAdapter::get_ch_mode() const { return state_.ch_mode_; }
 IMPL_GETSET_I(int, tz_offset)
 
 // Fault codes
@@ -168,6 +170,16 @@ void HeatingStateAdapter::get_schedule(void* sched) const {
     CH_Schedule& s = *static_cast<CH_Schedule*>(sched);
     s.enabled = state_.schedule_enabled_;
     memcpy(s.temps, state_.schedule_temps_, 24 * sizeof(float));
+}
+void HeatingStateAdapter::set_pid_schedule(const void* sched) {
+    const PID_Schedule& s = *static_cast<const PID_Schedule*>(sched);
+    state_.pid_schedule_enabled_ = s.enabled;
+    memcpy(state_.pid_schedule_temps_, s.temps, 24 * sizeof(float));
+}
+void HeatingStateAdapter::get_pid_schedule(void* sched) const {
+    PID_Schedule& s = *static_cast<PID_Schedule*>(sched);
+    s.enabled = state_.pid_schedule_enabled_;
+    memcpy(s.temps, state_.pid_schedule_temps_, 24 * sizeof(float));
 }
 
 // SNTP

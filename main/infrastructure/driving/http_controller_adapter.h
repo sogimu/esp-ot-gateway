@@ -36,4 +36,5 @@ private:
     static esp_err_t handler_log(httpd_req_t* req);
     static esp_err_t handler_stats(httpd_req_t* req);
     static esp_err_t handler_schedule(httpd_req_t* req);
+    static esp_err_t handler_pid_schedule(httpd_req_t* req);
 };

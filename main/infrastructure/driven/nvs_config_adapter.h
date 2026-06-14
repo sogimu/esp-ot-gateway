@@ -11,9 +11,9 @@
 
 struct __attribute__((packed)) NvsHistBlob {
     uint32_t samples;
-    uint16_t hist[HIST_BINS];
+    uint16_t hist[HIST_BINS];  // NVS storage: 16-bit (blob fits in 2KB limit)
 };
-static_assert(sizeof(NvsHistBlob) == 4 + 1000 * 2, "NvsHistBlob size mismatch — NVS blob corruption risk");
+static_assert(sizeof(NvsHistBlob) == 4 + 1000 * 2, "NvsHistBlob size mismatch");
 
 struct __attribute__((packed)) NvsCycleBlob {
     uint32_t burner_sec; uint32_t cycle_cnt;
@@ -64,6 +64,8 @@ public:
 
     void save_total_uptime(uint32_t total_uptime_sec) override;
     bool load_total_uptime(uint32_t& total_uptime_sec) override;
+
+    void save_integral(float value) override;
 
     void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
                          uint32_t inter_pause_sec, uint32_t inter_cnt,

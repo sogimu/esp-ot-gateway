@@ -36,10 +36,10 @@ void GasFlowService::update_ema(float& ema, float val, float alpha)
 
 void GasFlowService::poll()
 {
-    uint32_t now_ms = static_cast<uint32_t>(time_.now_us() / 1000);
+    uint32_t now_ms = static_cast<uint32_t>(time_.monotonic_ms());
     if (last_update_ms_ == 0) {
         last_update_ms_ = now_ms;
-        ema_start_us_ = time_.now_us();
+        ema_start_us_ = time_.monotonic_us();
         return;
     }
 
@@ -91,7 +91,7 @@ void GasFlowService::poll()
         }
         avg /= static_cast<float>(n);
 
-        uint64_t elapsed_us = time_.now_us() - ema_start_us_;
+        uint64_t elapsed_us = time_.monotonic_us() - ema_start_us_;
         float elapsed_h = elapsed_us / 3600000000.0f;
 
         if (elapsed_h >= 1.0f / 60)  update_ema(ema_1h_,  avg, 0.01f);
@@ -109,7 +109,7 @@ void GasFlowService::reset()
     ring_idx_ = 0;
     ring_count_ = 0;
     ema_1h_ = ema_3h_ = ema_12h_ = ema_24h_ = ema_7d_ = 0;
-    ema_start_us_ = time_.now_us();
+    ema_start_us_ = time_.monotonic_us();
     kalman_mod_.reset(0);
     kalman_ret_.reset(0);
 }

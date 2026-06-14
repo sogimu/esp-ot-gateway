@@ -126,12 +126,16 @@ public:
     float get_pid_hysteresis()         const override;
 
     // CH mode
-    void set_ch_mode(int v) override;
-    int  get_ch_mode() const override;
+    void set_ch_mode(CHMode v) override;
+    CHMode get_ch_mode() const override;
 
     // Schedule (opaque implementation — casts to CH_Schedule in .cpp)
     void set_schedule(const void* sched) override;
     void get_schedule(void* sched) const override;
+
+    // PID Schedule
+    void set_pid_schedule(const void* sched) override;
+    void get_pid_schedule(void* sched) const override;
 
     // Hysteresis
     void  set_dhw_hysteresis(float v) override;
@@ -186,10 +190,13 @@ private:
         float  pid_kp_ = 2.0f, pid_ki_ = 0.01f, pid_kd_ = 0;
         int    pid_dt_sec_ = 60, pid_room_sensor_ = 0, pid_lockout_sec_ = 300;
         float  pid_hysteresis_ = 0.5f;
-        int    ch_mode_ = 0;
+        CHMode ch_mode_ = CHMode::Manual_Static;
         // Schedule
         bool  schedule_enabled_ = false;
         float schedule_temps_[24] = {};
+        // PID Schedule
+        bool  pid_schedule_enabled_ = false;
+        float pid_schedule_temps_[24] = {};
         // Hysteresis
         float dhw_hysteresis_ = 2.0f;
         // Timezone

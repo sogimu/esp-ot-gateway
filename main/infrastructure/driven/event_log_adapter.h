@@ -9,7 +9,7 @@
 struct LogEntry {
     uint32_t time_sec;
     uint8_t  category;
-    char     msg[48];
+    char     msg[100];
 };
 
 #define LOG_RING_SIZE 512
@@ -24,6 +24,8 @@ public:
 
     void event(Category cat, const char* fmt, ...) override;
 
+    void set_time_source(class ITimeSource* t) { time_ = t; }
+
     /// Serialize ring buffer as JSON.
     const char* to_json();
 
@@ -31,8 +33,9 @@ public:
     int  get_head()  const { return head_; }
 
 private:
-    LogEntry* ring_; // malloc'd (512 * 56 = 28KB)
+    LogEntry* ring_; // malloc'd (512 * 88 ≈ 45KB)
     int head_  = 0;
     int count_ = 0;
+    class ITimeSource* time_ = nullptr;
     portMUX_TYPE spinlock_ = portMUX_INITIALIZER_UNLOCKED;
 };

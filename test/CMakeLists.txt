@@ -47,6 +47,8 @@ set(TEST_SRCS
 
     # Use case interactors
     test_main_poller.cpp
+    test_pid_poll_interactor.cpp
+    test_reset_statistics.cpp
 
     # Bug-focused tests (calculation edge cases)
     test_burn_cycle_bugs.cpp
@@ -93,6 +95,7 @@ set(APP_SRCS
     ${MAIN_DIR}/application/use_cases/main_poller_interactor.cpp
     ${MAIN_DIR}/application/use_cases/system_config_interactor.cpp
     ${MAIN_DIR}/application/use_cases/gas_correction_interactor.cpp
+    ${MAIN_DIR}/application/use_cases/pid_poll_interactor.cpp
 )
 
 # ── Test executable ───────────────────────────────────────

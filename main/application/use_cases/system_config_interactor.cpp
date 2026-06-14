@@ -1,6 +1,11 @@
 #include "application/use_cases/system_config_interactor.h"
 #include "application/use_cases/boiler_poll_interactor.h"
+#include "application/use_cases/pid_poll_interactor.h"
+#include "application/services/modulation_stats_service.h"
+#include "application/services/burn_cycle_service.h"
+#include "application/services/gas_flow_estimator.h"
 #include "domain/value_objects/ch_schedule.h"
+#include "domain/value_objects/ch_mode.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/iboiler_hardware.h"
 #include "application/ports/driven/iconfiguration_store.h"
@@ -18,7 +23,7 @@ SystemConfigInteractor::SystemConfigInteractor(IHeatingStateStore& state, IBoile
 
 void SystemConfigInteractor::save_and_log(const char* msg, ...)
 {
-    char buf[48];
+    char buf[100];
     va_list args;
     va_start(args, msg);
     vsnprintf(buf, sizeof(buf), msg, args);
@@ -32,18 +37,27 @@ void SystemConfigInteractor::save_and_log(const char* msg, ...)
 }
 
 // IConfigureSystem
-void SystemConfigInteractor::set_ch_mode(int mode)
+void SystemConfigInteractor::set_ch_mode(CHMode mode)
 {
     state_.lock_exclusive();
     state_.set_ch_mode(mode);
-    // ch_mode=1 (PID) enables PID controller; other modes disable it
-    state_.set_pid_state(mode == 1, state_.get_pid_active(), state_.get_pid_output(),
-                          state_.get_pid_p(), state_.get_pid_i(), state_.get_pid_d(),
-                          state_.get_pid_room_temp(), state_.get_pid_target_room(),
-                          state_.get_pid_cycle_locked(), state_.get_pid_remaining_lockout(),
-                          state_.get_pid_ch_enabled_by_pid());
     state_.unlock_exclusive();
-    save_and_log("Режим CH: %d", mode);
+
+    const char* mode_name = "?";
+    switch (mode) {
+        case CHMode::Manual_Static: mode_name = "Ручной статичный"; break;
+        case CHMode::PID_Static:    mode_name = "Адаптивный статичный"; break;
+        case CHMode::Manual_Sched:  mode_name = "Ручной по расписанию"; break;
+        case CHMode::PID_Sched:     mode_name = "Адаптивный по расписанию"; break;
+    }
+    save_and_log("Режим CH: %s", mode_name);
+
+    if (pid_poll_) {
+        if (is_pid_mode(mode))
+            pid_poll_->enable();
+        else
+            pid_poll_->disable();
+    }
 }
 
 void SystemConfigInteractor::set_ch_enable(bool en)
@@ -102,12 +116,20 @@ void SystemConfigInteractor::set_schedule(const CH_Schedule& sched)
     save_and_log("Расписание: %s", sched.enabled ? "вкл" : "выкл");
 }
 
+void SystemConfigInteractor::set_pid_schedule(const PID_Schedule& sched)
+{
+    state_.lock_exclusive();
+    state_.set_pid_schedule(&sched);
+    state_.unlock_exclusive();
+    save_and_log("PID расписание: %s", sched.enabled ? "вкл" : "выкл");
+}
+
 void SystemConfigInteractor::set_timezone(int offset)
 {
     state_.lock_exclusive();
     state_.set_tz_offset(offset);
     state_.unlock_exclusive();
-    time_.set_timezone(offset);  // update TZ env var for localtime_r
+    time_.set_timezone(offset);
     save_and_log("Часовой пояс: UTC%+d", offset);
 }
 
@@ -163,15 +185,18 @@ void SystemConfigInteractor::reset()
 // IResetStatistics
 void SystemConfigInteractor::reset_modulation_stats()
 {
+    if (mod_stats_) mod_stats_->reset();
     log_.event(ILogger::USER, "Статистика модуляции сброшена");
 }
 
 void SystemConfigInteractor::reset_cycle_stats()
 {
+    if (burn_cycles_) burn_cycles_->reset();
     log_.event(ILogger::USER, "Статистика циклов сброшена");
 }
 
 void SystemConfigInteractor::reset_gas_stats()
 {
+    if (gas_flow_) gas_flow_->reset();
     log_.event(ILogger::USER, "Статистика газа сброшена");
 }

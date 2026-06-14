@@ -9,7 +9,7 @@ BurnCycleService::BurnCycleService(IHeatingStateStore& state, ITimeSource& time)
 
 void BurnCycleService::poll()
 {
-    uint32_t now_ms = static_cast<uint32_t>(time_.now_us() / 1000);
+    uint32_t now_ms = static_cast<uint32_t>(time_.monotonic_ms());
 
     state_.lock_shared();
     bool flame = state_.is_flame_on();

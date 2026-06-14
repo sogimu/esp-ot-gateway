@@ -53,7 +53,7 @@ TEST_CASE("Timezone: unrelated config change does not overwrite timezone", "[tz]
 
     // Simulate applyControl POST that changes heating params
     // but does NOT include tz_offset
-    sys.set_ch_mode(0);
+    sys.set_ch_mode(CHMode::Manual_Static);
     sys.set_ch_setpoint(65);
 
     // Timezone must still be 7

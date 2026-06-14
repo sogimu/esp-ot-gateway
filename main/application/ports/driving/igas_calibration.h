@@ -8,5 +8,6 @@ public:
     virtual void set_gas_calorific(float) = 0;
     virtual void set_gas_meter_base(float) = 0;
     virtual void add_meter_correction(float reading) = 0;
+    virtual void reset_corrections() = 0;
     virtual ~IGasCalibration() = default;
 };

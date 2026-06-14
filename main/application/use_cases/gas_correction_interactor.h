@@ -6,6 +6,7 @@
 class IHeatingStateStore;
 class IConfigurationStore;
 class ILogger;
+class ITimeSource;
 class GasFlowService;
 
 /// Implements gas meter correction use case.
@@ -19,9 +20,13 @@ public:
     void set_gas_calorific(float) override;
     void set_gas_meter_base(float) override;
     void add_meter_correction(float reading) override;
+    void reset_corrections() override;
 
     /// Wire up the gas flow service (needed for integral_m3 in correction calc).
     void set_gas_flow(GasFlowService* gf) { gas_flow_ = gf; }
+
+    /// Wire up time source (needed for correction timestamps).
+    void set_time_source(ITimeSource* t) { time_ = t; }
 
     /// Restore persisted correction log from NVS on boot.
     void init();
@@ -33,6 +38,7 @@ private:
     IHeatingStateStore&  state_;
     IConfigurationStore& config_;
     ILogger&             log_;
+    ITimeSource*         time_ = nullptr;
     GasFlowService*      gas_flow_ = nullptr;
     NvsMeterBlob         meter_blob_;
 };

@@ -1,5 +1,6 @@
 #include "infrastructure/driven/nvs_config_adapter.h"
 #include "application/ports/driven/iheating_state_store.h"
+#include "domain/value_objects/ch_schedule.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include <cstring>
@@ -24,7 +25,7 @@ void NvsConfigAdapter::load_all(IHeatingStateStore& s)
     nvs_handle_t h;
     if (nvs_open("config", NVS_READONLY, &h) != ESP_OK) return;
 
-    int32_t i32; uint8_t u8; int16_t i16; char buf[64]; size_t sz;
+    int32_t i32; uint8_t u8; int16_t i16; char buf[128]; size_t sz;
 
     if (nvs_get_i32(h, "tz_offset", &i32) == ESP_OK
         && i32 >= -12 && i32 <= 14) {
@@ -42,7 +43,7 @@ void NvsConfigAdapter::load_all(IHeatingStateStore& s)
     if (nvs_get_i16(h, "dhw_sp", &i16) == ESP_OK && i16 >= 35 && i16 <= 80)
         { s.lock_exclusive(); s.set_dhw_setpoint((float)i16); s.unlock_exclusive(); }
     if (nvs_get_i32(h, "ch_mode", &i32) == ESP_OK)
-        { s.lock_exclusive(); s.set_ch_mode((int)i32); s.unlock_exclusive(); }
+        { s.lock_exclusive(); s.set_ch_mode(static_cast<CHMode>(i32)); s.unlock_exclusive(); }
     sz = sizeof(buf);
     if (nvs_get_blob(h, "sntp_srv0", buf, &sz) == ESP_OK)
         { s.lock_exclusive(); s.set_sntp_server0(buf); s.unlock_exclusive(); }
@@ -66,13 +67,15 @@ void NvsConfigAdapter::load_all(IHeatingStateStore& s)
     s.set_pid_config(pid_kp, pid_ki, pid_kd, (int)pid_dt, (int)pid_sns,
                      pid_trg / 10.0f, (int)pid_lockout);
     s.set_pid_hysteresis(pid_hys_u8 / 10.0f);
-    // Enable PID if ch_mode was restored as 1
-    if (s.get_ch_mode() == 1) {
-        s.set_pid_state(true, s.get_pid_active(), s.get_pid_output(),
-                         s.get_pid_p(), s.get_pid_i(), s.get_pid_d(),
-                         s.get_pid_room_temp(), s.get_pid_target_room(),
-                         s.get_pid_cycle_locked(), s.get_pid_remaining_lockout(),
-                         s.get_pid_ch_enabled_by_pid());
+    // PID enable/disable is handled by PidPollInteractor constructor
+    // Load PID schedule
+    {
+        PID_Schedule ps;
+        sz = sizeof(buf);
+        if (nvs_get_blob(h, "pid_sched", buf, &sz) == ESP_OK && sz >= 96) {
+            memcpy(&ps, buf, sizeof(ps));
+            s.set_pid_schedule(&ps);
+        }
     }
     s.unlock_exclusive();
 
@@ -90,7 +93,7 @@ void NvsConfigAdapter::save_config(const IHeatingStateStore& s)
     nvs_set_i16(h, "ch_sp", (int16_t)s.get_ch_setpoint());
     nvs_set_i16(h, "dhw_sp", (int16_t)s.get_dhw_setpoint());
     nvs_set_u8(h, "dhw_hyst", (uint8_t)(s.get_dhw_hysteresis() * 10.0f + 0.5f));
-    nvs_set_i32(h, "ch_mode", (int32_t)s.get_ch_mode());
+    nvs_set_i32(h, "ch_mode", static_cast<int32_t>(s.get_ch_mode()));
     const char* s0 = s.get_sntp_server0(); const char* s1 = s.get_sntp_server1();
     nvs_set_blob(h, "sntp_srv0", s0, strlen(s0)+1);
     nvs_set_blob(h, "sntp_srv1", s1, strlen(s1)+1);
@@ -103,6 +106,12 @@ void NvsConfigAdapter::save_config(const IHeatingStateStore& s)
     nvs_set_i16(h, "pid_trg", (int16_t)(s.get_pid_target_room() * 10.0f + 0.5f));
     nvs_set_i32(h, "pid_lck", (int32_t)s.get_pid_lockout_sec());
     nvs_set_u8(h,  "pid_hys", (uint8_t)(s.get_pid_hysteresis() * 10.0f + 0.5f));
+    // PID schedule
+    {
+        PID_Schedule ps;
+        s.get_pid_schedule(&ps);
+        nvs_set_blob(h, "pid_sched", &ps, sizeof(ps));
+    }
     nvs_commit(h); nvs_close(h);
 }
 
@@ -137,7 +146,7 @@ void NvsConfigAdapter::save_stats(const IHeatingStateStore&,
         nvs_set_blob(n, "gas_ema", e, sizeof(NvsGasEmaBlob));
     }
     if (h) {
-        assert(sizeof(NvsHistBlob) == 2004); // 4 + 1000*2
+        assert(sizeof(NvsHistBlob) == 2004);
         nvs_set_blob(n, "hist", h, sizeof(NvsHistBlob));
     }
     if (c) {
@@ -267,6 +276,15 @@ void NvsConfigAdapter::save_total_uptime(uint32_t total_uptime_sec)
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
     nvs_set_u32(n, "uptime", total_uptime_sec);
+    nvs_commit(n);
+    nvs_close(n);
+}
+
+void NvsConfigAdapter::save_integral(float value)
+{
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
+    nvs_set_blob(n, "integ_m3", &value, sizeof(value));
     nvs_commit(n);
     nvs_close(n);
 }

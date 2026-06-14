@@ -60,3 +60,24 @@ TEST_CASE("json_get_float: negative values parse correctly", "[json]") {
     REQUIRE(f == -5.0f);
     REQUIRE(f > -1e37f);
 }
+
+TEST_CASE("json_get_int: trailing zero not dropped (lockout regression)", "[json][regression]")
+{
+    // Bug: trailing '0' in values like 120, 300 was dropped → 12, 30
+    const char* body = "{\"pid_cycle_lockout\":120}";
+    int v = json_get_int(body, "\"pid_cycle_lockout\"");
+    REQUIRE(v == 120);
+
+    const char* body2 = "{\"pid_cycle_lockout\":300}";
+    int v2 = json_get_int(body2, "\"pid_cycle_lockout\"");
+    REQUIRE(v2 == 300);
+
+    const char* body3 = "{\"pid_cycle_lockout\":99}";
+    int v3 = json_get_int(body3, "\"pid_cycle_lockout\"");
+    REQUIRE(v3 == 99);
+
+    // Full body like from applyControl
+    const char* full = "{\"ch_enable\":1,\"ch_mode\":3,\"pid_cycle_lockout\":120,\"pid_hysteresis\":0.6}";
+    int v4 = json_get_int(full, "\"pid_cycle_lockout\"");
+    REQUIRE(v4 == 120);
+}

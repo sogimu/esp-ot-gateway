@@ -28,9 +28,11 @@ public:
         pid_remaining_lockout_ = 0; pid_ch_enabled_ = false;
         pid_kp_ = 2.0f; pid_ki_ = 0.01f; pid_kd_ = 0;
         pid_dt_sec_ = 60; pid_room_sensor_ = 0; pid_lockout_sec_ = 300; pid_hysteresis_ = 0.5f;
-        ch_mode_ = 0;
+        ch_mode_ = CHMode::Manual_Static;
         schedule_enabled_ = false;
         for (int i = 0; i < 24; i++) schedule_temps_[i] = 0;
+        pid_schedule_enabled_ = false;
+        for (int i = 0; i < 24; i++) pid_schedule_temps_[i] = 0;
         dhw_hysteresis_ = 2.0f;
         tz_offset_ = 3;
         sntp_srv0_.clear(); sntp_srv1_.clear();
@@ -158,8 +160,8 @@ public:
     FAKE_PID_GET(float, hysteresis)
 
     // CH mode
-    void set_ch_mode(int v) override { ch_mode_ = v; }
-    int  get_ch_mode() const override { return ch_mode_; }
+    void set_ch_mode(CHMode v) override { ch_mode_ = v; }
+    CHMode get_ch_mode() const override { return ch_mode_; }
 
     // Schedule
     void set_schedule(const void* sched) override {
@@ -173,6 +175,18 @@ public:
         auto& s = *static_cast<CH_Schedule*>(sched);
         s.enabled = schedule_enabled_;
         std::memcpy(s.temps, schedule_temps_, 24 * sizeof(float));
+    }
+    void set_pid_schedule(const void* sched) override {
+        struct PID_Schedule { bool enabled; float temps[24]; };
+        const auto& s = *static_cast<const PID_Schedule*>(sched);
+        pid_schedule_enabled_ = s.enabled;
+        std::memcpy(pid_schedule_temps_, s.temps, 24 * sizeof(float));
+    }
+    void get_pid_schedule(void* sched) const override {
+        struct PID_Schedule { bool enabled; float temps[24]; };
+        auto& s = *static_cast<PID_Schedule*>(sched);
+        s.enabled = pid_schedule_enabled_;
+        std::memcpy(s.temps, pid_schedule_temps_, 24 * sizeof(float));
     }
 
     // Hysteresis
@@ -224,9 +238,11 @@ public:
     float  pid_kp_ = 2.0f, pid_ki_ = 0.01f, pid_kd_ = 0;
     int    pid_dt_sec_ = 60, pid_room_sensor_ = 0, pid_lockout_sec_ = 300;
     float  pid_hysteresis_ = 0.5f;
-    int    ch_mode_ = 0;
+    CHMode ch_mode_ = CHMode::Manual_Static;
     bool   schedule_enabled_ = false;
     float  schedule_temps_[24] = {};
+    bool   pid_schedule_enabled_ = false;
+    float  pid_schedule_temps_[24] = {};
     float  dhw_hysteresis_ = 2.0f;
     int    tz_offset_ = 3;
     std::string sntp_srv0_, sntp_srv1_;

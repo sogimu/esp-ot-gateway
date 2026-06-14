@@ -181,6 +181,37 @@ TEST_CASE("PidAlgorithm: D-filter smooths derivative", "[pid]")
     CHECK(out2 > out1); // output approaches P-only value as derivative decays
 }
 
+TEST_CASE("PidAlgorithm: anti-windup blocks integral at low error — REGRESSION", "[pid][bug][critical]")
+{
+    // BUG: when output < out_min, anti-windup freezes integral.
+    // With Kp=2.5, error < 10°C → P-term < 25 → output clamped to 25.
+    // Integral NEVER grows, output stays at 25 forever.
+    //
+    // Real scenario: target=28, room=26.7, Kp=2.5, Ki=0.015, out_min=25
+    // P=3.25, I_raw=0.585, output_raw=3.79 → clamp to 25
+    // output_raw(3.79) != output(25) → integral stays 0 FOREVER.
+
+    PidAlgoCfg cfg = {2.5f, 0.015f, 0.0f, 25.0f, 80.0f};
+    PidAlgoState state;
+    pid_init(&state);
+
+    float setpoint = 28.0f;
+    float measured = 26.7f;
+    int dt = 30;
+
+    // Run 50 steps — integral should grow and eventually push output above out_min
+    float out = 0;
+    for (int i = 0; i < 50; i++) {
+        out = pid_step(&cfg, &state, setpoint, measured, dt);
+    }
+
+    INFO("After 50 steps: output=" << out << " integral=" << state.integral);
+    // Integral must have grown (0.585 per step × 50 ≈ 29)
+    CHECK(state.integral > 20.0f);
+    // Output must have risen above out_min once I-term accumulates enough
+    CHECK(out > 25.0f);
+}
+
 TEST_CASE("PidAlgorithm: full PID convergence", "[pid]")
 {
     PidAlgoCfg cfg = {2.0f, 0.05f, 0.5f, 25.0f, 75.0f};

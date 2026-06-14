@@ -18,6 +18,11 @@ public:
 
     void poll() override;
 
+    /// Enable PID control. Resets tracking state, updates state store.
+    void enable();
+    /// Disable PID control. Resets tracking state, updates state store.
+    void disable();
+
 private:
     IHeatingStateStore& state_;
     IBoilerHardware&    boiler_;
@@ -34,6 +39,7 @@ private:
     bool     cycle_locked_ = false;
     bool     lockout_logged_ = false;
     bool     overheat_logged_ = false;
+    bool     clamped_logged_ = false;
 
     void load_config();
     void compute_pid();

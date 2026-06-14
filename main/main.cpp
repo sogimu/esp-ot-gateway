@@ -6,13 +6,11 @@
 
 #include "esp_system.h"
 #include "esp_log.h"
-#include "esp_timer.h"
 #include "rom/ets_sys.h"
 
 // ── Driven adapters ──────────────────────────────────────
 #include "infrastructure/driven/event_log_adapter.h"
 #include "infrastructure/driven/heating_state_adapter.h"
-#include "infrastructure/driven/esp_timer_adapter.h"
 #include "infrastructure/driven/ot_hardware_adapter.h"
 #include "infrastructure/driven/boiler_opentherm_adapter.h"
 #include "infrastructure/driven/temperature_sensor_adapter.h"
@@ -59,37 +57,40 @@ extern "C" void app_main(void)
 
     // ── Phase 2: Driven adapters ────────────────────────
     HeatingStateAdapter      ca_state;
-    EspTimerAdapter          ca_time;
+    SntpTimeAdapter          ca_time;
     OtHardwareAdapter        ca_ot_hw;
     BoilerOpenThermAdapter   ca_boiler(ca_ot_hw);
     TemperatureSensorAdapter ca_sensors;
     WebPresenterAdapter      ca_web;
 
+    ca_log.set_time_source(&ca_time);
+
     ca_web.set_state(&ca_state);
     ca_web.set_logger(&ca_log);
+    ca_web.set_time_source(&ca_time);
 
     nvs.load_all(ca_state);  // restore persisted config into state
     nvs.load_meter(ca_state); // restore gas meter base reading
 
     // ── Phase 3: Network ─────────────────────────────────
     WifiInitAdapter wifi;
-    SntpTimeAdapter sntp;
 
     wifi.start();
 
     // Sync SNTP with UTC+0 first, then apply user timezone.
     // This prevents a wrong TZ from NVS from corrupting the system clock.
-    sntp.set_logger(&ca_log);
-    sntp.start();   // sets TZ=UTC+0, starts SNTP, waits for first sync
-    sntp.set_timezone(ca_state.get_tz_offset());
+    ca_time.set_logger(&ca_log);
+    ca_time.start();   // sets TZ=UTC+0, starts SNTP, waits for first sync
+    ca_time.set_timezone(ca_state.get_tz_offset());
 
     // ── Phase 4: Use cases ───────────────────────────────
     BoilerPollInteractor  boiler_poll(ca_boiler, ca_state, ca_log, ca_time);
     SensorsPollInteractor sensors_poll(ca_sensors, ca_state);
     PidPollInteractor     pid_poll(ca_state, ca_boiler, ca_time, ca_log);
 
-    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, nvs, ca_log, sntp);
+    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, nvs, ca_log, ca_time);
     sys_cfg.set_boiler_poll(&boiler_poll);
+    sys_cfg.set_pid_poll(&pid_poll);
 
     GasCorrectionInteractor gas_corr(ca_state, nvs, ca_log);
 
@@ -97,11 +98,15 @@ extern "C" void app_main(void)
     ModulationStatsService mod_stats(ca_state);
     BurnCycleService       burn_cycles(ca_state, ca_time);
     GasFlowService         gas_flow(ca_state, ca_time);
+    sys_cfg.set_burn_cycles(&burn_cycles);
+    sys_cfg.set_mod_stats(&mod_stats);
+    sys_cfg.set_gas_flow_reset(&gas_flow);
     DHWPredictService      dhw_predict(ca_state, nvs, ca_time);
     dhw_predict.load_history();
 
     // Wire gas correction interactor to gas flow service and restore correction log
     gas_corr.set_gas_flow(&gas_flow);
+    gas_corr.set_time_source(&ca_time);
     gas_corr.init();
 
     // Restore saved burner stats from NVS
@@ -128,7 +133,8 @@ extern "C" void app_main(void)
         if (nvs.load_stats(saved_burner_sec_hist, saved_integ_m3,
                            &hist_blob, nullptr, nullptr, nullptr)) {
             *mod_stats.samples_ptr() = hist_blob.samples;
-            memcpy(mod_stats.hist_ptr(), hist_blob.hist, HIST_BINS * sizeof(uint16_t));
+            for (int i = 0; i < HIST_BINS; i++)
+                mod_stats.hist_ptr()[i] = hist_blob.hist[i];
             gas_flow.set_integral(saved_integ_m3);
             ESP_LOGI("main", "NVS: восстановлена гистограмма (samples=%" PRIu32 ") и integral_m3=%.3f",
                      hist_blob.samples, (double)saved_integ_m3);
@@ -184,7 +190,7 @@ extern "C" void app_main(void)
 
         ESP_LOGI(TAG, "Аптайм: %lld с, свободно: %" PRIu32
                  " | CPU: core0=%d%% core1=%d%% total=%d%%",
-                 esp_timer_get_time() / 1000000,
+                 ca_time.monotonic_us() / 1000000,
                  esp_get_free_heap_size(),
                  100 - idle0, 100 - idle1, (200 - idle0 - idle1) / 2);
 
@@ -202,12 +208,15 @@ extern "C" void app_main(void)
             // Save modulation histogram
             NvsHistBlob hist_blob;
             hist_blob.samples = mod_stats.samples();
-            memcpy(hist_blob.hist, mod_stats.hist_ptr(), HIST_BINS * sizeof(uint16_t));
+            for (int i = 0; i < HIST_BINS; i++) {
+                uint32_t v = mod_stats.hist_ptr()[i];
+                hist_blob.hist[i] = v > 65535 ? 65535 : (uint16_t)v;
+            }
             nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
                            &hist_blob, nullptr, nullptr, nullptr);
             // Save total uptime
             nvs.save_total_uptime(total_uptime_base_sec +
-                                  (uint32_t)(esp_timer_get_time() / 1000000));
+                                  (uint32_t)(ca_time.monotonic_us() / 1000000));
             // Save gas meter blob (includes correction log)
             nvs.save_meter(ca_state, &gas_corr.meter_blob());
         }

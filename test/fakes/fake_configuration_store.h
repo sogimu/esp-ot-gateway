@@ -167,6 +167,10 @@ public:
     }
     void set_total_uptime_load(uint32_t sec) { total_uptime_load_ok_ = true; total_uptime_load_ = sec; }
 
+    void save_integral(float value) override { saved_integral_ = value; save_integral_called_ = true; }
+    float saved_integral_ = -1.0f;
+    bool save_integral_called_ = false;
+
     // ── Call tracking ──────────────────────────────────
     int save_config_called_ = 0;
     int save_predict_called_ = 0;
