@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-10 08:21:05</td>
+            <td class="headerValue">2026-06-14 15:52:24</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
@@ -83,8 +83,8 @@
 <span id="L21"><span class="lineNum">      21</span>              :     void poll() override;</span>
 <span id="L22"><span class="lineNum">      22</span>              :     void reset();</span>
 <span id="L23"><span class="lineNum">      23</span>              : </span>
-<span id="L24"><span class="lineNum">      24</span> <span class="tlaGNC tlaBgGNC">          10 :     uint32_t samples() const { return samples_; }</span></span>
-<span id="L25"><span class="lineNum">      25</span>              :     const uint16_t* hist() const { return hist_; }</span>
+<span id="L24"><span class="lineNum">      24</span> <span class="tlaGNC tlaBgGNC">          13 :     uint32_t samples() const { return samples_; }</span></span>
+<span id="L25"><span class="lineNum">      25</span>              :     const uint32_t* hist() const { return hist_; }</span>
 <span id="L26"><span class="lineNum">      26</span>              :     float p1()  const;</span>
 <span id="L27"><span class="lineNum">      27</span>              :     float p10() const;</span>
 <span id="L28"><span class="lineNum">      28</span>              :     float p25() const;</span>
@@ -93,11 +93,11 @@
 <span id="L31"><span class="lineNum">      31</span>              :     float p90() const;</span>
 <span id="L32"><span class="lineNum">      32</span>              :     float p99() const;</span>
 <span id="L33"><span class="lineNum">      33</span>              :     uint32_t* samples_ptr() { return &amp;samples_; }</span>
-<span id="L34"><span class="lineNum">      34</span>              :     uint16_t* hist_ptr() { return hist_; }</span>
+<span id="L34"><span class="lineNum">      34</span>              :     uint32_t* hist_ptr() { return hist_; }</span>
 <span id="L35"><span class="lineNum">      35</span>              : </span>
 <span id="L36"><span class="lineNum">      36</span>              : private:</span>
 <span id="L37"><span class="lineNum">      37</span>              :     IHeatingStateStore&amp; state_;</span>
-<span id="L38"><span class="lineNum">      38</span>              :     uint16_t* hist_; // malloc'd</span>
+<span id="L38"><span class="lineNum">      38</span>              :     uint32_t* hist_; // malloc'd</span>
 <span id="L39"><span class="lineNum">      39</span>              :     uint32_t samples_ = 0;</span>
 <span id="L40"><span class="lineNum">      40</span>              :     float percentile(float p) const;</span>
 <span id="L41"><span class="lineNum">      41</span>              : };</span>

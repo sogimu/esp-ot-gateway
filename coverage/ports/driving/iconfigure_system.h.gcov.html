@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-10 08:21:05</td>
+            <td class="headerValue">2026-06-14 15:52:24</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryLo">50.0&nbsp;%</td>
@@ -63,22 +63,27 @@
 <span id="L1"><span class="lineNum">       1</span>              : #pragma once</span>
 <span id="L2"><span class="lineNum">       2</span>              : </span>
 <span id="L3"><span class="lineNum">       3</span>              : #include &quot;domain/value_objects/ch_schedule.h&quot;</span>
-<span id="L4"><span class="lineNum">       4</span>              : </span>
-<span id="L5"><span class="lineNum">       5</span>              : /// User-facing system configuration.</span>
-<span id="L6"><span class="lineNum">       6</span>              : /// Called from HTTP /api/control and /api/schedule handlers.</span>
-<span id="L7"><span class="lineNum">       7</span>              : class IConfigureSystem {</span>
-<span id="L8"><span class="lineNum">       8</span>              : public:</span>
-<span id="L9"><span class="lineNum">       9</span>              :     virtual void set_ch_mode(int mode) = 0;               // 0=manual, 1=PID, 2=schedule</span>
-<span id="L10"><span class="lineNum">      10</span>              :     virtual void set_ch_enable(bool) = 0;</span>
-<span id="L11"><span class="lineNum">      11</span>              :     virtual void set_dhw_enable(bool) = 0;</span>
-<span id="L12"><span class="lineNum">      12</span>              :     virtual void set_ch_setpoint(float temp) = 0;          // validated 20–80</span>
-<span id="L13"><span class="lineNum">      13</span>              :     virtual void set_dhw_setpoint(float temp) = 0;         // validated 35–80</span>
-<span id="L14"><span class="lineNum">      14</span>              :     virtual void set_dhw_hysteresis(float value) = 0;      // validated 0.5–10</span>
-<span id="L15"><span class="lineNum">      15</span>              :     virtual void set_schedule(const CH_Schedule&amp;) = 0;</span>
-<span id="L16"><span class="lineNum">      16</span>              :     virtual void set_timezone(int offset) = 0;</span>
-<span id="L17"><span class="lineNum">      17</span>              :     virtual void set_sntp_servers(const char* srv0, const char* srv1) = 0;</span>
-<span id="L18"><span class="lineNum">      18</span> <span class="tlaGNC tlaBgGNC">           3 :     virtual ~IConfigureSystem() = default;</span></span>
-<span id="L19"><span class="lineNum">      19</span>              : };</span>
+<span id="L4"><span class="lineNum">       4</span>              : #include &quot;domain/value_objects/ch_mode.h&quot;</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : /// User-facing system configuration.</span>
+<span id="L7"><span class="lineNum">       7</span>              : /// Called from HTTP /api/control and /api/schedule handlers.</span>
+<span id="L8"><span class="lineNum">       8</span>              : class IConfigureSystem {</span>
+<span id="L9"><span class="lineNum">       9</span>              : public:</span>
+<span id="L10"><span class="lineNum">      10</span>              :     virtual void set_ch_mode(CHMode mode) = 0;</span>
+<span id="L11"><span class="lineNum">      11</span>              :     virtual void set_ch_enable(bool) = 0;</span>
+<span id="L12"><span class="lineNum">      12</span>              :     virtual void set_dhw_enable(bool) = 0;</span>
+<span id="L13"><span class="lineNum">      13</span>              :     virtual void set_ch_setpoint(float temp) = 0;          // validated 20–80</span>
+<span id="L14"><span class="lineNum">      14</span>              :     virtual void set_dhw_setpoint(float temp) = 0;         // validated 35–80</span>
+<span id="L15"><span class="lineNum">      15</span>              :     virtual void set_dhw_hysteresis(float value) = 0;      // validated 0.5–10</span>
+<span id="L16"><span class="lineNum">      16</span>              :     virtual void set_schedule(const CH_Schedule&amp;) = 0;</span>
+<span id="L17"><span class="lineNum">      17</span>              :     virtual void set_pid_schedule(const PID_Schedule&amp;) = 0;</span>
+<span id="L18"><span class="lineNum">      18</span>              :     virtual void set_timezone(int offset) = 0;</span>
+<span id="L19"><span class="lineNum">      19</span>              :     virtual void set_sntp_servers(const char* srv0, const char* srv1) = 0;</span>
+<span id="L20"><span class="lineNum">      20</span>              :     virtual void reset_modulation_stats() = 0;</span>
+<span id="L21"><span class="lineNum">      21</span>              :     virtual void reset_cycle_stats() = 0;</span>
+<span id="L22"><span class="lineNum">      22</span>              :     virtual void reset_gas_stats() = 0;</span>
+<span id="L23"><span class="lineNum">      23</span> <span class="tlaGNC tlaBgGNC">           9 :     virtual ~IConfigureSystem() = default;</span></span>
+<span id="L24"><span class="lineNum">      24</span>              : };</span>
         </pre>
               </td>
             </tr>
