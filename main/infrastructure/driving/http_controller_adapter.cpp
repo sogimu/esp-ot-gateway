@@ -23,7 +23,7 @@ HttpControllerAdapter::~HttpControllerAdapter() { stop(); s_self = nullptr; }
 void HttpControllerAdapter::start()
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers    = 12;
+    config.max_uri_handlers    = 13;
     config.lru_purge_enable    = true;
     config.stack_size          = 10240;
 
@@ -41,6 +41,7 @@ void HttpControllerAdapter::start()
         { .uri = "/api/schedule",      .method = HTTP_POST, .handler = handler_schedule,      .user_ctx = NULL },
         { .uri = "/api/pid_schedule",  .method = HTTP_GET,  .handler = handler_pid_schedule,  .user_ctx = NULL },
         { .uri = "/api/pid_schedule",  .method = HTTP_POST, .handler = handler_pid_schedule,  .user_ctx = NULL },
+        { .uri = "/api/pid_quality",  .method = HTTP_GET,  .handler = handler_pid_quality,  .user_ctx = NULL },
     };
     int route_count = sizeof(routes) / sizeof(routes[0]);
     for (int i = 0; i < route_count; i++)
@@ -230,6 +231,15 @@ esp_err_t HttpControllerAdapter::handler_stats(httpd_req_t* req) {
     if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{}"); return ESP_FAIL; }
     static char buf[2048];  // static: off stack
     self->presenter_->render_stats(buf, sizeof(buf));
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, buf);
+}
+
+esp_err_t HttpControllerAdapter::handler_pid_quality(httpd_req_t* req) {
+    auto* self = s_self;
+    if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{}"); return ESP_FAIL; }
+    static char buf[512];
+    self->presenter_->render_pid_quality(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, buf);
 }

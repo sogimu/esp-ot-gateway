@@ -44,6 +44,8 @@ set(TEST_SRCS
     test_modulation_stats.cpp
     test_burn_cycle.cpp
     test_dhw_predict.cpp
+    test_pid_quality_assessor.cpp
+    test_fopdt_estimator.cpp
 
     # Use case interactors
     test_main_poller.cpp
@@ -92,6 +94,8 @@ set(APP_SRCS
     ${MAIN_DIR}/application/services/burn_cycle_service.cpp
     ${MAIN_DIR}/application/services/dhw_predict_service.cpp
     ${MAIN_DIR}/application/services/gas_flow_estimator.cpp
+    ${MAIN_DIR}/application/services/fopdt_estimator.cpp
+    ${MAIN_DIR}/application/services/pid_quality_assessor.cpp
     ${MAIN_DIR}/application/use_cases/main_poller_interactor.cpp
     ${MAIN_DIR}/application/use_cases/system_config_interactor.cpp
     ${MAIN_DIR}/application/use_cases/gas_correction_interactor.cpp

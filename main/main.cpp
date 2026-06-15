@@ -37,6 +37,8 @@
 #include "application/services/burn_cycle_service.h"
 #include "application/services/gas_flow_estimator.h"
 #include "application/services/dhw_predict_service.h"
+#include "application/services/pid_quality_assessor.h"
+#include "application/services/fopdt_estimator.h"
 
 extern "C" void app_main(void)
 {
@@ -104,6 +106,9 @@ extern "C" void app_main(void)
     DHWPredictService      dhw_predict(ca_state, nvs, ca_time);
     dhw_predict.load_history();
 
+    PidQualityAssessor pid_quality(ca_state);
+    FopdtEstimator      fopdt_est(ca_state, ca_time);
+
     // Wire gas correction interactor to gas flow service and restore correction log
     gas_corr.set_gas_flow(&gas_flow);
     gas_corr.set_time_source(&ca_time);
@@ -150,6 +155,8 @@ extern "C" void app_main(void)
     ca_web.set_burn_cycles(&burn_cycles);
     ca_web.set_gas_flow(&gas_flow);
     ca_web.set_gas_correction(&gas_corr);
+    ca_web.set_pid_quality(&pid_quality);
+    ca_web.set_fopdt_estimator(&fopdt_est);
 
     // ── Phase 6: Main poller ─────────────────────────────
     MainPollerInteractor main_poller;
@@ -160,6 +167,8 @@ extern "C" void app_main(void)
     main_poller.add(&burn_cycles);
     main_poller.add(&gas_flow);
     main_poller.add(&dhw_predict);
+    main_poller.add(&pid_quality);
+    main_poller.add(&fopdt_est);
 
     // ── Phase 7: Hardware init + start ───────────────────
     ca_sensors.init();

@@ -9,6 +9,8 @@ class ModulationStatsService;
 class BurnCycleService;
 class GasFlowService;
 class GasCorrectionInteractor;
+class PidQualityAssessor;
+class FopdtEstimator;
 
 /// JSON rendering from CA state + services.
 /// Writes into caller-provided buffer — no heap, thread-safe.
@@ -20,6 +22,8 @@ public:
     void set_burn_cycles(BurnCycleService* b)    { burn_cycles_ = b; }
     void set_gas_flow(GasFlowService* g)         { gas_flow_ = g; }
     void set_gas_correction(GasCorrectionInteractor* g) { gas_corr_ = g; }
+    void set_pid_quality(const PidQualityAssessor* q) { pid_quality_ = q; }
+    void set_fopdt_estimator(const FopdtEstimator* e) { fopdt_ = e; }
     void set_total_uptime_base(uint32_t sec)     { total_uptime_base_ = sec; }
     void set_time_source(class ITimeSource* t)   { time_ = t; }
 
@@ -40,6 +44,9 @@ public:
     /// Render PID schedule JSON into buf, returns length.
     int render_pid_schedule(char* buf, size_t size);
 
+    /// Render PID quality JSON into buf, returns length.
+    int render_pid_quality(char* buf, size_t size);
+
 private:
     IHeatingStateStore*       state_ = nullptr;
     ILogger*                  logger_ = nullptr;
@@ -47,6 +54,8 @@ private:
     BurnCycleService*         burn_cycles_ = nullptr;
     GasFlowService*           gas_flow_ = nullptr;
     GasCorrectionInteractor*  gas_corr_ = nullptr;
+    const PidQualityAssessor* pid_quality_ = nullptr;
+    const FopdtEstimator*     fopdt_ = nullptr;
     class ITimeSource*        time_ = nullptr;
     uint32_t                  total_uptime_base_ = 0;
 };
