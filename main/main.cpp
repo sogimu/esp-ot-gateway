@@ -20,9 +20,13 @@
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
 // ── Driving adapters ─────────────────────────────────────
-#include "infrastructure/driving/wifi_init_adapter.h"
 #include "infrastructure/driving/main_poller_task_adapter.h"
 #include "infrastructure/driving/http_controller_adapter.h"
+
+// ── WiFi provisioning ────────────────────────────────────
+#include "infrastructure/driven/wifi_nvs_adapter.h"
+#include "infrastructure/driven/esp32_wifi_adapter.h"
+#include "infrastructure/driving/wifi_apsta_adapter.h"
 
 // ── Use cases ────────────────────────────────────────────
 #include "application/use_cases/main_poller_interactor.h"
@@ -37,8 +41,6 @@
 #include "application/services/burn_cycle_service.h"
 #include "application/services/gas_flow_estimator.h"
 #include "application/services/dhw_predict_service.h"
-#include "application/services/pid_quality_assessor.h"
-#include "application/services/fopdt_estimator.h"
 
 extern "C" void app_main(void)
 {
@@ -54,6 +56,10 @@ extern "C" void app_main(void)
 
     CrashDiagnosticsAdapter crash_diag(ca_log);
     crash_diag.start();
+
+    if (crash_diag.last_boot_had_crash()) {
+        ca_log.event(ILogger::SYSTEM, "Предыдущая загрузка: КРАШ");
+    }
 
     ca_log.event(ILogger::SYSTEM, "Система запущена");
 
@@ -75,15 +81,25 @@ extern "C" void app_main(void)
     nvs.load_meter(ca_state); // restore gas meter base reading
 
     // ── Phase 3: Network ─────────────────────────────────
-    WifiInitAdapter wifi;
+    WifiNvsAdapter     wifi_nvs;
+    Esp32WifiAdapter   wifi_hw;
+    WifiApStaAdapter   wifi(wifi_hw, wifi_nvs);
+    auto wifi_mode = wifi.boot();
 
-    wifi.start();
-
-    // Sync SNTP with UTC+0 first, then apply user timezone.
-    // This prevents a wrong TZ from NVS from corrupting the system clock.
+    // SNTP + manual time
     ca_time.set_logger(&ca_log);
-    ca_time.start();   // sets TZ=UTC+0, starts SNTP, waits for first sync
-    ca_time.set_timezone(ca_state.get_tz_offset());
+    if (wifi_mode == IWifiManager::Mode::STA) {
+        // Full SNTP sync (STA mode has internet)
+        ca_time.start();
+        ca_time.set_timezone(ca_state.get_tz_offset());
+    } else {
+        // No internet — try restoring manual time offset from NVS
+        if (ca_time.restore_time_offset()) {
+            ESP_LOGI("main", "SNTP пропущен (нет STA) — время из NVS");
+        } else {
+            ESP_LOGW("main", "SNTP пропущен, ручное время не задано");
+        }
+    }
 
     // ── Phase 4: Use cases ───────────────────────────────
     BoilerPollInteractor  boiler_poll(ca_boiler, ca_state, ca_log, ca_time);
@@ -105,9 +121,6 @@ extern "C" void app_main(void)
     sys_cfg.set_gas_flow_reset(&gas_flow);
     DHWPredictService      dhw_predict(ca_state, nvs, ca_time);
     dhw_predict.load_history();
-
-    PidQualityAssessor pid_quality(ca_state);
-    FopdtEstimator      fopdt_est(ca_state, ca_time);
 
     // Wire gas correction interactor to gas flow service and restore correction log
     gas_corr.set_gas_flow(&gas_flow);
@@ -155,8 +168,6 @@ extern "C" void app_main(void)
     ca_web.set_burn_cycles(&burn_cycles);
     ca_web.set_gas_flow(&gas_flow);
     ca_web.set_gas_correction(&gas_corr);
-    ca_web.set_pid_quality(&pid_quality);
-    ca_web.set_fopdt_estimator(&fopdt_est);
 
     // ── Phase 6: Main poller ─────────────────────────────
     MainPollerInteractor main_poller;
@@ -167,8 +178,6 @@ extern "C" void app_main(void)
     main_poller.add(&burn_cycles);
     main_poller.add(&gas_flow);
     main_poller.add(&dhw_predict);
-    main_poller.add(&pid_quality);
-    main_poller.add(&fopdt_est);
 
     // ── Phase 7: Hardware init + start ───────────────────
     ca_sensors.init();
@@ -185,6 +194,8 @@ extern "C" void app_main(void)
     http.set_pid(&sys_cfg);
     http.set_fault(&sys_cfg);
     http.set_gas(&gas_corr);
+    http.set_wifi(&wifi);
+    http.set_time_adapter(&ca_time);
     http.start();
 
     // ── Idle: CPU stats every 60s, periodic NVS save every 10 min ──
@@ -196,12 +207,21 @@ extern "C" void app_main(void)
 
         int idle0 = (int)ulTaskGetIdleRunTimePercentForCore(0);
         int idle1 = (int)ulTaskGetIdleRunTimePercentForCore(1);
+        uint32_t free_heap = esp_get_free_heap_size();
 
         ESP_LOGI(TAG, "Аптайм: %lld с, свободно: %" PRIu32
                  " | CPU: core0=%d%% core1=%d%% total=%d%%",
                  ca_time.monotonic_us() / 1000000,
-                 esp_get_free_heap_size(),
+                 free_heap,
                  100 - idle0, 100 - idle1, (200 - idle0 - idle1) / 2);
+
+        // AP watchdog: restart AP if WiFi died
+        wifi.try_recover_ap();
+
+        if (free_heap < 40 * 1024) {
+            ca_log.event(ILogger::SYSTEM,
+                "Мало свободной кучи: %" PRIu32 " байт", free_heap);
+        }
 
         // Save all persistent state to NVS every 10 min (10 ticks)
         if (save_tick >= 10) {

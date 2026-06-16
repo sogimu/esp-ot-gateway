@@ -2,11 +2,16 @@
 
 #include "application/ports/driven/iheating_state_store.h"
 
-/// In-memory state store — single writer (poll task), atomic reads (HTTP).
-/// No lock needed: ESP32 word-aligned float/bool reads are atomic.
+extern "C" {
+#include "infrastructure/freertos/shared_mutex.h"
+}
+
+/// In-memory state store with FreeRTOS read-write lock.
+/// Poller task (writer) uses exclusive lock, HTTP server (reader) uses shared lock.
+/// Prevents torn reads on arrays (schedule_temps_, sntp_srv*_) and multi-field structs.
 class HeatingStateAdapter : public IHeatingStateStore {
 public:
-    HeatingStateAdapter() = default;
+    HeatingStateAdapter() { shared_mutex_init(&mutex_); }
 
     // Lock protocol
     void lock_shared() override;
@@ -160,6 +165,8 @@ public:
     float get_gas_meter_base() const override;
 
 private:
+    SharedMutex mutex_;
+
     struct State {
         bool   connected_ = false;
         bool   fault_ = false, flame_ = false, ch_active_ = false, dhw_active_ = false;

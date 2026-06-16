@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup.sh — установка ESP-IDF и зависимостей для gas_boiler
+# setup.sh — установка ESP-IDF и зависимостей для esp-ot-gateway
 # Запускать из корня проекта: bash scripts/setup.sh
 
 set -e

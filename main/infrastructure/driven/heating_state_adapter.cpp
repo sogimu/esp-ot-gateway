@@ -3,11 +3,11 @@
 #include "domain/value_objects/ch_mode.h"
 #include <cstring>
 
-// No-op: single writer (poll task), atomic reads (ESP32 word-aligned)
-void HeatingStateAdapter::lock_shared()     {}
-void HeatingStateAdapter::unlock_shared()   {}
-void HeatingStateAdapter::lock_exclusive()  {}
-void HeatingStateAdapter::unlock_exclusive(){}
+// FreeRTOS read-write lock — prevents torn reads on arrays and multi-field structs
+void HeatingStateAdapter::lock_shared()     { shared_mutex_lock_shared(&mutex_); }
+void HeatingStateAdapter::unlock_shared()   { shared_mutex_unlock_shared(&mutex_); }
+void HeatingStateAdapter::lock_exclusive()  { shared_mutex_lock_exclusive(&mutex_); }
+void HeatingStateAdapter::unlock_exclusive(){ shared_mutex_unlock_exclusive(&mutex_); }
 
 // Boiler status
 void HeatingStateAdapter::set_connected(bool v) { state_.connected_ = v; }
