@@ -6,6 +6,8 @@
 #include "application/services/burn_cycle_service.h"
 #include "application/services/gas_flow_estimator.h"
 #include "application/use_cases/gas_correction_interactor.h"
+#include "application/services/pid_quality_assessor.h"
+#include "application/services/fopdt_estimator.h"
 #include "infrastructure/driven/event_log_adapter.h"
 #include "domain/value_objects/ch_schedule.h"
 #include <cstdio>
@@ -274,5 +276,34 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
     }
     pos += snprintf(buf + pos, size - pos, "]}");
 
+    return pos;
+}
+
+int WebPresenterAdapter::render_pid_quality(char* buf, size_t size)
+{
+    if (!pid_quality_) return snprintf(buf, size, "{}");
+
+    const QualityScores& s = pid_quality_->scores();
+
+    int pos = snprintf(buf, size,
+        "{"
+        "\"composite\":%.1f,"
+        "\"overshoot\":%.1f,\"steady_state\":%.1f,\"stability\":%.1f,"
+        "\"cycling\":%.1f,\"clamp\":%.1f,"
+        "\"fopdt\":{",
+        (double)s.composite,
+        (double)s.overshoot, (double)s.steady_state, (double)s.stability,
+        (double)s.cycling, (double)s.clamp);
+
+    if (fopdt_) {
+        pos += snprintf(buf + pos, size - pos,
+            "\"gain\":%.2f,\"tau_heat_sec\":%.0f,\"tau_cool_sec\":%.0f,"
+            "\"dead_time_sec\":%.0f,\"outside_temp\":%.1f,\"event_count\":%d",
+            (double)fopdt_->gain(), (double)fopdt_->time_constant_heat_sec(),
+            (double)fopdt_->time_constant_cool_sec(), (double)fopdt_->dead_time_sec(),
+            (double)fopdt_->outside_temp_typical(), fopdt_->event_count());
+    }
+
+    pos += snprintf(buf + pos, size - pos, "}}");
     return pos;
 }

@@ -18,7 +18,7 @@ if [ -z "$IDF_PATH" ]; then
     fi
 fi
 
-echo "=== Сборка gas_boiler (ESP32) ==="
+echo "=== Сборка esp-ot-gateway (ESP32) ==="
 echo "IDF_PATH: $IDF_PATH"
 echo ""
 
@@ -29,7 +29,7 @@ echo ""
 echo "=== Сборка завершена ==="
 echo ""
 echo "Файлы прошивки:"
-ls -lh build/gas_boiler.bin build/gas_boiler.elf 2>/dev/null || true
+ls -lh build/esp-ot-gateway.bin build/esp-ot-gateway.elf 2>/dev/null || true
 echo ""
 echo "Для прошивки:"
 echo "    bash scripts/flash.sh /dev/ttyUSB0"

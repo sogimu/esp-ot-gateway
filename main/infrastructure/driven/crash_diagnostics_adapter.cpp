@@ -51,6 +51,7 @@ void CrashDiagnosticsAdapter::check_on_boot(ILogger& log)
 
     esp_err_t cd_err = esp_core_dump_image_check();
     if (cd_err == ESP_OK) {
+        last_boot_had_crash_ = true;
         esp_core_dump_summary_t summary;
         if (esp_core_dump_get_summary(&summary) == ESP_OK) {
             char buf[64];

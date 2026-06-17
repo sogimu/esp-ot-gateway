@@ -16,6 +16,7 @@ set(MAIN_DIR  ${CMAKE_CURRENT_SOURCE_DIR}/../main)
 
 # ── Include paths (domain + application only, NO ESP-IDF) ─
 set(INCLUDE_DIRS
+    ${TEST_DIR}/stubs          # ESP-IDF stubs (must be first to shadow real includes)
     ${MAIN_DIR}
     ${MAIN_DIR}/domain
     ${MAIN_DIR}/domain/value_objects
@@ -44,6 +45,8 @@ set(TEST_SRCS
     test_modulation_stats.cpp
     test_burn_cycle.cpp
     test_dhw_predict.cpp
+    test_pid_quality_assessor.cpp
+    test_fopdt_estimator.cpp
 
     # Use case interactors
     test_main_poller.cpp
@@ -77,6 +80,11 @@ set(TEST_SRCS
 
     # Gas correction orchestration (read + save paths)
     test_gas_correction_orchestration.cpp
+
+    # WiFi provisioning
+    test_wifi_validation.cpp
+    test_manual_time_offset.cpp
+    test_wifi_apsta_adapter.cpp
 )
 
 # ── Stubs (replace ESP-IDF-dependent implementations) ──────
@@ -92,10 +100,15 @@ set(APP_SRCS
     ${MAIN_DIR}/application/services/burn_cycle_service.cpp
     ${MAIN_DIR}/application/services/dhw_predict_service.cpp
     ${MAIN_DIR}/application/services/gas_flow_estimator.cpp
+    ${MAIN_DIR}/application/services/fopdt_estimator.cpp
+    ${MAIN_DIR}/application/services/pid_quality_assessor.cpp
     ${MAIN_DIR}/application/use_cases/main_poller_interactor.cpp
     ${MAIN_DIR}/application/use_cases/system_config_interactor.cpp
     ${MAIN_DIR}/application/use_cases/gas_correction_interactor.cpp
     ${MAIN_DIR}/application/use_cases/pid_poll_interactor.cpp
+    ${MAIN_DIR}/domain/value_objects/wifi_validation.cpp
+    ${MAIN_DIR}/infrastructure/driving/wifi_apsta_adapter.cpp
+    ${MAIN_DIR}/infrastructure/driven/dns_captive_server.cpp
 )
 
 # ── Test executable ───────────────────────────────────────

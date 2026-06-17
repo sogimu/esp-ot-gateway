@@ -15,7 +15,7 @@ if [ -z "$IDF_PATH" ]; then
     exit 1
 fi
 
-if [ ! -f "$ROOT/build/gas_boiler.bin" ]; then
+if [ ! -f "$ROOT/build/esp-ot-gateway.bin" ]; then
     echo "[!] Прошивка не найдена. Сначала соберите:"
     echo "    bash scripts/build.sh"
     exit 1

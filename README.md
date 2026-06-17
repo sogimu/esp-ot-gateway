@@ -48,6 +48,18 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 | **DS18B20 sensors** | Two 1-Wire temperature sensors on GPIO 15 and 26, using internal pull-up resistors (bit-banged protocol). Polling cycle ~1.6 seconds. |
 | **Baxi-specific** | The boiler rejects DHW setpoint writes (ID=56) and uses its own internal setpoint (~60°C). The `CH2_ENABLE` flag (bit 4) is required to switch the 3-way valve to DHW despite `SlaveConfig` reporting CH2=0. |
 
+### LED Indicators
+
+The built-in LED (GPIO 2) on the ESP32 development board provides status information during startup:
+
+| LED state | Meaning |
+|-----------|---------|
+| **Rapid blinking** (~5 Hz, on for 100ms, off for 100ms) | **NTP time sync in progress.** The controller is connecting to internet time servers to set the clock. This happens during every boot in WiFi Router mode and lasts up to 30 seconds |
+| **LED off** | **Time sync complete** (NTP succeeded) **or timed out** (no internet). If the LED stays off immediately after boot, the controller is in AP mode and NTP sync was skipped — use manual time setting via the web interface |
+| **Solid on / dim** | Normal operation — the LED is not used after startup. On some ESP32 boards the LED may glow dimly due to shared GPIO with internal circuitry |
+
+> **Note:** On the ESP32 DevKit board, GPIO 2 is connected to the on-board blue LED. This is the same GPIO used by some boards for boot mode selection — do not connect external pull-down resistors to it.
+
 ### Tested Hardware
 
 | Component | Detail |
@@ -59,16 +71,7 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 
 ## Quick Start (Ubuntu)
 
-### 1. Set WiFi credentials
-
-Edit `main/infrastructure/driving/wifi_config.h`:
-
-```
-WIFI_SSID  "your_network"
-WIFI_PASS  "your_password"
-```
-
-### 2. Install ESP-IDF
+### 1. Install ESP-IDF
 
 ```bash
 bash scripts/setup.sh
@@ -79,7 +82,7 @@ This installs:
 - **ESP-IDF v5.2.2** into `~/esp/esp-idf`
 - Xtensa toolchain (`xtensa-esp32-elf-gcc`)
 
-### 3. Activate the ESP-IDF environment
+### 2. Activate the ESP-IDF environment
 
 ```bash
 source ~/esp/esp-idf/export.sh
@@ -87,7 +90,7 @@ source ~/esp/esp-idf/export.sh
 
 > Add this line to `~/.bashrc` to avoid running it on every session.
 
-### 4. Build
+### 3. Build
 
 ```bash
 bash scripts/build.sh
@@ -95,7 +98,7 @@ bash scripts/build.sh
 idf.py build
 ```
 
-### 5. Flash
+### 4. Flash
 
 ```bash
 bash scripts/flash.sh /dev/ttyUSB0
@@ -103,15 +106,173 @@ bash scripts/flash.sh /dev/ttyUSB0
 idf.py -p /dev/ttyUSB0 flash
 ```
 
+### 5. First-time WiFi setup
+
+After flashing, the controller starts in **setup mode**. Connect your phone or laptop to the WiFi network named **`Baxi-OT-Setup-XXXXXX`** (no password). Your browser should open automatically with the setup page. If not, open `http://192.168.4.1` manually.
+
+Follow the on-screen instructions to choose your connection method (home WiFi router or own access point). See **[WiFi Setup Guide](#wifi-setup-guide)** for detailed instructions.
+
+> **After setup,** if you chose "WiFi Router" mode, the controller reboots and the **blue LED blinks rapidly** while it syncs the clock with internet time servers (NTP). This takes up to 30 seconds. When the LED stops blinking, the controller is ready.
+
 ### 6. Open the web dashboard
 
-Navigate to `http://<device-ip>` (the IP is assigned by your router via DHCP).
+Once connected, navigate to `http://<device-ip>` (the IP is assigned by your router for WiFi mode, or `192.168.4.1` for AP mode).
+
+---
+
+## WiFi Setup Guide
+
+The controller supports two network modes. You choose one during initial setup and can switch at any time via the web interface.
+
+### Connection Modes
+
+| Mode | How it works | Web dashboard | Internet needed |
+|------|-------------|---------------|-----------------|
+| **WiFi Router** (STA) | Controller connects to your home WiFi network, just like your phone or laptop | Accessible at the IP address assigned by your router (e.g. `192.168.1.42`) | Yes — for NTP time sync. The controller works without internet, but the clock will be wrong |
+| **Own Access Point** (AP) | Controller creates its own WiFi network. You connect your phone to this network when you want to check or adjust settings | Always at `192.168.4.1` | No — the controller works fully offline. Set the clock manually via the web interface |
+
+### First-Time Setup
+
+When you flash the controller for the first time (or after a factory reset), it starts in **setup mode**:
+
+1. **Power on the controller.** It creates an open WiFi network named `Baxi-OT-Setup-XXXXXX` (the last 6 characters are unique to your device).
+2. **Connect your phone or laptop to this network.** No password is needed.
+3. **Your browser should open automatically** with the setup page. If it doesn't, open your browser and go to **`http://192.168.4.1`**.
+4. **Choose your connection method** on the setup page:
+   - **"Connect to my WiFi router"** — select this if you have a home WiFi network and want the controller always accessible on it.
+   - **"Own access point"** — select this if you don't have a WiFi router, don't want the controller on your home network, or want a fully offline setup.
+5. **Fill in the details** and tap **"Save & Reboot"**.
+
+#### Option A: Connect to WiFi Router
+
+1. Select **"Connect to my WiFi router"**
+2. Tap **"Scan for Networks"** — wait a few seconds for the list to appear
+3. Tap your home WiFi network in the list. Its name will appear in the input field
+4. Enter your WiFi password (minimum 8 characters)
+5. Tap **"Save & Reboot"**
+6. The controller will restart and connect to your router. After reboot, open the web dashboard at the new IP address (check your router's device list, or look at the serial monitor: `idf.py -p /dev/ttyUSB0 monitor`)
+
+#### Option B: Own Access Point
+
+1. Select **"Own access point (no router needed)"**
+2. Enter a password for the access point (minimum 8 characters). **Remember this password — you'll need it to connect**
+3. Tap **"Save & Reboot"**
+4. After reboot, the controller creates a WiFi network `Baxi-OT-Setup-XXXXXX` protected by your password
+5. Connect your phone to this network and open `http://192.168.4.1`
+
+### Accessing the Web Dashboard
+
+**WiFi Router mode:** use the IP address assigned by your router. You can find it by:
+- Looking at the serial output during boot: `WiFi подключён. IP: 192.168.x.x`
+- Checking your router's DHCP client list
+- The IP is displayed on the WiFi tab of the web interface
+
+**AP mode:** always `http://192.168.4.1`. The controller's WiFi network name is `Baxi-OT-Setup-XXXXXX`.
+
+> **Tip:** Bookmark the dashboard address in your browser. If the controller switches between modes, the bookmark for AP mode always works, while the STA mode address depends on your router.
+
+### Switching Between Modes
+
+You can change the network mode at any time from the WiFi tab in the web dashboard:
+
+- **From WiFi Router to AP:** open the WiFi tab → tap **"Switch to Own Access Point"** → enter a new AP password → confirm. The controller reboots into AP mode.
+- **From AP to WiFi Router:** open the WiFi tab → tap **"Connect to WiFi Router"** → this resets network settings and reboots into setup mode. Follow the first-time setup steps to configure a WiFi network.
+
+### Setting the Clock (AP Mode)
+
+In AP mode, the controller has no internet access and cannot sync time automatically. You can tell NTP sync was skipped because **the blue LED (GPIO 2) stays off** immediately after boot — no blinking occurs. The clock is important for:
+- Timestamps in the event log
+- The heating schedule (if you use time-based CH control)
+- Gas consumption statistics with correct dates
+
+**To set the clock manually:**
+1. Open the web dashboard
+2. Go to the **Info** tab
+3. Find the **Time** section — it shows the current time and source (`manual` or `none`)
+4. Enter the current date and time, tap **Apply**
+5. The time is saved and survives reboots
+
+When the controller switches to WiFi Router mode and connects to the internet, it will automatically sync time via NTP and override the manual setting.
+
+### Troubleshooting
+
+#### I can't see the "Baxi-OT-Setup-XXXXXX" WiFi network
+
+- Make sure the controller is powered on (the ESP32 board has a power LED)
+- The setup network is only active during **first boot** or after a factory reset. If the controller was previously configured, it won't appear
+- Try moving closer to the controller — the WiFi range is limited
+- The network name contains 6 hex digits unique to your device (e.g. `Baxi-OT-Setup-A1B2C3`)
+
+#### The browser didn't open automatically (captive portal didn't work)
+
+This depends on your phone's operating system and version. The automatic popup doesn't work on all devices.
+
+- **Android:** open Chrome, type `192.168.4.1` in the address bar
+- **iPhone/iPad:** open Safari, type `192.168.4.1` in the address bar
+- **Windows laptop:** open any browser, type `192.168.4.1`
+- If the page doesn't load, disconnect from other WiFi networks first, then reconnect to `Baxi-OT-Setup-XXXXXX`
+
+#### The controller won't connect to my WiFi router
+
+- **Wrong password:** the controller will try to connect 10 times (~30 seconds), then reboot and try again. After 3 failed boot attempts, it automatically returns to setup mode (open AP) so you can reconfigure.
+- **Router too far:** the ESP32 has a small antenna. Move the controller closer to the router during initial setup.
+- **5 GHz networks:** the ESP32 only supports **2.4 GHz WiFi**. If your router uses the same name for both bands, the controller should connect to the 2.4 GHz one automatically. If your router only broadcasts 5 GHz, the controller cannot connect.
+- **Hidden SSID:** if your router doesn't broadcast its network name, it won't appear in the scan results. Type the network name manually in the input field.
+- **MAC address filtering:** if your router restricts connections by MAC address, add the controller's MAC (shown in the serial monitor at boot) to your router's allowlist.
+
+#### I forgot my AP password
+
+If the controller is in AP mode and you forgot the password:
+
+1. You can't recover it — the password is not displayed anywhere for security
+2. You need to perform a **factory reset of network settings** to return to setup mode
+3. To do this: power off the controller, then power on while holding... *(if a hardware reset button exists)*
+4. **Without a reset button:** use `idf.py erase-flash` from a computer, then `idf.py flash` to reinstall the firmware. This erases all settings including boiler configuration and statistics
+
+> **Important:** write down your AP password and keep it in a safe place. There is no password recovery mechanism.
+
+#### The controller keeps rebooting
+
+This is the **reboot-loop protection**. If the controller cannot connect to the configured WiFi network after 3 consecutive boot attempts, it automatically resets to setup mode (open AP). This prevents the controller from being permanently unreachable.
+
+1. Connect to `Baxi-OT-Setup-XXXXXX` (no password)
+2. The setup page opens — reconfigure your WiFi settings
+3. If the problem persists, check that your WiFi router is powered on and broadcasting a 2.4 GHz network
+
+#### The controller works but I can't access the web dashboard
+
+- **WiFi Router mode:** the controller may have received a new IP address from your router. Check your router's DHCP client list. Open the WiFi tab (if you can access the controller via AP mode) to see the current IP.
+- **AP mode:** make sure your phone is connected to `Baxi-OT-Setup-XXXXXX`, not to another WiFi network. The dashboard is at `http://192.168.4.1`.
+- **Both modes:** the web server runs on port 80. Make sure you're using `http://` not `https://`.
+
+#### Factory Reset (Network Settings Only)
+
+To erase all WiFi settings and return to first-time setup mode:
+
+1. Open the web dashboard
+2. Go to the **WiFi** tab
+3. Tap **"Forget All Network Settings"**
+4. Confirm the dialog
+5. The controller reboots into setup mode — the open AP `Baxi-OT-Setup-XXXXXX` appears
+
+> This only erases WiFi credentials. Boiler configuration, statistics, and schedules are preserved.
+
+#### Full Factory Reset (All Settings)
+
+To erase everything including boiler settings, statistics, and schedules:
+
+```bash
+idf.py -p /dev/ttyUSB0 erase-flash
+idf.py -p /dev/ttyUSB0 flash
+```
+
+> This completely wipes the device. All configuration will be lost.
 
 ---
 
 ## Web Dashboard
 
-The dashboard auto-refreshes and features 5 tabbed views:
+The dashboard auto-refreshes and features 6 tabbed views:
 
 ### Status tab
 
@@ -180,6 +341,14 @@ Emergency shutdown button stops all heating.
 - Runtime counters (burner starts, CH pump starts, DHW valve starts, DHW burner starts)
 - Runtime hours (burner, CH pump, DHW valve, DHW burner)
 
+### WiFi tab
+
+- **Setup mode:** radio buttons to choose connection method (WiFi router or own AP), network scan with signal strength, manual SSID entry for hidden networks, password fields with validation
+- **WiFi Router mode:** shows connected network name, IP address, signal strength (dBm). Button to switch to AP mode
+- **AP mode:** shows access point name and IP (`192.168.4.1`). Button to switch to WiFi Router mode
+- **Factory reset:** "Forget All Network Settings" button returns to first-time setup
+- Auto-opens on first boot (captive portal detection)
+
 ---
 
 ## REST API
@@ -193,6 +362,14 @@ Emergency shutdown button stops all heating.
 | POST | `/api/control` | Set CH/DHW enable, setpoints, CH mode, PID config, schedule, fault reset, timezone, NTP servers, gas meter, K calibration, DHW hysteresis |
 | GET | `/api/schedule` | Read 24-hour heating schedule |
 | POST | `/api/schedule` | Update 24-hour heating schedule |
+| GET | `/api/wifi/status` | Current WiFi mode (sta/ap/first_boot), IP, SSID, RSSI |
+| GET | `/api/wifi/scan` | Scan for nearby WiFi networks |
+| POST | `/api/wifi/settings` | Save WiFi configuration and reboot |
+| POST | `/api/wifi/forget` | Reset WiFi settings to first-boot mode and reboot |
+| GET | `/prov` | Improv-compatible provisioning status (Home Assistant/ESP Web Tools) |
+| POST | `/prov` | Improv-compatible: send WiFi credentials |
+| GET | `/api/system/time` | Current time (epoch, source: sntp/manual/none, timezone offset) |
+| POST | `/api/system/time` | Set time manually (for AP mode without internet) |
 
 ```bash
 # Get boiler state
@@ -207,6 +384,20 @@ curl -X POST http://<device-ip>/api/control \
 curl -X POST http://<device-ip>/api/schedule \
   -H "Content-Type: application/json" \
   -d '{"schedule":[20,20,20,20,20,20,22,22,22,22,22,22,22,22,22,22,22,22,22,22,20,20,20,20]}'
+
+# WiFi status
+curl http://192.168.4.1/api/wifi/status
+
+# WiFi scan (in AP mode)
+curl http://192.168.4.1/api/wifi/scan
+
+# Set time manually (in AP mode)
+curl -X POST http://192.168.4.1/api/system/time \
+  -H "Content-Type: application/json" \
+  -d '{"epoch":1718496000}'
+
+# Improv provisioning status
+curl http://192.168.4.1/prov
 ```
 
 ---
@@ -333,8 +524,9 @@ idf.py -p /dev/ttyUSB0 flash
 
 ## Notes
 
-- WiFi credentials are stored in plaintext in `main/infrastructure/driving/wifi_config.h` — keep the device on a trusted local network.
+- WiFi credentials are stored in NVS (non-volatile storage) on the ESP32 flash. The device should be kept on a trusted local network.
 - HTTP endpoints have no authentication; the dashboard is intended for LAN use only.
+- **WiFi provisioning:** the controller supports two modes — connect to your home WiFi router, or create its own access point. Setup is done through a web interface. See **[WiFi Setup Guide](#wifi-setup-guide)**.
 - The OpenTherm initialisation handshake (slave version exchange) runs at startup and repeats every 60 minutes to ensure DHW control stays active on some Baxi firmware versions.
 - **Inter-frame gap**: A minimum 100 ms pause between OpenTherm transactions is required by the spec; violating this causes `NO_RESP` errors and boiler resets on Baxi hardware.
 - **DHW setpoint (ID=56)**: The Baxi Duo-tec Compact does NOT accept DHW setpoint writes — it returns `NO_RESP` and uses its own internal setpoint (~60°C). Control DHW firing via `DHW_ENABLE` (bit 1) in the Status flags instead, paired with hysteresis in firmware.

@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_sntp.h"
+#include "nvs.h"
 #include "driver/gpio.h"
 
 #include <ctime>
@@ -82,8 +83,22 @@ void SntpTimeAdapter::start()
     }
     if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED) {
         gpio_set_level(SNTP_LED_GPIO, 0);  // LED off
+        sntp_synced_ = false;
         ESP_LOGW(TAG, "SNTP: таймаут синхронизации");
         if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: таймаут");
+
+        // Try restoring manual time offset from NVS
+        if (restore_time_offset()) {
+            ESP_LOGI(TAG, "SNTP недоступен — используется сохранённое время");
+            if (logger_) logger_->event(ILogger::SYSTEM,
+                "SNTP: недоступен, время из NVS");
+        } else {
+            ESP_LOGW(TAG, "SNTP недоступен, ручное время не задано");
+            if (logger_) logger_->event(ILogger::SYSTEM,
+                "SNTP: недоступен, время не задано");
+        }
+    } else {
+        sntp_synced_ = true;
     }
 }
 
@@ -117,4 +132,47 @@ ITimeSource::time_point SntpTimeAdapter::now() const
         return clock::from_time_t(::time(nullptr)) + (since_boot % seconds(1));
     }
     return time_point(since_boot + boot_offset_us_);
+}
+
+// ── Manual time ──────────────────────────────────────────
+
+void SntpTimeAdapter::set_manual_time(time_t epoch_sec)
+{
+    uint64_t real_us = (uint64_t)epoch_sec * 1000000ULL;
+    uint64_t boot_us = esp_timer_get_time();
+    boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
+    ESP_LOGI(TAG, "Время установлено вручную: %lld", (long long)epoch_sec);
+    if (logger_) logger_->event(ILogger::SYSTEM,
+        "Время установлено вручную: %lld с", (long long)epoch_sec);
+}
+
+void SntpTimeAdapter::save_time_offset()
+{
+    int64_t offset = (int64_t)boot_offset_us_.count();
+    if (offset == 0) return;  // don't save meaningless zero offset
+
+    nvs_handle_t handle;
+    if (nvs_open("config", NVS_READWRITE, &handle) == ESP_OK) {
+        nvs_set_i64(handle, "utc_offset_us", offset);
+        nvs_commit(handle);
+        nvs_close(handle);
+        ESP_LOGI(TAG, "Смещение времени сохранено в NVS: %lld us", (long long)offset);
+    }
+}
+
+bool SntpTimeAdapter::restore_time_offset()
+{
+    nvs_handle_t handle;
+    if (nvs_open("config", NVS_READONLY, &handle) != ESP_OK) return false;
+
+    int64_t offset = 0;
+    esp_err_t err = nvs_get_i64(handle, "utc_offset_us", &offset);
+    nvs_close(handle);
+
+    if (err == ESP_OK && offset != 0) {
+        boot_offset_us_ = microseconds(offset);
+        ESP_LOGI(TAG, "Смещение времени загружено из NVS: %lld us", (long long)offset);
+        return true;
+    }
+    return false;
 }

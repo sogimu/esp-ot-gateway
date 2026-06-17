@@ -19,11 +19,25 @@ public:
     time_point now() const override;
     uint64_t monotonic_us() const override;
 
+    /// Manual time setting (for AP mode without SNTP).
+    /// @param epoch_sec  Unix timestamp to set.
+    void set_manual_time(time_t epoch_sec);
+
+    /// Persist current boot_offset_us_ to NVS (key "utc_offset_us" in "config").
+    void save_time_offset();
+
+    /// Restore boot_offset_us_ from NVS. Returns true if valid offset loaded.
+    bool restore_time_offset();
+
+    /// Has SNTP successfully synced at least once?
+    bool is_synced() const { return sntp_synced_; }
+
 private:
     int  tz_offset_ = 3;
     char srv0_[64] = {};
     char srv1_[64] = {};
     bool started_ = false;
+    bool sntp_synced_ = false;
     mutable microseconds boot_offset_us_{0}; // offset from boot time to Unix epoch
     ILogger* logger_ = nullptr;
     static const char* TAG;
