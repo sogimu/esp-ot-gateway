@@ -1,0 +1,126 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - esp-ot-gateway test coverage - domain/value_objects/pid_quality_metrics.h</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html">top level</a> - <a href="index.html">domain/value_objects</a> - pid_quality_metrics.h<span style="font-size: 80%;"> (source / <a href="pid_quality_metrics.h.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">esp-ot-gateway test coverage</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">8</td>
+            <td class="headerCovTableEntry">8</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-06-17 01:40:18</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">6</td>
+            <td class="headerCovTableEntry">6</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : #pragma once</span>
+<span id="L2"><span class="lineNum">       2</span>              : #include &lt;cstdint&gt;</span>
+<span id="L3"><span class="lineNum">       3</span>              : </span>
+<span id="L4"><span class="lineNum">       4</span>              : /// Один минутный отсчёт. Флаги упакованы в uint8_t для экономии RAM.</span>
+<span id="L5"><span class="lineNum">       5</span>              : struct __attribute__((packed)) PidQualitySample {</span>
+<span id="L6"><span class="lineNum">       6</span>              :     uint16_t minute_of_day;  // 0–1439</span>
+<span id="L7"><span class="lineNum">       7</span>              :     int16_t  room_temp;      // x100 (20.00°C = 2000)</span>
+<span id="L8"><span class="lineNum">       8</span>              :     int16_t  target_temp;    // x100</span>
+<span id="L9"><span class="lineNum">       9</span>              :     int16_t  outside_temp;   // x100</span>
+<span id="L10"><span class="lineNum">      10</span>              :     uint8_t  flags;          // bit0=flame, bit1=dhw_active, bit2=cycle_locked, bit3=clamped</span>
+<span id="L11"><span class="lineNum">      11</span>              : };</span>
+<span id="L12"><span class="lineNum">      12</span>              : </span>
+<span id="L13"><span class="lineNum">      13</span>              : /// Скоры 0–100 по каждой оси + композит.</span>
+<span id="L14"><span class="lineNum">      14</span>              : struct QualityScores {</span>
+<span id="L15"><span class="lineNum">      15</span>              :     float overshoot;      // 100 = нет перерегулирования</span>
+<span id="L16"><span class="lineNum">      16</span>              :     float steady_state;   // 100 = идеальное удержание target</span>
+<span id="L17"><span class="lineNum">      17</span>              :     float stability;      // 100 = нет осцилляций</span>
+<span id="L18"><span class="lineNum">      18</span>              :     float cycling;        // 100 = редкие циклы горелки</span>
+<span id="L19"><span class="lineNum">      19</span>              :     float clamp;          // 100 = выход PID не упирается в границы</span>
+<span id="L20"><span class="lineNum">      20</span>              :     float composite;      // взвешенное среднее</span>
+<span id="L21"><span class="lineNum">      21</span>              : };</span>
+<span id="L22"><span class="lineNum">      22</span>              : </span>
+<span id="L23"><span class="lineNum">      23</span>              : /// Результат оценки FOPDT-параметров по одному событию нагрева.</span>
+<span id="L24"><span class="lineNum">      24</span>              : struct FopdtEvent {</span>
+<span id="L25"><span class="lineNum">      25</span>              :     float gain;                // °C комнаты / °C setpoint</span>
+<span id="L26"><span class="lineNum">      26</span>              :     float tau_heat_sec;        // постоянная времени нагрева</span>
+<span id="L27"><span class="lineNum">      27</span>              :     float tau_cool_sec;        // постоянная времени остывания</span>
+<span id="L28"><span class="lineNum">      28</span>              :     float dead_time_sec;       // транспортная задержка</span>
+<span id="L29"><span class="lineNum">      29</span>              :     float outside_temp;        // уличная температура во время события</span>
+<span id="L30"><span class="lineNum">      30</span>              :     bool  valid;               // false если событие прервано DHW</span>
+<span id="L31"><span class="lineNum">      31</span>              : };</span>
+<span id="L32"><span class="lineNum">      32</span>              : </span>
+<span id="L33"><span class="lineNum">      33</span>              : // ── Инлайн-функции для конвертации fixed-point ─────────</span>
+<span id="L34"><span class="lineNum">      34</span>              : </span>
+<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC tlaBgGNC">        4620 : inline int16_t to_fixed16(float v) {</span></span>
+<span id="L36"><span class="lineNum">      36</span> <span class="tlaGNC">        4620 :     return static_cast&lt;int16_t&gt;(v * 100.0f);</span></span>
+<span id="L37"><span class="lineNum">      37</span>              : }</span>
+<span id="L38"><span class="lineNum">      38</span>              : </span>
+<span id="L39"><span class="lineNum">      39</span> <span class="tlaGNC">      904024 : inline float from_fixed16(int16_t v) {</span></span>
+<span id="L40"><span class="lineNum">      40</span> <span class="tlaGNC">      904024 :     return static_cast&lt;float&gt;(v) / 100.0f;</span></span>
+<span id="L41"><span class="lineNum">      41</span>              : }</span>
+<span id="L42"><span class="lineNum">      42</span>              : </span>
+<span id="L43"><span class="lineNum">      43</span>              : // ── Инлайн-функции для доступа к флагам ────────────────</span>
+<span id="L44"><span class="lineNum">      44</span>              : </span>
+<span id="L45"><span class="lineNum">      45</span> <span class="tlaGNC">      113080 : inline bool sample_has_flame(const PidQualitySample&amp; s)   { return s.flags &amp; 0x01; }</span></span>
+<span id="L46"><span class="lineNum">      46</span> <span class="tlaGNC">      565092 : inline bool sample_has_dhw(const PidQualitySample&amp; s)     { return s.flags &amp; 0x02; }</span></span>
+<span id="L47"><span class="lineNum">      47</span> <span class="tlaGNC">      113080 : inline bool sample_is_locked(const PidQualitySample&amp; s)   { return s.flags &amp; 0x04; }</span></span>
+<span id="L48"><span class="lineNum">      48</span> <span class="tlaGNC">      113080 : inline bool sample_is_clamped(const PidQualitySample&amp; s)  { return s.flags &amp; 0x08; }</span></span>
+<span id="L49"><span class="lineNum">      49</span>              : </span>
+<span id="L50"><span class="lineNum">      50</span>              : static_assert(sizeof(PidQualitySample) == 9, &quot;PidQualitySample must be 9 bytes&quot;);</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

@@ -1,0 +1,118 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - esp-ot-gateway test coverage - application/ports/driving/iwifi_manager.h</title>
+  <link rel="stylesheet" type="text/css" href="../../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../../index.html">top level</a> - <a href="index.html">application/ports/driving</a> - iwifi_manager.h<span style="font-size: 80%;"> (source / <a href="iwifi_manager.h.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">esp-ot-gateway test coverage</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">1</td>
+            <td class="headerCovTableEntry">1</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-06-17 01:40:18</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryLo">50.0&nbsp;%</td>
+            <td class="headerCovTableEntry">2</td>
+            <td class="headerCovTableEntry">1</td>
+          </tr>
+                  <tr><td><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : #pragma once</span>
+<span id="L2"><span class="lineNum">       2</span>              : </span>
+<span id="L3"><span class="lineNum">       3</span>              : #include &quot;application/ports/driven/iwifi_hardware.h&quot;  // WifiApRecord</span>
+<span id="L4"><span class="lineNum">       4</span>              : </span>
+<span id="L5"><span class="lineNum">       5</span>              : /// High-level WiFi manager consumed by main.cpp and HttpControllerAdapter.</span>
+<span id="L6"><span class="lineNum">       6</span>              : /// Implemented by WifiApStaAdapter in infrastructure/driving/.</span>
+<span id="L7"><span class="lineNum">       7</span>              : class IWifiManager {</span>
+<span id="L8"><span class="lineNum">       8</span>              : public:</span>
+<span id="L9"><span class="lineNum">       9</span>              :     enum class Mode { FIRST_BOOT, STA, AP };</span>
+<span id="L10"><span class="lineNum">      10</span>              : </span>
+<span id="L11"><span class="lineNum">      11</span>              :     /// Main boot sequence. Determines mode from stored config,</span>
+<span id="L12"><span class="lineNum">      12</span>              :     /// initialises WiFi accordingly. Does NOT block indefinitely —</span>
+<span id="L13"><span class="lineNum">      13</span>              :     /// if STA fails, transitions to FIRST_BOOT/AP.</span>
+<span id="L14"><span class="lineNum">      14</span>              :     virtual Mode boot() = 0;</span>
+<span id="L15"><span class="lineNum">      15</span>              : </span>
+<span id="L16"><span class="lineNum">      16</span>              :     /// Scan for nearby WiFi networks (blocking, ~3-5 sec).</span>
+<span id="L17"><span class="lineNum">      17</span>              :     /// @return number of networks found.</span>
+<span id="L18"><span class="lineNum">      18</span>              :     virtual int scan_networks(WifiApRecord* out, int max) = 0;</span>
+<span id="L19"><span class="lineNum">      19</span>              : </span>
+<span id="L20"><span class="lineNum">      20</span>              :     /// Save settings and reboot into the chosen mode.</span>
+<span id="L21"><span class="lineNum">      21</span>              :     /// @param mode      1=STA, 2=AP</span>
+<span id="L22"><span class="lineNum">      22</span>              :     /// @param sta_ssid  SSID (ignored for AP, may be null)</span>
+<span id="L23"><span class="lineNum">      23</span>              :     /// @param sta_pass  password (ignored for AP, may be null)</span>
+<span id="L24"><span class="lineNum">      24</span>              :     /// @param ap_pass   AP password (ignored for STA, may be null)</span>
+<span id="L25"><span class="lineNum">      25</span>              :     virtual void save_settings_and_reboot(int mode,</span>
+<span id="L26"><span class="lineNum">      26</span>              :                                           const char* sta_ssid,</span>
+<span id="L27"><span class="lineNum">      27</span>              :                                           const char* sta_pass,</span>
+<span id="L28"><span class="lineNum">      28</span>              :                                           const char* ap_pass) = 0;</span>
+<span id="L29"><span class="lineNum">      29</span>              : </span>
+<span id="L30"><span class="lineNum">      30</span>              :     /// Factory-reset WiFi settings and reboot to FIRST_BOOT (open AP).</span>
+<span id="L31"><span class="lineNum">      31</span>              :     virtual void factory_reset_and_reboot() = 0;</span>
+<span id="L32"><span class="lineNum">      32</span>              : </span>
+<span id="L33"><span class="lineNum">      33</span>              :     // ── Getters ───────────────────────────────────</span>
+<span id="L34"><span class="lineNum">      34</span>              : </span>
+<span id="L35"><span class="lineNum">      35</span>              :     virtual Mode mode() const = 0;</span>
+<span id="L36"><span class="lineNum">      36</span>              :     virtual const char* sta_ip() const = 0;         // e.g. &quot;192.168.1.42&quot; or &quot;0.0.0.0&quot;</span>
+<span id="L37"><span class="lineNum">      37</span>              :     virtual const char* ap_ip() const = 0;          // always &quot;192.168.4.1&quot;</span>
+<span id="L38"><span class="lineNum">      38</span>              :     virtual const char* connected_ssid() const = 0; // STA SSID or &quot;&quot;</span>
+<span id="L39"><span class="lineNum">      39</span>              :     virtual int rssi() const = 0;                   // dBm or 0</span>
+<span id="L40"><span class="lineNum">      40</span>              : </span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC tlaBgGNC">          18 :     virtual ~IWifiManager() = default;</span></span>
+<span id="L42"><span class="lineNum">      42</span>              : };</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

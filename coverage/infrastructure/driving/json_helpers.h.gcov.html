@@ -1,0 +1,118 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - esp-ot-gateway test coverage - infrastructure/driving/json_helpers.h</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html">top level</a> - <a href="index.html">infrastructure/driving</a> - json_helpers.h<span style="font-size: 80%;"> (source / <a href="json_helpers.h.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">esp-ot-gateway test coverage</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">9</td>
+            <td class="headerCovTableEntry">9</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-06-17 01:40:18</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">2</td>
+            <td class="headerCovTableEntry">2</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : #pragma once</span>
+<span id="L2"><span class="lineNum">       2</span>              : </span>
+<span id="L3"><span class="lineNum">       3</span>              : #include &lt;cstring&gt;</span>
+<span id="L4"><span class="lineNum">       4</span>              : #include &lt;cstdlib&gt;</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : /// Parse a float value for a JSON key using simple strstr scan.</span>
+<span id="L7"><span class="lineNum">       7</span>              : /// Returns -1e38f if key is not found. Suitable for small flat JSON bodies.</span>
+<span id="L8"><span class="lineNum">       8</span> <span class="tlaGNC tlaBgGNC">          10 : inline float json_get_float(const char* json, const char* key) {</span></span>
+<span id="L9"><span class="lineNum">       9</span> <span class="tlaGNC">          10 :     const char* p = strstr(json, key);</span></span>
+<span id="L10"><span class="lineNum">      10</span> <span class="tlaGNC">          10 :     if (!p) return -1e38f;</span></span>
+<span id="L11"><span class="lineNum">      11</span> <span class="tlaGNC">           7 :     p += strlen(key);</span></span>
+<span id="L12"><span class="lineNum">      12</span> <span class="tlaGNC">          14 :     while (*p == ':' || *p == ' ') p++;</span></span>
+<span id="L13"><span class="lineNum">      13</span> <span class="tlaGNC">           7 :     return static_cast&lt;float&gt;(atof(p));</span></span>
+<span id="L14"><span class="lineNum">      14</span>              : }</span>
+<span id="L15"><span class="lineNum">      15</span>              : </span>
+<span id="L16"><span class="lineNum">      16</span>              : /// Parse an int value for a JSON key.</span>
+<span id="L17"><span class="lineNum">      17</span>              : /// Returns -1 if key is not found OR if the value parses to a float &lt; -1e37f.</span>
+<span id="L18"><span class="lineNum">      18</span>              : /// IMPORTANT: -1 is also a valid integer value for timezone offsets.</span>
+<span id="L19"><span class="lineNum">      19</span>              : /// Use json_get_float() + guard (&gt; -1e37f) when -1 is a valid value.</span>
+<span id="L20"><span class="lineNum">      20</span> <span class="tlaGNC">           5 : inline int json_get_int(const char* json, const char* key) {</span></span>
+<span id="L21"><span class="lineNum">      21</span> <span class="tlaGNC">           5 :     float v = json_get_float(json, key);</span></span>
+<span id="L22"><span class="lineNum">      22</span> <span class="tlaGNC">           5 :     return (v &lt; -1e37f) ? -1 : static_cast&lt;int&gt;(v);</span></span>
+<span id="L23"><span class="lineNum">      23</span>              : }</span>
+<span id="L24"><span class="lineNum">      24</span>              : </span>
+<span id="L25"><span class="lineNum">      25</span>              : /// Extract a quoted string value from JSON body.</span>
+<span id="L26"><span class="lineNum">      26</span>              : /// Returns pointer into `json` (past the opening quote) or nullptr if not found.</span>
+<span id="L27"><span class="lineNum">      27</span>              : /// Sets out_len to the length of the string content (between quotes, excluding escapes).</span>
+<span id="L28"><span class="lineNum">      28</span>              : inline const char* json_get_string(const char* json, const char* key, int&amp; out_len) {</span>
+<span id="L29"><span class="lineNum">      29</span>              :     const char* p = strstr(json, key);</span>
+<span id="L30"><span class="lineNum">      30</span>              :     if (!p) { out_len = 0; return nullptr; }</span>
+<span id="L31"><span class="lineNum">      31</span>              :     p += strlen(key);</span>
+<span id="L32"><span class="lineNum">      32</span>              :     while (*p == ':' || *p == ' ' || *p == '\t') p++;</span>
+<span id="L33"><span class="lineNum">      33</span>              :     if (*p != '&quot;') { out_len = 0; return nullptr; }</span>
+<span id="L34"><span class="lineNum">      34</span>              :     p++;  // past opening quote</span>
+<span id="L35"><span class="lineNum">      35</span>              :     const char* start = p;</span>
+<span id="L36"><span class="lineNum">      36</span>              :     while (*p &amp;&amp; *p != '&quot;') {</span>
+<span id="L37"><span class="lineNum">      37</span>              :         if (*p == '\\' &amp;&amp; *(p + 1)) p++;  // skip escaped char</span>
+<span id="L38"><span class="lineNum">      38</span>              :         p++;</span>
+<span id="L39"><span class="lineNum">      39</span>              :     }</span>
+<span id="L40"><span class="lineNum">      40</span>              :     out_len = (int)(p - start);</span>
+<span id="L41"><span class="lineNum">      41</span>              :     return start;</span>
+<span id="L42"><span class="lineNum">      42</span>              : }</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>
