@@ -211,6 +211,9 @@ public:
     void set_gas_meter_base(float v) override { gas_meter_base_ = v; }
     float get_gas_meter_base() const override { return gas_meter_base_; }
 
+    void set_mqtt_connected(bool v) override { mqtt_connected_ = v; }
+    bool is_mqtt_connected() const override  { return mqtt_connected_; }
+
     // ── Public fields for direct test inspection ─────────
     bool   connected_ = false, fault_ = false, flame_ = false, ch_active_ = false, dhw_active_ = false;
     float  ch_temp_ = 0, dhw_temp_ = 0, return_temp_ = 0, outside_temp_ = 0, modulation_ = 0;
@@ -247,4 +250,5 @@ public:
     int    tz_offset_ = 3;
     std::string sntp_srv0_, sntp_srv1_;
     float  k_calib_ = 1.0f, p_max_ = 24.0f, gas_calorific_ = 9.5f, gas_meter_base_ = 0;
+    bool   mqtt_connected_ = false;
 };

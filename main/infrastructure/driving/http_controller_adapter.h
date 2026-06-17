@@ -9,6 +9,7 @@ class IGasCalibration;
 class IFaultReset;
 class IWifiManager;
 class SntpTimeAdapter;
+class IMqttConfigurator;
 
 class HttpControllerAdapter {
 public:
@@ -24,6 +25,7 @@ public:
     void set_fault(IFaultReset* f)              { fault_ = f; }
     void set_wifi(IWifiManager* w)              { wifi_ = w; }
     void set_time_adapter(SntpTimeAdapter* t)   { time_ = t; }
+    void set_mqtt(IMqttConfigurator* m)         { mqtt_ = m; }
 
 private:
     httpd_handle_t server_ = nullptr;
@@ -34,6 +36,7 @@ private:
     IFaultReset*         fault_    = nullptr;
     IWifiManager*        wifi_     = nullptr;
     SntpTimeAdapter*     time_     = nullptr;
+    IMqttConfigurator*   mqtt_     = nullptr;
     static HttpControllerAdapter* s_self;
 
     static esp_err_t handler_root(httpd_req_t* req);
@@ -55,4 +58,6 @@ private:
     static esp_err_t handler_captive_redirect(httpd_req_t* req);
     static esp_err_t handler_generate_204(httpd_req_t* req);
     static esp_err_t handler_ping(httpd_req_t* req);
+    static esp_err_t handler_mqtt_status(httpd_req_t* req);
+    static esp_err_t handler_mqtt_settings(httpd_req_t* req);
 };

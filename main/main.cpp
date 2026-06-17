@@ -28,6 +28,12 @@
 #include "infrastructure/driven/esp32_wifi_adapter.h"
 #include "infrastructure/driving/wifi_apsta_adapter.h"
 
+// ── MQTT ─────────────────────────────────────────────────
+#include "infrastructure/freertos/mqtt_queue_adapter.h"
+#include "infrastructure/driven/mqtt_client_adapter.h"
+#include "infrastructure/driven/mqtt_renderer_adapter.h"
+#include "infrastructure/driving/mqtt_interactor.h"
+
 // ── Use cases ────────────────────────────────────────────
 #include "application/use_cases/main_poller_interactor.h"
 #include "application/use_cases/boiler_poll_interactor.h"
@@ -70,6 +76,10 @@ extern "C" void app_main(void)
     BoilerOpenThermAdapter   ca_boiler(ca_ot_hw);
     TemperatureSensorAdapter ca_sensors;
     WebPresenterAdapter      ca_web;
+
+    FreeRtosMqttQueue        ca_mqtt_queue;
+    MqttClientAdapter        ca_mqtt(ca_mqtt_queue);
+    MqttRendererAdapter      ca_mqtt_renderer(ca_web);
 
     ca_log.set_time_source(&ca_time);
 
@@ -169,6 +179,20 @@ extern "C" void app_main(void)
     ca_web.set_gas_flow(&gas_flow);
     ca_web.set_gas_correction(&gas_corr);
 
+    // ── MQTT interactor ──────────────────────────────────
+    MqttInteractor mqtt(ca_mqtt, ca_mqtt_queue,
+                        nvs,           // IMqttConfigPersistence
+                        ca_state,
+                        sys_cfg,       // IConfigureSystem
+                        sys_cfg,       // IConfigurePid
+                        gas_corr,      // IGasCalibration
+                        sys_cfg,       // IFaultReset
+                        sys_cfg,       // IResetStatistics
+                        ca_log,
+                        ca_time,
+                        ca_mqtt_renderer);  // IMqttStateRenderer
+    mqtt.init();
+
     // ── Phase 6: Main poller ─────────────────────────────
     MainPollerInteractor main_poller;
     main_poller.add(&boiler_poll);
@@ -178,6 +202,7 @@ extern "C" void app_main(void)
     main_poller.add(&burn_cycles);
     main_poller.add(&gas_flow);
     main_poller.add(&dhw_predict);
+    main_poller.add(&mqtt);       // MQTT: публикация после обновления состояния
 
     // ── Phase 7: Hardware init + start ───────────────────
     ca_sensors.init();
@@ -196,6 +221,7 @@ extern "C" void app_main(void)
     http.set_gas(&gas_corr);
     http.set_wifi(&wifi);
     http.set_time_adapter(&ca_time);
+    http.set_mqtt(&mqtt);
     http.start();
 
     // ── Idle: CPU stats every 60s, periodic NVS save every 10 min ──

@@ -164,6 +164,10 @@ public:
     void set_gas_meter_base(float v) override;
     float get_gas_meter_base() const override;
 
+    // ── MQTT status ───────────────────────────────────
+    void set_mqtt_connected(bool v) override;
+    bool is_mqtt_connected() const override;
+
 private:
     SharedMutex mutex_;
 
@@ -203,6 +207,8 @@ private:
         float schedule_temps_[24] = {};
         // PID Schedule
         bool  pid_schedule_enabled_ = false;
+
+        bool  mqtt_connected_ = false;
         float pid_schedule_temps_[24] = {};
         // Hysteresis
         float dhw_hysteresis_ = 2.0f;

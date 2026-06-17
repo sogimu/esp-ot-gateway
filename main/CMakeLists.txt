@@ -34,6 +34,12 @@ idf_component_register(
         "infrastructure/driven/esp32_wifi_adapter.cpp"
         "infrastructure/driven/dns_captive_server.cpp"
         "infrastructure/driving/wifi_apsta_adapter.cpp"
+
+        # MQTT
+        "infrastructure/freertos/mqtt_queue.c"
+        "infrastructure/driven/mqtt_client_adapter.cpp"
+        "infrastructure/driven/mqtt_renderer_adapter.cpp"
+        "infrastructure/driving/mqtt_interactor.cpp"
     INCLUDE_DIRS
         "application/use_cases"
         "application/services"
@@ -58,4 +64,5 @@ idf_component_register(
         esp_event
         log
         espcoredump
+        mqtt
 )

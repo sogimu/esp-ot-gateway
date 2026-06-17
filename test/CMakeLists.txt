@@ -81,6 +81,13 @@ set(TEST_SRCS
     # Gas correction orchestration (read + save paths)
     test_gas_correction_orchestration.cpp
 
+    # MQTT — ports, queue, client, interactor
+    test_mqtt_ports_compile.cpp
+    test_mqtt_nvs_config.cpp
+    test_mqtt_queue.cpp
+    test_mqtt_client_fake.cpp
+    test_mqtt_interactor.cpp
+
     # WiFi provisioning
     test_wifi_validation.cpp
     test_manual_time_offset.cpp
@@ -109,6 +116,10 @@ set(APP_SRCS
     ${MAIN_DIR}/domain/value_objects/wifi_validation.cpp
     ${MAIN_DIR}/infrastructure/driving/wifi_apsta_adapter.cpp
     ${MAIN_DIR}/infrastructure/driven/dns_captive_server.cpp
+
+    # MQTT interactor (testable on host — no ESP-IDF deps)
+    ${MAIN_DIR}/infrastructure/driving/mqtt_interactor.cpp
+
 )
 
 # ── Test executable ───────────────────────────────────────

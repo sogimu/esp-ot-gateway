@@ -9,12 +9,14 @@
 #include "application/ports/driving/iconfigure_pid.h"
 #include "application/ports/driving/igas_calibration.h"
 #include "application/ports/driving/ifault_reset.h"
+#include "application/ports/driving/imqtt_configurator.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 #include <string>
 
 static const char* TAG = "http";
@@ -27,7 +29,7 @@ HttpControllerAdapter::~HttpControllerAdapter() { stop(); s_self = nullptr; }
 void HttpControllerAdapter::start()
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers    = 29;
+    config.max_uri_handlers    = 31;
     config.lru_purge_enable    = true;
     config.stack_size          = 16384;   // +6KB for 90KB page + JSON serialisation
     config.recv_wait_timeout   = 10;      // prevent slow-client worker exhaustion
@@ -53,6 +55,10 @@ void HttpControllerAdapter::start()
         { .uri = "/api/wifi/scan",     .method = HTTP_GET,  .handler = handler_wifi_scan,     .user_ctx = NULL },
         { .uri = "/api/wifi/settings", .method = HTTP_POST, .handler = handler_wifi_settings, .user_ctx = NULL },
         { .uri = "/api/wifi/forget",   .method = HTTP_POST, .handler = handler_wifi_forget,   .user_ctx = NULL },
+
+        // MQTT API
+        { .uri = "/api/mqtt/status",   .method = HTTP_GET,  .handler = handler_mqtt_status,   .user_ctx = NULL },
+        { .uri = "/api/mqtt/settings", .method = HTTP_POST, .handler = handler_mqtt_settings, .user_ctx = NULL },
 
         // Improv
         { .uri = "/prov",              .method = HTTP_GET,  .handler = handler_prov_get,      .user_ctx = NULL },
@@ -525,4 +531,88 @@ esp_err_t HttpControllerAdapter::handler_captive_redirect(httpd_req_t* req) {
     httpd_resp_set_hdr(req, "Location", "/");
     httpd_resp_send(req, "", 0);
     return ESP_OK;
+}
+
+// ── MQTT API ──────────────────────────────────────────────────
+
+esp_err_t HttpControllerAdapter::handler_mqtt_status(httpd_req_t* req)
+{
+    auto* self = s_self;
+    if (!self || !self->mqtt_) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"enabled\":false}");
+        return ESP_FAIL;
+    }
+
+    char buf[512];
+    snprintf(buf, sizeof(buf),
+        "{\"enabled\":%s,\"connected\":%s,\"host\":\"%s\",\"port\":%u,"
+        "\"user\":\"%s\",\"prefix\":\"%s\",\"tls\":%s}",
+        self->mqtt_->is_enabled()   ? "true" : "false",
+        self->mqtt_->is_connected() ? "true" : "false",
+        self->mqtt_->get_host(),
+        self->mqtt_->get_port(),
+        self->mqtt_->get_user(),
+        self->mqtt_->get_prefix(),
+        self->mqtt_->get_tls()      ? "true" : "false");
+
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, buf);
+}
+
+esp_err_t HttpControllerAdapter::handler_mqtt_settings(httpd_req_t* req)
+{
+    auto* self = s_self;
+    if (!self || !self->mqtt_) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"no mqtt configurator\"}");
+        return ESP_FAIL;
+    }
+
+    char body[512] = {0};
+    int len = httpd_req_recv(req, body, sizeof(body) - 1);
+    if (len <= 0) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"empty body\"}");
+        return ESP_FAIL;
+    }
+    body[len] = '\0';
+
+    // Парсинг полей
+    int v_enabled = json_get_int(body, "\"enabled\"");
+    int v_tls     = json_get_int(body, "\"tls\"");
+    int v_port    = json_get_int(body, "\"port\"");
+
+    // Парсим и сразу копируем — своя out_len для каждого поля
+    int host_len, user_len, pass_len, prefix_len;
+    const char* s_host   = json_get_string(body, "\"host\"", host_len);
+    const char* s_user   = json_get_string(body, "\"user\"", user_len);
+    const char* s_pass   = json_get_string(body, "\"pass\"", pass_len);
+    const char* s_prefix = json_get_string(body, "\"prefix\"", prefix_len);
+
+    // Значения по умолчанию от текущих настроек
+    bool    enabled = v_enabled >= 0 ? (v_enabled != 0) : self->mqtt_->is_enabled();
+    bool    tls     = v_tls     >= 0 ? (v_tls != 0)     : self->mqtt_->get_tls();
+    uint16_t port   = v_port    >  0 ? (uint16_t)v_port   : self->mqtt_->get_port();
+
+    char host[128];
+    snprintf(host, sizeof(host), "%.*s",
+             s_host ? std::min(host_len, 127) : (int)strlen(self->mqtt_->get_host()),
+             s_host ? s_host : self->mqtt_->get_host());
+    char user[64];
+    snprintf(user, sizeof(user), "%.*s",
+             s_user ? std::min(user_len, 63) : (int)strlen(self->mqtt_->get_user()),
+             s_user ? s_user : self->mqtt_->get_user());
+    char pass[64];
+    snprintf(pass, sizeof(pass), "%.*s",
+             s_pass ? std::min(pass_len, 63) : 0, s_pass ? s_pass : "");
+    char prefix[64];
+    snprintf(prefix, sizeof(prefix), "%.*s",
+             s_prefix ? std::min(prefix_len, 63) : (int)strlen(self->mqtt_->get_prefix()),
+             s_prefix ? s_prefix : self->mqtt_->get_prefix());
+
+    self->mqtt_->save_and_apply(host, port, user, pass, prefix, enabled, tls);
+
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, "{\"ok\":true}");
 }

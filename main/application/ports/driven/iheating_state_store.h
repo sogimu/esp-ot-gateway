@@ -165,5 +165,9 @@ public:
     virtual void set_gas_meter_base(float v) = 0;
     virtual float get_gas_meter_base() const = 0;
 
+    // ── MQTT status (для отображения в веб-интерфейсе) ──
+    virtual void set_mqtt_connected(bool v) = 0;
+    virtual bool is_mqtt_connected() const = 0;
+
     virtual ~IHeatingStateStore() = default;
 };
