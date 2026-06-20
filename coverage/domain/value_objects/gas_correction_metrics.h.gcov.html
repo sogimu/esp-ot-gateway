@@ -1,0 +1,122 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - esp-ot-gateway test coverage - domain/value_objects/gas_correction_metrics.h</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html">top level</a> - <a href="index.html">domain/value_objects</a> - gas_correction_metrics.h<span style="font-size: 80%;"> (source / <a href="gas_correction_metrics.h.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">esp-ot-gateway test coverage</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">11</td>
+            <td class="headerCovTableEntry">11</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-06-20 17:25:10</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">2</td>
+            <td class="headerCovTableEntry">2</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : #pragma once</span>
+<span id="L2"><span class="lineNum">       2</span>              : #include &lt;cmath&gt;</span>
+<span id="L3"><span class="lineNum">       3</span>              : </span>
+<span id="L4"><span class="lineNum">       4</span>              : /// Результат сравнения двух последовательных сверок газового счётчика.</span>
+<span id="L5"><span class="lineNum">       5</span>              : /// Чистый доменный value object — не зависит ни от NVS, ни от JSON, ни от UI.</span>
+<span id="L6"><span class="lineNum">       6</span>              : struct GasCorrectionMetrics {</span>
+<span id="L7"><span class="lineNum">       7</span>              :     float actual_consumed    = 0;  // м³ — реальное потребление за период</span>
+<span id="L8"><span class="lineNum">       8</span>              :     float estimated_consumed = 0;  // м³ — оценённое потребление за период</span>
+<span id="L9"><span class="lineNum">       9</span>              :     float error_pct          = 0;  // %   — |оценка − факт| / факт × 100</span>
+<span id="L10"><span class="lineNum">      10</span>              : </span>
+<span id="L11"><span class="lineNum">      11</span>              :     /// Рекомендованный корректирующий множитель.</span>
+<span id="L12"><span class="lineNum">      12</span>              :     /// k_calib_new = k_calib_prev × k_factor()</span>
+<span id="L13"><span class="lineNum">      13</span>              :     /// &gt; 1 — модель занижает расход, нужно увеличить k</span>
+<span id="L14"><span class="lineNum">      14</span>              :     /// &lt; 1 — модель завышает расход, нужно уменьшить k</span>
+<span id="L15"><span class="lineNum">      15</span>              :     /// = 1 — менять не нужно (или недостаточно данных)</span>
+<span id="L16"><span class="lineNum">      16</span> <span class="tlaGNC tlaBgGNC">          64 :     float k_factor() const {</span></span>
+<span id="L17"><span class="lineNum">      17</span> <span class="tlaGNC">          64 :         if (estimated_consumed &lt; 0.001f || actual_consumed &lt;= 0.0f) return 1.0f;</span></span>
+<span id="L18"><span class="lineNum">      18</span> <span class="tlaGNC">          54 :         return actual_consumed / estimated_consumed;</span></span>
+<span id="L19"><span class="lineNum">      19</span>              :     }</span>
+<span id="L20"><span class="lineNum">      20</span>              : };</span>
+<span id="L21"><span class="lineNum">      21</span>              : </span>
+<span id="L22"><span class="lineNum">      22</span>              : /// Вычислить метрики по двум последовательным сверкам.</span>
+<span id="L23"><span class="lineNum">      23</span>              : ///</span>
+<span id="L24"><span class="lineNum">      24</span>              : /// Параметры:</span>
+<span id="L25"><span class="lineNum">      25</span>              : ///   prev_actual     — показание счётчика на предыдущей сверке</span>
+<span id="L26"><span class="lineNum">      26</span>              : ///   prev_estimated  — расчётный объём на предыдущей сверке (estimated_total)</span>
+<span id="L27"><span class="lineNum">      27</span>              : ///   last_actual     — показание счётчика на последней сверке</span>
+<span id="L28"><span class="lineNum">      28</span>              : ///   last_estimated  — расчётный объём на последней сверке</span>
+<span id="L29"><span class="lineNum">      29</span>              : ///</span>
+<span id="L30"><span class="lineNum">      30</span>              : /// После каждой сверки integral сбрасывается в 0, а gas_meter_base</span>
+<span id="L31"><span class="lineNum">      31</span>              : /// устанавливается равным фактическому показанию. Поэтому:</span>
+<span id="L32"><span class="lineNum">      32</span>              : ///   actual_consumed    = last_actual - prev_actual</span>
+<span id="L33"><span class="lineNum">      33</span>              : ///   estimated_consumed = last_estimated - prev_actual</span>
+<span id="L34"><span class="lineNum">      34</span>              : ///                      (= накопленный integral между сверками)</span>
+<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC">          63 : inline GasCorrectionMetrics compute_correction_metrics(</span></span>
+<span id="L36"><span class="lineNum">      36</span>              :     float prev_actual, float prev_estimated,</span>
+<span id="L37"><span class="lineNum">      37</span>              :     float last_actual, float last_estimated)</span>
+<span id="L38"><span class="lineNum">      38</span>              : {</span>
+<span id="L39"><span class="lineNum">      39</span> <span class="tlaGNC">          63 :     GasCorrectionMetrics m;</span></span>
+<span id="L40"><span class="lineNum">      40</span> <span class="tlaGNC">          63 :     m.actual_consumed    = last_actual  - prev_actual;</span></span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">          63 :     m.estimated_consumed = last_estimated - prev_actual;</span></span>
+<span id="L42"><span class="lineNum">      42</span> <span class="tlaGNC">          63 :     if (m.actual_consumed &gt; 0.001f)</span></span>
+<span id="L43"><span class="lineNum">      43</span> <span class="tlaGNC">          56 :         m.error_pct = fabsf(m.actual_consumed - m.estimated_consumed)</span></span>
+<span id="L44"><span class="lineNum">      44</span> <span class="tlaGNC">          56 :                      / m.actual_consumed * 100.0f;</span></span>
+<span id="L45"><span class="lineNum">      45</span> <span class="tlaGNC">          63 :     return m;</span></span>
+<span id="L46"><span class="lineNum">      46</span>              : }</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

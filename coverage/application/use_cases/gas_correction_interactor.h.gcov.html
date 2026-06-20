@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-17 01:40:18</td>
+            <td class="headerValue">2026-06-20 17:25:10</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
@@ -84,26 +84,32 @@
 <span id="L22"><span class="lineNum">      22</span>              :     void add_meter_correction(float reading) override;</span>
 <span id="L23"><span class="lineNum">      23</span>              :     void reset_corrections() override;</span>
 <span id="L24"><span class="lineNum">      24</span>              : </span>
-<span id="L25"><span class="lineNum">      25</span>              :     /// Wire up the gas flow service (needed for integral_m3 in correction calc).</span>
-<span id="L26"><span class="lineNum">      26</span> <span class="tlaGNC tlaBgGNC">          15 :     void set_gas_flow(GasFlowService* gf) { gas_flow_ = gf; }</span></span>
-<span id="L27"><span class="lineNum">      27</span>              : </span>
-<span id="L28"><span class="lineNum">      28</span>              :     /// Wire up time source (needed for correction timestamps).</span>
-<span id="L29"><span class="lineNum">      29</span> <span class="tlaGNC">           3 :     void set_time_source(ITimeSource* t) { time_ = t; }</span></span>
+<span id="L25"><span class="lineNum">      25</span>              :     // ── Boiler model config setters with validation ──────────</span>
+<span id="L26"><span class="lineNum">      26</span>              :     void set_gas_temp_offset(float v) override;</span>
+<span id="L27"><span class="lineNum">      27</span>              :     void set_ch_power(float pmin_warm, float pmax_warm, float pmin_hot, float pmax_hot) override;</span>
+<span id="L28"><span class="lineNum">      28</span>              :     void set_dhw_power(float pmin, float pmax) override;</span>
+<span id="L29"><span class="lineNum">      29</span>              :     void set_efficiency_points(float t1, float v1, float t2, float v2, float t3, float v3) override;</span>
 <span id="L30"><span class="lineNum">      30</span>              : </span>
-<span id="L31"><span class="lineNum">      31</span>              :     /// Restore persisted correction log from NVS on boot.</span>
-<span id="L32"><span class="lineNum">      32</span>              :     void init();</span>
+<span id="L31"><span class="lineNum">      31</span>              :     /// Wire up the gas flow service (needed for integral_m3 in correction calc).</span>
+<span id="L32"><span class="lineNum">      32</span> <span class="tlaGNC tlaBgGNC">          17 :     void set_gas_flow(GasFlowService* gf) { gas_flow_ = gf; }</span></span>
 <span id="L33"><span class="lineNum">      33</span>              : </span>
-<span id="L34"><span class="lineNum">      34</span>              :     /// Read-only access to the correction log for web rendering.</span>
-<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC">          13 :     const NvsMeterBlob&amp; meter_blob() const { return meter_blob_; }</span></span>
+<span id="L34"><span class="lineNum">      34</span>              :     /// Wire up time source (needed for correction timestamps).</span>
+<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC">           5 :     void set_time_source(ITimeSource* t) { time_ = t; }</span></span>
 <span id="L36"><span class="lineNum">      36</span>              : </span>
-<span id="L37"><span class="lineNum">      37</span>              : private:</span>
-<span id="L38"><span class="lineNum">      38</span>              :     IHeatingStateStore&amp;  state_;</span>
-<span id="L39"><span class="lineNum">      39</span>              :     IConfigurationStore&amp; config_;</span>
-<span id="L40"><span class="lineNum">      40</span>              :     ILogger&amp;             log_;</span>
-<span id="L41"><span class="lineNum">      41</span>              :     ITimeSource*         time_ = nullptr;</span>
-<span id="L42"><span class="lineNum">      42</span>              :     GasFlowService*      gas_flow_ = nullptr;</span>
-<span id="L43"><span class="lineNum">      43</span>              :     NvsMeterBlob         meter_blob_;</span>
-<span id="L44"><span class="lineNum">      44</span>              : };</span>
+<span id="L37"><span class="lineNum">      37</span>              :     /// Restore persisted correction log from NVS on boot.</span>
+<span id="L38"><span class="lineNum">      38</span>              :     void init();</span>
+<span id="L39"><span class="lineNum">      39</span>              : </span>
+<span id="L40"><span class="lineNum">      40</span>              :     /// Read-only access to the correction log for web rendering.</span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">          23 :     const NvsMeterBlob&amp; meter_blob() const { return meter_blob_; }</span></span>
+<span id="L42"><span class="lineNum">      42</span>              : </span>
+<span id="L43"><span class="lineNum">      43</span>              : private:</span>
+<span id="L44"><span class="lineNum">      44</span>              :     IHeatingStateStore&amp;  state_;</span>
+<span id="L45"><span class="lineNum">      45</span>              :     IConfigurationStore&amp; config_;</span>
+<span id="L46"><span class="lineNum">      46</span>              :     ILogger&amp;             log_;</span>
+<span id="L47"><span class="lineNum">      47</span>              :     ITimeSource*         time_ = nullptr;</span>
+<span id="L48"><span class="lineNum">      48</span>              :     GasFlowService*      gas_flow_ = nullptr;</span>
+<span id="L49"><span class="lineNum">      49</span>              :     NvsMeterBlob         meter_blob_;</span>
+<span id="L50"><span class="lineNum">      50</span>              : };</span>
         </pre>
               </td>
             </tr>

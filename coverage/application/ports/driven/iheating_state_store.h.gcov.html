@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-17 01:40:18</td>
+            <td class="headerValue">2026-06-20 17:25:10</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryLo">50.0&nbsp;%</td>
@@ -227,8 +227,40 @@
 <span id="L165"><span class="lineNum">     165</span>              :     virtual void set_gas_meter_base(float v) = 0;</span>
 <span id="L166"><span class="lineNum">     166</span>              :     virtual float get_gas_meter_base() const = 0;</span>
 <span id="L167"><span class="lineNum">     167</span>              : </span>
-<span id="L168"><span class="lineNum">     168</span> <span class="tlaGNC tlaBgGNC">         138 :     virtual ~IHeatingStateStore() = default;</span></span>
-<span id="L169"><span class="lineNum">     169</span>              : };</span>
+<span id="L168"><span class="lineNum">     168</span>              :     // ── Boiler model config ────────────────────────────</span>
+<span id="L169"><span class="lineNum">     169</span>              :     virtual void set_gas_temp_offset(float v) = 0;</span>
+<span id="L170"><span class="lineNum">     170</span>              :     virtual float get_gas_temp_offset() const = 0;</span>
+<span id="L171"><span class="lineNum">     171</span>              : </span>
+<span id="L172"><span class="lineNum">     172</span>              :     virtual void set_ch_pmin_warm(float v) = 0;</span>
+<span id="L173"><span class="lineNum">     173</span>              :     virtual float get_ch_pmin_warm() const = 0;</span>
+<span id="L174"><span class="lineNum">     174</span>              :     virtual void set_ch_pmax_warm(float v) = 0;</span>
+<span id="L175"><span class="lineNum">     175</span>              :     virtual float get_ch_pmax_warm() const = 0;</span>
+<span id="L176"><span class="lineNum">     176</span>              :     virtual void set_ch_pmin_hot(float v) = 0;</span>
+<span id="L177"><span class="lineNum">     177</span>              :     virtual float get_ch_pmin_hot() const = 0;</span>
+<span id="L178"><span class="lineNum">     178</span>              :     virtual void set_ch_pmax_hot(float v) = 0;</span>
+<span id="L179"><span class="lineNum">     179</span>              :     virtual float get_ch_pmax_hot() const = 0;</span>
+<span id="L180"><span class="lineNum">     180</span>              : </span>
+<span id="L181"><span class="lineNum">     181</span>              :     virtual void set_dhw_pmin(float v) = 0;</span>
+<span id="L182"><span class="lineNum">     182</span>              :     virtual float get_dhw_pmin() const = 0;</span>
+<span id="L183"><span class="lineNum">     183</span>              :     virtual void set_dhw_pmax(float v) = 0;</span>
+<span id="L184"><span class="lineNum">     184</span>              :     virtual float get_dhw_pmax() const = 0;</span>
+<span id="L185"><span class="lineNum">     185</span>              : </span>
+<span id="L186"><span class="lineNum">     186</span>              :     // ── Efficiency curve points ────────────────────────</span>
+<span id="L187"><span class="lineNum">     187</span>              :     virtual void set_eff_t1(float v) = 0;</span>
+<span id="L188"><span class="lineNum">     188</span>              :     virtual float get_eff_t1() const = 0;</span>
+<span id="L189"><span class="lineNum">     189</span>              :     virtual void set_eff_v1(float v) = 0;</span>
+<span id="L190"><span class="lineNum">     190</span>              :     virtual float get_eff_v1() const = 0;</span>
+<span id="L191"><span class="lineNum">     191</span>              :     virtual void set_eff_t2(float v) = 0;</span>
+<span id="L192"><span class="lineNum">     192</span>              :     virtual float get_eff_t2() const = 0;</span>
+<span id="L193"><span class="lineNum">     193</span>              :     virtual void set_eff_v2(float v) = 0;</span>
+<span id="L194"><span class="lineNum">     194</span>              :     virtual float get_eff_v2() const = 0;</span>
+<span id="L195"><span class="lineNum">     195</span>              :     virtual void set_eff_t3(float v) = 0;</span>
+<span id="L196"><span class="lineNum">     196</span>              :     virtual float get_eff_t3() const = 0;</span>
+<span id="L197"><span class="lineNum">     197</span>              :     virtual void set_eff_v3(float v) = 0;</span>
+<span id="L198"><span class="lineNum">     198</span>              :     virtual float get_eff_v3() const = 0;</span>
+<span id="L199"><span class="lineNum">     199</span>              : </span>
+<span id="L200"><span class="lineNum">     200</span> <span class="tlaGNC tlaBgGNC">         199 :     virtual ~IHeatingStateStore() = default;</span></span>
+<span id="L201"><span class="lineNum">     201</span>              : };</span>
         </pre>
               </td>
             </tr>
