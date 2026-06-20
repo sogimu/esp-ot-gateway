@@ -58,4 +58,7 @@ private:
     const FopdtEstimator*     fopdt_ = nullptr;
     class ITimeSource*        time_ = nullptr;
     uint32_t                  total_uptime_base_ = 0;
+
+    /// Compute monthly error percentage from the last two corrections.
+    float compute_monthly_error_pct() const;
 };

@@ -36,6 +36,7 @@ public:
     void  set_k_calib(float v) { k_calib_ = v; }
     void  set_integral(float v) { integral_m3_ = v; }
 
+
     // EMA setters for NVS restore
     void set_ema_1h(float v)  { ema_1h_ = v; }
     void set_ema_3h(float v)  { ema_3h_ = v; }
@@ -45,7 +46,17 @@ public:
     uint64_t ema_start_us() const { return ema_start_us_; }
     void set_ema_start_us(uint64_t v) { ema_start_us_ = v; }
 
+    // Public for testability — continuous efficiency curve vs return temp
+    float efficiency_continuous(float t_ret) const;
+
 private:
+    /// Seasonal correction of calorific value based on outdoor temperature.
+    /// Uses Tomsk nominal CV (9.45 kWh/m3) and Boyle's law:
+    ///   T_gas = T_outdoor - 5C  (user's correction for buried gas pipe)
+    ///   CV_eff = CV_nom * (15+273.15) / (T_gas+273.15)
+    /// Falls back to gas_calorific_ if outdoor temperature is not yet received (outdoor_temp_valid_ == false).
+    float corrected_calorific() const;
+    float calc_power(float modulation_pct, float flow_temp, float ret_temp) const;
     IHeatingStateStore& state_;
     ITimeSource&        time_;
 
@@ -53,10 +64,23 @@ private:
     Kalman1D kalman_ret_{0, 0.05f, 0.3f};
 
     float k_calib_ = 1.0f;
-    float p_max_kw_ = 24.0f;
+    float p_max_kw_ = 20.0f;
     float gas_calorific_ = 9.5f;
+    float outdoor_temp_ = 0.0f;
+    bool outdoor_temp_valid_ = false;
     float integral_m3_ = 0;
     float latest_flow_ = 0;
+
+    // Flame-gating state
+    bool flame_prev_ = false;
+    uint32_t ignition_start_ms_ = 0;
+
+    // DHW mode flag
+    bool dhw_active_ = false;
+
+    // Sensor validity flags (prevent ==0 sentinel ambiguity)
+    bool flow_temp_valid_ = false;
+    bool ret_temp_valid_  = false;
 
     // EMA ring + accumulators
     struct Sample { float flow; };
@@ -68,8 +92,8 @@ private:
     uint64_t ema_start_us_ = 0;
 
     uint32_t last_update_ms_ = 0;
+    uint32_t outdoor_zero_start_ms_ = 0;
     int ema_tick_ = 0;
 
-    static float efficiency_correction(float t_ret);
     void update_ema(float& ema, float val, float alpha);
 };

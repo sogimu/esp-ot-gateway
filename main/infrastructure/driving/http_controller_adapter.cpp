@@ -2,6 +2,7 @@
 #include "infrastructure/driven/web_presenter_adapter.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driving/web_page.h"
+#include "infrastructure/driving/web_page_gz.inc"
 #include "infrastructure/driving/json_helpers.h"
 #include "application/ports/driving/iconfigure_system.h"
 #include "application/ports/driving/iwifi_manager.h"
@@ -81,8 +82,10 @@ void HttpControllerAdapter::start()
 void HttpControllerAdapter::stop() { if (server_) { httpd_stop(server_); server_ = nullptr; } }
 
 esp_err_t HttpControllerAdapter::handler_root(httpd_req_t* req) {
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    return httpd_resp_send(req, WEB_PAGE, HTTPD_RESP_USE_STRLEN);
+    return httpd_resp_send(req, (const char*)WEB_PAGE_GZ, WEB_PAGE_GZ_LEN);
 }
 
 esp_err_t HttpControllerAdapter::handler_status(httpd_req_t* req) {
@@ -252,7 +255,7 @@ esp_err_t HttpControllerAdapter::handler_pid_schedule(httpd_req_t* req) {
 esp_err_t HttpControllerAdapter::handler_stats(httpd_req_t* req) {
     auto* self = s_self;
     if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{}"); return ESP_FAIL; }
-    static char buf[2048];
+    static char buf[6144];  // room for stats + 32 correction log entries
     self->presenter_->render_stats(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, buf);

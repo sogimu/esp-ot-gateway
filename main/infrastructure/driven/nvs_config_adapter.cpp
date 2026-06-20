@@ -79,6 +79,34 @@ void NvsConfigAdapter::load_all(IHeatingStateStore& s)
     }
     s.unlock_exclusive();
 
+    // Boiler model config — gas_temp_offset, CH/DHW power params, efficiency points
+    {
+        sz = sizeof(NvsCalibBlob);
+        NvsCalibBlob cal;
+        if (nvs_get_blob(h, "boiler", &cal, &sz) == ESP_OK && sz >= 28) {
+            s.lock_exclusive();
+            s.set_gas_temp_offset(cal.gas_temp_offset);
+            s.set_ch_pmin_warm(cal.ch_pmin_warm);
+            s.set_ch_pmax_warm(cal.ch_pmax_warm);
+            s.set_ch_pmin_hot(cal.ch_pmin_hot);
+            s.set_ch_pmax_hot(cal.ch_pmax_hot);
+            s.set_dhw_pmin(cal.dhw_pmin);
+            s.set_dhw_pmax(cal.dhw_pmax);
+            s.unlock_exclusive();
+        }
+    }
+    {
+        sz = sizeof(NvsEfficiencyBlob);
+        NvsEfficiencyBlob eff;
+        if (nvs_get_blob(h, "eff", &eff, &sz) == ESP_OK && sz >= 24) {
+            s.lock_exclusive();
+            s.set_eff_t1(eff.t1); s.set_eff_v1(eff.v1);
+            s.set_eff_t2(eff.t2); s.set_eff_v2(eff.v2);
+            s.set_eff_t3(eff.t3); s.set_eff_v3(eff.v3);
+            s.unlock_exclusive();
+        }
+    }
+
     nvs_close(h);
 }
 
@@ -112,6 +140,29 @@ void NvsConfigAdapter::save_config(const IHeatingStateStore& s)
         s.get_pid_schedule(&ps);
         nvs_set_blob(h, "pid_sched", &ps, sizeof(ps));
     }
+    // Boiler model config
+    {
+        NvsCalibBlob cal;
+        cal.k_calib = s.get_k_calib();
+        cal.p_max = s.get_p_max();
+        cal.gas_calorific = s.get_gas_calorific();
+        cal.gas_temp_offset = s.get_gas_temp_offset();
+        cal.ch_pmin_warm = s.get_ch_pmin_warm();
+        cal.ch_pmax_warm = s.get_ch_pmax_warm();
+        cal.ch_pmin_hot = s.get_ch_pmin_hot();
+        cal.ch_pmax_hot = s.get_ch_pmax_hot();
+        cal.dhw_pmin = s.get_dhw_pmin();
+        cal.dhw_pmax = s.get_dhw_pmax();
+        nvs_set_blob(h, "boiler", &cal, sizeof(cal));
+    }
+    {
+        NvsEfficiencyBlob eff;
+        eff.t1 = s.get_eff_t1(); eff.v1 = s.get_eff_v1();
+        eff.t2 = s.get_eff_t2(); eff.v2 = s.get_eff_v2();
+        eff.t3 = s.get_eff_t3(); eff.v3 = s.get_eff_v3();
+        nvs_set_blob(h, "eff", &eff, sizeof(eff));
+    }
+
     nvs_commit(h); nvs_close(h);
 }
 
@@ -128,7 +179,18 @@ bool NvsConfigAdapter::load_stats(uint32_t& bs, float& im3,
     if (e)   { sz=sizeof(NvsGasEmaBlob); nvs_get_blob(n, "gas_ema", e, &sz); }
     if (h)   { sz=sizeof(NvsHistBlob);   nvs_get_blob(n, "hist", h, &sz); }
     if (c)   { sz=sizeof(NvsCycleBlob);  nvs_get_blob(n, "cycles", c, &sz); }
-    if (cal) { sz=sizeof(NvsCalibBlob);  nvs_get_blob(n, "calib", cal, &sz); }
+    if (cal) {
+        sz = 0;
+        if (nvs_get_blob(n, "calib", nullptr, &sz) == ESP_OK) {
+            if (sz == 12) {
+                // Migration from old 3-float blob — read old fields; new fields remain zero (caller fills defaults)
+                nvs_get_blob(n, "calib", cal, &sz);
+            } else if (sz >= 40) {
+                sz = sizeof(NvsCalibBlob);
+                nvs_get_blob(n, "calib", cal, &sz);
+            }
+        }
+    }
     nvs_close(n); return true;
 }
 
@@ -154,7 +216,7 @@ void NvsConfigAdapter::save_stats(const IHeatingStateStore&,
         nvs_set_blob(n, "cycles", c, sizeof(NvsCycleBlob));
     }
     if (cal) {
-        assert(sizeof(NvsCalibBlob) == 12); // 3 floats
+        assert(sizeof(NvsCalibBlob) == 40); // 10 floats
         nvs_set_blob(n, "calib", cal, sizeof(NvsCalibBlob));
     }
     nvs_commit(n); nvs_close(n);
@@ -287,4 +349,39 @@ void NvsConfigAdapter::save_integral(float value)
     nvs_set_blob(n, "integ_m3", &value, sizeof(value));
     nvs_commit(n);
     nvs_close(n);
+}
+
+// ── Efficiency blob (stats namespace, "eff" key) ──────────────
+
+bool NvsConfigAdapter::save_eff(const IHeatingStateStore& state)
+{
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return false;
+    NvsEfficiencyBlob eff;
+    eff.t1 = state.get_eff_t1(); eff.v1 = state.get_eff_v1();
+    eff.t2 = state.get_eff_t2(); eff.v2 = state.get_eff_v2();
+    eff.t3 = state.get_eff_t3(); eff.v3 = state.get_eff_v3();
+    esp_err_t r = nvs_set_blob(n, "eff", &eff, sizeof(eff));
+    nvs_commit(n);
+    nvs_close(n);
+    return r == ESP_OK;
+}
+
+bool NvsConfigAdapter::load_eff(IHeatingStateStore& state)
+{
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READONLY, &n) != ESP_OK) return false;
+    NvsEfficiencyBlob eff;
+    size_t sz = sizeof(eff);
+    bool ok = false;
+    if (nvs_get_blob(n, "eff", &eff, &sz) == ESP_OK && sz >= sizeof(eff)) {
+        state.lock_exclusive();
+        state.set_eff_t1(eff.t1); state.set_eff_v1(eff.v1);
+        state.set_eff_t2(eff.t2); state.set_eff_v2(eff.v2);
+        state.set_eff_t3(eff.t3); state.set_eff_v3(eff.v3);
+        state.unlock_exclusive();
+        ok = true;
+    }
+    nvs_close(n);
+    return ok;
 }

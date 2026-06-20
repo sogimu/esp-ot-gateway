@@ -153,7 +153,9 @@ TEST_CASE("GasCorrection: add_meter_correction persists to store", "[gas][orches
     // Correction computation:
     //   estimated = base(100) + integral(50) = 150
     //   diff = actual(155) - estimated(150) = +5
-    //   new_k = prev_k(1.0) * (155/150) ≈ 1.0333...
+    //   consumed_actual = 155 - 100 = 55, consumed_est = 150 - 100 = 50
+    //   k_factor = 55/50 = 1.1
+    //   new_k = prev_k(1.0) * 1.1 = 1.1
 
     REQUIRE(config.meter_save_called_ == true);
     REQUIRE(config.save_config_called_ > 0); // k_calib change saved
@@ -169,10 +171,10 @@ TEST_CASE("GasCorrection: add_meter_correction persists to store", "[gas][orches
     REQUIRE(e.estimated_total == Approx(150.0f));
     REQUIRE(e.difference == Approx(5.0f));
     REQUIRE(e.prev_k_calib == Approx(1.0f));
-    REQUIRE(e.new_k_calib == Approx(1.03333f).margin(0.01f));
+    REQUIRE(e.new_k_calib == Approx(1.1f).margin(0.01f));
 
     // k_calib should be updated in state
-    REQUIRE(state.get_k_calib() == Approx(1.03333f).margin(0.01f));
+    REQUIRE(state.get_k_calib() == Approx(1.1f).margin(0.01f));
 
     // Log event should contain key values
     REQUIRE(log.event_count_ > 0);
@@ -753,4 +755,9 @@ TEST_CASE("GasCorrection: timestamp uses wall-clock time from ITimeSource", "[ga
     // Should be ~1782000000 (the Unix second)
     REQUIRE(ts == Approx(1782000000).margin(1));
 }
+
+// ═══════════════════════════════════════════════════════════
+// error_pct removed from GasFlowService — now computed in
+// WebPresenterAdapter::compute_monthly_error_pct() from journal
+// ═══════════════════════════════════════════════════════════
 
