@@ -9,5 +9,12 @@ public:
     virtual void set_gas_meter_base(float) = 0;
     virtual void add_meter_correction(float reading) = 0;
     virtual void reset_corrections() = 0;
+
+    // ── Boiler model config ──────────────────────────────────
+    virtual void set_gas_temp_offset(float v) = 0;      // clamp [-20, +10]
+    virtual void set_ch_power(float pmin_warm, float pmax_warm, float pmin_hot, float pmax_hot) = 0;
+    virtual void set_dhw_power(float pmin, float pmax) = 0;
+    virtual void set_efficiency_points(float t1, float v1, float t2, float v2, float t3, float v3) = 0;
+
     virtual ~IGasCalibration() = default;
 };

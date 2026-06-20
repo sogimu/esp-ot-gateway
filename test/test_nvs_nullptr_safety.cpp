@@ -195,7 +195,7 @@ TEST_CASE("ConfigStore: blob size invariants are documented", "[nvs][struct]")
     // NvsHistBlob: 4 (samples) + 1000 * 2 (hist) = 2004
     // NvsCycleBlob: 4+4+4+4 + 256*2 + 256*2 = 1040
     // NvsGasEmaBlob: 5*4 + 8 = 28
-    // NvsCalibBlob: 3*4 = 12
+    // NvsCalibBlob: 10*4 = 40
     // NvsMeterBlob: 4+4+4+4+4 + 32*(4+4+4+4+4+4) = 20 + 32*24 = 788
     // NvsPredictBlob: 3*4 + 4 + 4 = 20
 
@@ -204,7 +204,7 @@ TEST_CASE("ConfigStore: blob size invariants are documented", "[nvs][struct]")
     REQUIRE(sizeof(NvsHistBlob) == 2004);
     REQUIRE(sizeof(NvsCycleBlob) == 1040);
     REQUIRE(sizeof(NvsGasEmaBlob) == 28);
-    REQUIRE(sizeof(NvsCalibBlob) == 12);
+    REQUIRE(sizeof(NvsCalibBlob) == 40);
     REQUIRE(sizeof(NvsMeterBlob) == 788);
     REQUIRE(sizeof(NvsPredictBlob) == 20);
 }

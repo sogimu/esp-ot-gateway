@@ -164,6 +164,37 @@ public:
     void set_gas_meter_base(float v) override;
     float get_gas_meter_base() const override;
 
+    // Boiler model config — gas temp offset
+    void set_gas_temp_offset(float v) override;
+    float get_gas_temp_offset() const override;
+    // Boiler model config — CH power
+    void set_ch_pmin_warm(float v) override;
+    float get_ch_pmin_warm() const override;
+    void set_ch_pmax_warm(float v) override;
+    float get_ch_pmax_warm() const override;
+    void set_ch_pmin_hot(float v) override;
+    float get_ch_pmin_hot() const override;
+    void set_ch_pmax_hot(float v) override;
+    float get_ch_pmax_hot() const override;
+    // Boiler model config — DHW power
+    void set_dhw_pmin(float v) override;
+    float get_dhw_pmin() const override;
+    void set_dhw_pmax(float v) override;
+    float get_dhw_pmax() const override;
+    // Boiler model config — efficiency curve points
+    void set_eff_t1(float v) override;
+    float get_eff_t1() const override;
+    void set_eff_v1(float v) override;
+    float get_eff_v1() const override;
+    void set_eff_t2(float v) override;
+    float get_eff_t2() const override;
+    void set_eff_v2(float v) override;
+    float get_eff_v2() const override;
+    void set_eff_t3(float v) override;
+    float get_eff_t3() const override;
+    void set_eff_v3(float v) override;
+    float get_eff_v3() const override;
+
 private:
     SharedMutex mutex_;
 
@@ -214,5 +245,14 @@ private:
         // Gas
         float k_calib_ = 1.0f, p_max_ = 24.0f, gas_calorific_ = 9.5f;
         float gas_meter_base_ = 0;
+        // Boiler model config
+        float gas_temp_offset_ = -5.0f;
+        float ch_pmin_warm_ = 3.7f, ch_pmax_warm_ = 21.8f;
+        float ch_pmin_hot_ = 3.4f, ch_pmax_hot_ = 20.0f;
+        float dhw_pmin_ = 5.0f, dhw_pmax_ = 24.0f;
+        // Efficiency curve points
+        float eff_t1_ = 30.0f, eff_v1_ = 0.98f;
+        float eff_t2_ = 55.0f, eff_v2_ = 0.93f;
+        float eff_t3_ = 80.0f, eff_v3_ = 0.88f;
     } state_;
 };

@@ -22,6 +22,12 @@ public:
     void add_meter_correction(float reading) override;
     void reset_corrections() override;
 
+    // ── Boiler model config setters with validation ──────────
+    void set_gas_temp_offset(float v) override;
+    void set_ch_power(float pmin_warm, float pmax_warm, float pmin_hot, float pmax_hot) override;
+    void set_dhw_power(float pmin, float pmax) override;
+    void set_efficiency_points(float t1, float v1, float t2, float v2, float t3, float v3) override;
+
     /// Wire up the gas flow service (needed for integral_m3 in correction calc).
     void set_gas_flow(GasFlowService* gf) { gas_flow_ = gf; }
 

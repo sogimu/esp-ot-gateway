@@ -28,8 +28,22 @@ struct __attribute__((packed)) NvsGasEmaBlob {
 };
 static_assert(sizeof(NvsGasEmaBlob) == 5 * 4 + 8, "NvsGasEmaBlob size mismatch");
 
-struct __attribute__((packed)) NvsCalibBlob { float k_calib, p_max, gas_calorific; };
-static_assert(sizeof(NvsCalibBlob) == 12, "NvsCalibBlob size mismatch");
+// ── Boiler model config blob (on-disk format) ──────────────────
+struct __attribute__((packed)) NvsCalibBlob {
+    float k_calib, p_max, gas_calorific;     // existing (offset 0)
+    float gas_temp_offset;                   // default -5.0
+    float ch_pmin_warm, ch_pmax_warm;        // default 3.7, 21.8
+    float ch_pmin_hot,  ch_pmax_hot;         // default 3.4, 20.0
+    float dhw_pmin,     dhw_pmax;            // default 5.0, 24.0
+};
+static_assert(sizeof(NvsCalibBlob) == 40, "NvsCalibBlob size mismatch");
+
+struct __attribute__((packed)) NvsEfficiencyBlob {
+    float t1, v1;  // 30, 0.98
+    float t2, v2;  // 55, 0.93
+    float t3, v3;  // 80, 0.88
+};
+static_assert(sizeof(NvsEfficiencyBlob) == 24, "NvsEfficiencyBlob size mismatch");
 
 struct __attribute__((packed)) NvsCorrLogEntry {
     uint32_t timestamp; float actual_reading, estimated_total, difference, prev_k_calib, new_k_calib;
@@ -66,6 +80,9 @@ public:
     bool load_total_uptime(uint32_t& total_uptime_sec) override;
 
     void save_integral(float value) override;
+
+    bool save_eff(const IHeatingStateStore& state);
+    bool load_eff(IHeatingStateStore& state);
 
     void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
                          uint32_t inter_pause_sec, uint32_t inter_cnt,

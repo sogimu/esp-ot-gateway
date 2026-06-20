@@ -165,5 +165,37 @@ public:
     virtual void set_gas_meter_base(float v) = 0;
     virtual float get_gas_meter_base() const = 0;
 
+    // ── Boiler model config ────────────────────────────
+    virtual void set_gas_temp_offset(float v) = 0;
+    virtual float get_gas_temp_offset() const = 0;
+
+    virtual void set_ch_pmin_warm(float v) = 0;
+    virtual float get_ch_pmin_warm() const = 0;
+    virtual void set_ch_pmax_warm(float v) = 0;
+    virtual float get_ch_pmax_warm() const = 0;
+    virtual void set_ch_pmin_hot(float v) = 0;
+    virtual float get_ch_pmin_hot() const = 0;
+    virtual void set_ch_pmax_hot(float v) = 0;
+    virtual float get_ch_pmax_hot() const = 0;
+
+    virtual void set_dhw_pmin(float v) = 0;
+    virtual float get_dhw_pmin() const = 0;
+    virtual void set_dhw_pmax(float v) = 0;
+    virtual float get_dhw_pmax() const = 0;
+
+    // ── Efficiency curve points ────────────────────────
+    virtual void set_eff_t1(float v) = 0;
+    virtual float get_eff_t1() const = 0;
+    virtual void set_eff_v1(float v) = 0;
+    virtual float get_eff_v1() const = 0;
+    virtual void set_eff_t2(float v) = 0;
+    virtual float get_eff_t2() const = 0;
+    virtual void set_eff_v2(float v) = 0;
+    virtual float get_eff_v2() const = 0;
+    virtual void set_eff_t3(float v) = 0;
+    virtual float get_eff_t3() const = 0;
+    virtual void set_eff_v3(float v) = 0;
+    virtual float get_eff_v3() const = 0;
+
     virtual ~IHeatingStateStore() = default;
 };

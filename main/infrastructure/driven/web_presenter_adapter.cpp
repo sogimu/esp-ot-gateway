@@ -6,11 +6,13 @@
 #include "application/services/burn_cycle_service.h"
 #include "application/services/gas_flow_estimator.h"
 #include "application/use_cases/gas_correction_interactor.h"
+#include "domain/value_objects/gas_correction_metrics.h"
 #include "application/services/pid_quality_assessor.h"
 #include "application/services/fopdt_estimator.h"
 #include "infrastructure/driven/event_log_adapter.h"
 #include "domain/value_objects/ch_schedule.h"
 #include <cstdio>
+#include <cmath>
 #include <chrono>
 #include <inttypes.h>
 
@@ -194,6 +196,24 @@ const char* WebPresenterAdapter::log_json()
     return nullptr;
 }
 
+float WebPresenterAdapter::compute_monthly_error_pct() const
+{
+    if (!gas_corr_) return 0.0f;
+    const NvsMeterBlob& blob = gas_corr_->meter_blob();
+    int cnt = blob.corrections_count;
+    if (cnt < 2) return 0.0f;
+    int head = blob.corrections_head;
+    int idx_last = (head - 1 + CORRECTION_LOG_SIZE) % CORRECTION_LOG_SIZE;
+    const auto& last = blob.corrections[idx_last];
+    int idx_prev = (head - 2 + CORRECTION_LOG_SIZE) % CORRECTION_LOG_SIZE;
+    const auto& prev = blob.corrections[idx_prev];
+    // Delegate to domain function
+    auto m = compute_correction_metrics(
+        prev.actual_reading, prev.estimated_total,
+        last.actual_reading, last.estimated_total);
+    return m.error_pct;
+}
+
 int WebPresenterAdapter::render_stats(char* buf, size_t size)
 {
     if (!mod_stats_ || !burn_cycles_ || !gas_flow_ || !state_)
@@ -217,7 +237,15 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         "\"avg_24h\":%.4f,\"avg_7d\":%.4f,"
         "\"mod_filt\":%.1f,\"t_ret_filt\":%.1f,"
         "\"k_calib\":%.3f,\"p_max\":%.1f,\"gas_cal\":%.1f,"
+        "\"gas_temp_offset\":%.1f,"
+        "\"ch_pmin_warm\":%.1f,\"ch_pmax_warm\":%.1f,"
+        "\"ch_pmin_hot\":%.1f,\"ch_pmax_hot\":%.1f,"
+        "\"dhw_pmin\":%.1f,\"dhw_pmax\":%.1f,"
+        "\"eff_t1\":%.0f,\"eff_v1\":%.2f,"
+        "\"eff_t2\":%.0f,\"eff_v2\":%.2f,"
+        "\"eff_t3\":%.0f,\"eff_v3\":%.2f,"
         "\"gas_meter_base\":%.3f,\"gas_meter_total\":%.3f,"
+        "\"gas_error_pct\":%.1f,"
         "\"corrections\":[",
         (unsigned)mod_stats_->samples(),
         (double)mod_stats_->p1(), (double)mod_stats_->p10(),
@@ -240,18 +268,27 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         (double)gas_flow_->mod_filtered(), (double)gas_flow_->t_ret_filtered(),
         (double)gas_flow_->k_calib(),
         (double)state_->get_p_max(), (double)state_->get_gas_calorific(),
+        (double)state_->get_gas_temp_offset(),
+        (double)state_->get_ch_pmin_warm(), (double)state_->get_ch_pmax_warm(),
+        (double)state_->get_ch_pmin_hot(), (double)state_->get_ch_pmax_hot(),
+        (double)state_->get_dhw_pmin(), (double)state_->get_dhw_pmax(),
+        (double)state_->get_eff_t1(), (double)state_->get_eff_v1(),
+        (double)state_->get_eff_t2(), (double)state_->get_eff_v2(),
+        (double)state_->get_eff_t3(), (double)state_->get_eff_v3(),
         (double)state_->get_gas_meter_base(),
-        (double)(state_->get_gas_meter_base() + gas_flow_->integral_m3())
+        (double)(state_->get_gas_meter_base() + gas_flow_->integral_m3()),
+        (double)compute_monthly_error_pct()
     );
 
-    // Render correction log from the interactor
-    // Field names must match JS in web_page.h: ts, t, ar, et, diff, pk, nk
+    // Render last 10 corrections, oldest first
     if (gas_corr_ && pos < (int)size - 4) {
         const NvsMeterBlob& blob = gas_corr_->meter_blob();
         int cnt = blob.corrections_count;
         int head = blob.corrections_head;
-        for (int i = 0; i < cnt && pos < (int)size - 100; i++) {
-            // Ring buffer: oldest first
+        int show = cnt < 10 ? cnt : 10;
+        int start = cnt - show;  // skip older entries beyond last 10
+        for (int i = start; i < cnt && pos < (int)size - 100; i++) {
+            // Ring buffer: oldest first within the last 10
             int idx = (head - cnt + i + CORRECTION_LOG_SIZE) % CORRECTION_LOG_SIZE;
             const NvsCorrLogEntry& e = blob.corrections[idx];
             // Format timestamp as HH:MM:SS + date
@@ -266,7 +303,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
             pos += snprintf(buf + pos, size - pos,
                 "%s{\"ts\":%u,\"t\":\"%s\",\"d\":\"%s\",\"ar\":%.3f,\"et\":%.3f,"
                 "\"diff\":%.3f,\"pk\":%.4f,\"nk\":%.4f}",
-                (i > 0) ? "," : "",
+                (i > start) ? "," : "",
                 (unsigned)e.timestamp,
                 tbuf, dbuf,
                 (double)e.actual_reading, (double)e.estimated_total,
