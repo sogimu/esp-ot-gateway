@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-20 17:25:10</td>
+            <td class="headerValue">2026-06-21 10:06:42</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
@@ -75,9 +75,9 @@
 <span id="L13"><span class="lineNum">      13</span>              :     /// &gt; 1 — модель занижает расход, нужно увеличить k</span>
 <span id="L14"><span class="lineNum">      14</span>              :     /// &lt; 1 — модель завышает расход, нужно уменьшить k</span>
 <span id="L15"><span class="lineNum">      15</span>              :     /// = 1 — менять не нужно (или недостаточно данных)</span>
-<span id="L16"><span class="lineNum">      16</span> <span class="tlaGNC tlaBgGNC">          64 :     float k_factor() const {</span></span>
-<span id="L17"><span class="lineNum">      17</span> <span class="tlaGNC">          64 :         if (estimated_consumed &lt; 0.001f || actual_consumed &lt;= 0.0f) return 1.0f;</span></span>
-<span id="L18"><span class="lineNum">      18</span> <span class="tlaGNC">          54 :         return actual_consumed / estimated_consumed;</span></span>
+<span id="L16"><span class="lineNum">      16</span> <span class="tlaGNC tlaBgGNC">          63 :     float k_factor() const {</span></span>
+<span id="L17"><span class="lineNum">      17</span> <span class="tlaGNC">          63 :         if (estimated_consumed &lt; 0.001f || actual_consumed &lt;= 0.0f) return 1.0f;</span></span>
+<span id="L18"><span class="lineNum">      18</span> <span class="tlaGNC">          56 :         return actual_consumed / estimated_consumed;</span></span>
 <span id="L19"><span class="lineNum">      19</span>              :     }</span>
 <span id="L20"><span class="lineNum">      20</span>              : };</span>
 <span id="L21"><span class="lineNum">      21</span>              : </span>
@@ -94,17 +94,17 @@
 <span id="L32"><span class="lineNum">      32</span>              : ///   actual_consumed    = last_actual - prev_actual</span>
 <span id="L33"><span class="lineNum">      33</span>              : ///   estimated_consumed = last_estimated - prev_actual</span>
 <span id="L34"><span class="lineNum">      34</span>              : ///                      (= накопленный integral между сверками)</span>
-<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC">          63 : inline GasCorrectionMetrics compute_correction_metrics(</span></span>
+<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC">          62 : inline GasCorrectionMetrics compute_correction_metrics(</span></span>
 <span id="L36"><span class="lineNum">      36</span>              :     float prev_actual, float prev_estimated,</span>
 <span id="L37"><span class="lineNum">      37</span>              :     float last_actual, float last_estimated)</span>
 <span id="L38"><span class="lineNum">      38</span>              : {</span>
-<span id="L39"><span class="lineNum">      39</span> <span class="tlaGNC">          63 :     GasCorrectionMetrics m;</span></span>
-<span id="L40"><span class="lineNum">      40</span> <span class="tlaGNC">          63 :     m.actual_consumed    = last_actual  - prev_actual;</span></span>
-<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">          63 :     m.estimated_consumed = last_estimated - prev_actual;</span></span>
-<span id="L42"><span class="lineNum">      42</span> <span class="tlaGNC">          63 :     if (m.actual_consumed &gt; 0.001f)</span></span>
-<span id="L43"><span class="lineNum">      43</span> <span class="tlaGNC">          56 :         m.error_pct = fabsf(m.actual_consumed - m.estimated_consumed)</span></span>
-<span id="L44"><span class="lineNum">      44</span> <span class="tlaGNC">          56 :                      / m.actual_consumed * 100.0f;</span></span>
-<span id="L45"><span class="lineNum">      45</span> <span class="tlaGNC">          63 :     return m;</span></span>
+<span id="L39"><span class="lineNum">      39</span> <span class="tlaGNC">          62 :     GasCorrectionMetrics m;</span></span>
+<span id="L40"><span class="lineNum">      40</span> <span class="tlaGNC">          62 :     m.actual_consumed    = last_actual  - prev_actual;</span></span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">          62 :     m.estimated_consumed = last_estimated - prev_actual;</span></span>
+<span id="L42"><span class="lineNum">      42</span> <span class="tlaGNC">          62 :     if (m.actual_consumed &gt; 0.001f)</span></span>
+<span id="L43"><span class="lineNum">      43</span> <span class="tlaGNC">          58 :         m.error_pct = fabsf(m.actual_consumed - m.estimated_consumed)</span></span>
+<span id="L44"><span class="lineNum">      44</span> <span class="tlaGNC">          58 :                      / m.actual_consumed * 100.0f;</span></span>
+<span id="L45"><span class="lineNum">      45</span> <span class="tlaGNC">          62 :     return m;</span></span>
 <span id="L46"><span class="lineNum">      46</span>              : }</span>
         </pre>
               </td>

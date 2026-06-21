@@ -31,13 +31,13 @@
             <td class="headerValue">esp-ot-gateway test coverage</td>
             <td></td>
             <td class="headerItem">Lines:</td>
-            <td class="headerCovTableEntryHi">98.6&nbsp;%</td>
-            <td class="headerCovTableEntry">148</td>
-            <td class="headerCovTableEntry">146</td>
+            <td class="headerCovTableEntryHi">98.7&nbsp;%</td>
+            <td class="headerCovTableEntry">149</td>
+            <td class="headerCovTableEntry">147</td>
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-20 17:25:10</td>
+            <td class="headerValue">2026-06-21 10:06:42</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryMed">88.9&nbsp;%</td>
@@ -68,17 +68,17 @@
 <span id="L6"><span class="lineNum">       6</span>              : #include &lt;cstdlib&gt;</span>
 <span id="L7"><span class="lineNum">       7</span>              : #include &lt;cstring&gt;</span>
 <span id="L8"><span class="lineNum">       8</span>              : </span>
-<span id="L9"><span class="lineNum">       9</span> <span class="tlaGNC tlaBgGNC">          84 : GasFlowService::GasFlowService(IHeatingStateStore&amp; state, ITimeSource&amp; time)</span></span>
-<span id="L10"><span class="lineNum">      10</span> <span class="tlaGNC">          84 :     : state_(state), time_(time)</span></span>
+<span id="L9"><span class="lineNum">       9</span> <span class="tlaGNC tlaBgGNC">          85 : GasFlowService::GasFlowService(IHeatingStateStore&amp; state, ITimeSource&amp; time)</span></span>
+<span id="L10"><span class="lineNum">      10</span> <span class="tlaGNC">          85 :     : state_(state), time_(time)</span></span>
 <span id="L11"><span class="lineNum">      11</span>              : {</span>
-<span id="L12"><span class="lineNum">      12</span> <span class="tlaGNC">          84 :     ring_ = static_cast&lt;Sample*&gt;(malloc(RING_SIZE * sizeof(Sample)));</span></span>
-<span id="L13"><span class="lineNum">      13</span> <span class="tlaGNC">          84 :     if (ring_) std::memset(ring_, 0, RING_SIZE * sizeof(Sample));</span></span>
-<span id="L14"><span class="lineNum">      14</span> <span class="tlaGNC">          84 : }</span></span>
+<span id="L12"><span class="lineNum">      12</span> <span class="tlaGNC">          85 :     ring_ = static_cast&lt;Sample*&gt;(malloc(RING_SIZE * sizeof(Sample)));</span></span>
+<span id="L13"><span class="lineNum">      13</span> <span class="tlaGNC">          85 :     if (ring_) std::memset(ring_, 0, RING_SIZE * sizeof(Sample));</span></span>
+<span id="L14"><span class="lineNum">      14</span> <span class="tlaGNC">          85 : }</span></span>
 <span id="L15"><span class="lineNum">      15</span>              : </span>
-<span id="L16"><span class="lineNum">      16</span> <span class="tlaGNC">          84 : GasFlowService::~GasFlowService()</span></span>
+<span id="L16"><span class="lineNum">      16</span> <span class="tlaGNC">          85 : GasFlowService::~GasFlowService()</span></span>
 <span id="L17"><span class="lineNum">      17</span>              : {</span>
-<span id="L18"><span class="lineNum">      18</span> <span class="tlaGNC">          84 :     free(ring_);</span></span>
-<span id="L19"><span class="lineNum">      19</span> <span class="tlaGNC">          84 : }</span></span>
+<span id="L18"><span class="lineNum">      18</span> <span class="tlaGNC">          85 :     free(ring_);</span></span>
+<span id="L19"><span class="lineNum">      19</span> <span class="tlaGNC">          85 : }</span></span>
 <span id="L20"><span class="lineNum">      20</span>              : </span>
 <span id="L21"><span class="lineNum">      21</span> <span class="tlaGNC">         727 : float GasFlowService::efficiency_continuous(float t_ret) const</span></span>
 <span id="L22"><span class="lineNum">      22</span>              : {</span>
@@ -113,186 +113,191 @@
 <span id="L51"><span class="lineNum">      51</span> <span class="tlaGNC">         699 :     return gas_calorific_ * f_t;</span></span>
 <span id="L52"><span class="lineNum">      52</span>              : }</span>
 <span id="L53"><span class="lineNum">      53</span>              : </span>
-<span id="L54"><span class="lineNum">      54</span> <span class="tlaGNC">         727 : float GasFlowService::calc_power(float modulation_pct, float flow_temp, float ret_temp) const</span></span>
+<span id="L54"><span class="lineNum">      54</span> <span class="tlaGNC">         731 : float GasFlowService::calc_power(float modulation_pct, float flow_temp, float ret_temp) const</span></span>
 <span id="L55"><span class="lineNum">      55</span>              : {</span>
 <span id="L56"><span class="lineNum">      56</span>              :     // Clamp modulation to valid range</span>
-<span id="L57"><span class="lineNum">      57</span> <span class="tlaGNC">         727 :     if (modulation_pct &lt; 0.0f) modulation_pct = 0.0f;</span></span>
-<span id="L58"><span class="lineNum">      58</span> <span class="tlaGNC">         727 :     if (modulation_pct &gt; 100.0f) modulation_pct = 100.0f;</span></span>
+<span id="L57"><span class="lineNum">      57</span> <span class="tlaGNC">         731 :     if (modulation_pct &lt; 0.0f) modulation_pct = 0.0f;</span></span>
+<span id="L58"><span class="lineNum">      58</span> <span class="tlaGNC">         731 :     if (modulation_pct &gt; 100.0f) modulation_pct = 100.0f;</span></span>
 <span id="L59"><span class="lineNum">      59</span>              : </span>
-<span id="L60"><span class="lineNum">      60</span>              :     // ── DHW-ветка: фиксированные параметры мощности ──</span>
-<span id="L61"><span class="lineNum">      61</span> <span class="tlaGNC">         727 :     if (dhw_active_) {</span></span>
-<span id="L62"><span class="lineNum">      62</span> <span class="tlaGNC">           7 :         float pmin = state_.get_dhw_pmin();</span></span>
-<span id="L63"><span class="lineNum">      63</span> <span class="tlaGNC">           7 :         float pmax = state_.get_dhw_pmax();</span></span>
-<span id="L64"><span class="lineNum">      64</span> <span class="tlaGNC">           7 :         return pmin + (pmax - pmin) * modulation_pct / 100.0f;</span></span>
-<span id="L65"><span class="lineNum">      65</span>              :     }</span>
-<span id="L66"><span class="lineNum">      66</span>              : </span>
-<span id="L67"><span class="lineNum">      67</span>              :     // Fallback when temperature channel is uninitialized (flag=false AND value=0).</span>
-<span id="L68"><span class="lineNum">      68</span> <span class="tlaGNC">         720 :     if ((!flow_temp_valid_ &amp;&amp; flow_temp == 0.0f) || (!ret_temp_valid_ &amp;&amp; ret_temp == 0.0f)) {</span></span>
-<span id="L69"><span class="lineNum">      69</span> <span class="tlaGNC">         698 :         float pmin = state_.get_ch_pmin_warm();</span></span>
-<span id="L70"><span class="lineNum">      70</span> <span class="tlaGNC">         698 :         float pmax = state_.get_ch_pmax_warm();</span></span>
-<span id="L71"><span class="lineNum">      71</span> <span class="tlaGNC">         698 :         return pmin + (pmax - pmin) * modulation_pct / 100.0f;</span></span>
-<span id="L72"><span class="lineNum">      72</span>              :     }</span>
-<span id="L73"><span class="lineNum">      73</span>              : </span>
-<span id="L74"><span class="lineNum">      74</span> <span class="tlaGNC">          22 :     float mwt = (flow_temp + ret_temp) / 2.0f;</span></span>
-<span id="L75"><span class="lineNum">      75</span>              :     // Clamp MWT to [40, 70] safe operating range</span>
-<span id="L76"><span class="lineNum">      76</span> <span class="tlaGNC">          22 :     if (mwt &lt; 40.0f) mwt = 40.0f;</span></span>
-<span id="L77"><span class="lineNum">      77</span> <span class="tlaGNC">          22 :     if (mwt &gt; 70.0f) mwt = 70.0f;</span></span>
+<span id="L60"><span class="lineNum">      60</span>              :     // Modulation &lt; 1 % means the burner is not actually firing</span>
+<span id="L61"><span class="lineNum">      61</span>              :     // (gas valve closed or in pre-purge).  Real modulating boilers</span>
+<span id="L62"><span class="lineNum">      62</span>              :     // never operate below ~20 % in steady state.</span>
+<span id="L63"><span class="lineNum">      63</span> <span class="tlaGNC">         731 :     if (modulation_pct &lt; 1.0f) return 0.0f;</span></span>
+<span id="L64"><span class="lineNum">      64</span>              : </span>
+<span id="L65"><span class="lineNum">      65</span>              :     // ── DHW-ветка: фиксированные параметры мощности ──</span>
+<span id="L66"><span class="lineNum">      66</span> <span class="tlaGNC">         724 :     if (dhw_active_) {</span></span>
+<span id="L67"><span class="lineNum">      67</span> <span class="tlaGNC">           6 :         float pmin = state_.get_dhw_pmin();</span></span>
+<span id="L68"><span class="lineNum">      68</span> <span class="tlaGNC">           6 :         float pmax = state_.get_dhw_pmax();</span></span>
+<span id="L69"><span class="lineNum">      69</span> <span class="tlaGNC">           6 :         return pmin + (pmax - pmin) * modulation_pct / 100.0f;</span></span>
+<span id="L70"><span class="lineNum">      70</span>              :     }</span>
+<span id="L71"><span class="lineNum">      71</span>              : </span>
+<span id="L72"><span class="lineNum">      72</span>              :     // Fallback when temperature channel is uninitialized (flag=false AND value=0).</span>
+<span id="L73"><span class="lineNum">      73</span> <span class="tlaGNC">         718 :     if ((!flow_temp_valid_ &amp;&amp; flow_temp == 0.0f) || (!ret_temp_valid_ &amp;&amp; ret_temp == 0.0f)) {</span></span>
+<span id="L74"><span class="lineNum">      74</span> <span class="tlaGNC">         697 :         float pmin = state_.get_ch_pmin_warm();</span></span>
+<span id="L75"><span class="lineNum">      75</span> <span class="tlaGNC">         697 :         float pmax = state_.get_ch_pmax_warm();</span></span>
+<span id="L76"><span class="lineNum">      76</span> <span class="tlaGNC">         697 :         return pmin + (pmax - pmin) * modulation_pct / 100.0f;</span></span>
+<span id="L77"><span class="lineNum">      77</span>              :     }</span>
 <span id="L78"><span class="lineNum">      78</span>              : </span>
-<span id="L79"><span class="lineNum">      79</span>              :     // CH power: interpolate between warm (MWT=40) and hot (MWT=70) parameters from state</span>
-<span id="L80"><span class="lineNum">      80</span> <span class="tlaGNC">          22 :     const float MWT_WARM = 40.0f;</span></span>
-<span id="L81"><span class="lineNum">      81</span> <span class="tlaGNC">          22 :     const float MWT_HOT  = 70.0f;</span></span>
-<span id="L82"><span class="lineNum">      82</span> <span class="tlaGNC">          22 :     float pmin_warm = state_.get_ch_pmin_warm();</span></span>
-<span id="L83"><span class="lineNum">      83</span> <span class="tlaGNC">          22 :     float pmax_warm = state_.get_ch_pmax_warm();</span></span>
-<span id="L84"><span class="lineNum">      84</span> <span class="tlaGNC">          22 :     float pmin_hot  = state_.get_ch_pmin_hot();</span></span>
-<span id="L85"><span class="lineNum">      85</span> <span class="tlaGNC">          22 :     float pmax_hot  = state_.get_ch_pmax_hot();</span></span>
-<span id="L86"><span class="lineNum">      86</span>              : </span>
-<span id="L87"><span class="lineNum">      87</span> <span class="tlaGNC">          22 :     float t = (mwt - MWT_WARM) / (MWT_HOT - MWT_WARM);</span></span>
-<span id="L88"><span class="lineNum">      88</span> <span class="tlaGNC">          22 :     float pmin = pmin_warm + (pmin_hot - pmin_warm) * t;</span></span>
-<span id="L89"><span class="lineNum">      89</span> <span class="tlaGNC">          22 :     float pmax = pmax_warm + (pmax_hot - pmax_warm) * t;</span></span>
-<span id="L90"><span class="lineNum">      90</span>              : </span>
-<span id="L91"><span class="lineNum">      91</span> <span class="tlaGNC">          22 :     return pmin + (pmax - pmin) * modulation_pct / 100.0f;</span></span>
-<span id="L92"><span class="lineNum">      92</span>              : }</span>
-<span id="L93"><span class="lineNum">      93</span>              : </span>
-<span id="L94"><span class="lineNum">      94</span> <span class="tlaGNC">          64 : void GasFlowService::update_ema(float&amp; ema, float val, float alpha)</span></span>
-<span id="L95"><span class="lineNum">      95</span>              : {</span>
-<span id="L96"><span class="lineNum">      96</span> <span class="tlaGNC">          64 :     if (ema == 0) ema = val;</span></span>
-<span id="L97"><span class="lineNum">      97</span> <span class="tlaGNC">          51 :     else ema = alpha * val + (1.0f - alpha) * ema;</span></span>
-<span id="L98"><span class="lineNum">      98</span> <span class="tlaGNC">          64 : }</span></span>
-<span id="L99"><span class="lineNum">      99</span>              : </span>
-<span id="L100"><span class="lineNum">     100</span> <span class="tlaGNC">         734 : void GasFlowService::poll()</span></span>
-<span id="L101"><span class="lineNum">     101</span>              : {</span>
-<span id="L102"><span class="lineNum">     102</span> <span class="tlaGNC">         734 :     uint32_t now_ms = static_cast&lt;uint32_t&gt;(time_.monotonic_ms());</span></span>
-<span id="L103"><span class="lineNum">     103</span> <span class="tlaGNC">         734 :     if (last_update_ms_ == 0) {</span></span>
-<span id="L104"><span class="lineNum">     104</span> <span class="tlaGNC">          26 :         last_update_ms_ = now_ms;</span></span>
-<span id="L105"><span class="lineNum">     105</span> <span class="tlaGNC">          26 :         ema_start_us_ = time_.monotonic_us();</span></span>
-<span id="L106"><span class="lineNum">     106</span> <span class="tlaGNC">          26 :         return;</span></span>
-<span id="L107"><span class="lineNum">     107</span>              :     }</span>
-<span id="L108"><span class="lineNum">     108</span>              : </span>
-<span id="L109"><span class="lineNum">     109</span> <span class="tlaGNC">         708 :     state_.lock_shared();</span></span>
-<span id="L110"><span class="lineNum">     110</span> <span class="tlaGNC">         708 :     float mod_raw = state_.get_modulation();</span></span>
-<span id="L111"><span class="lineNum">     111</span> <span class="tlaGNC">         708 :     float t_ret   = state_.get_return_temp();</span></span>
-<span id="L112"><span class="lineNum">     112</span> <span class="tlaGNC">         708 :     float t_flow  = state_.get_ch_temp();</span></span>
-<span id="L113"><span class="lineNum">     113</span> <span class="tlaGNC">         708 :     float p_max   = state_.get_p_max();</span></span>
-<span id="L114"><span class="lineNum">     114</span> <span class="tlaGNC">         708 :     float gas_cal = state_.get_gas_calorific();</span></span>
-<span id="L115"><span class="lineNum">     115</span> <span class="tlaGNC">         708 :     float t_out   = state_.get_outside_temp();</span></span>
-<span id="L116"><span class="lineNum">     116</span> <span class="tlaGNC">         708 :     bool flame    = state_.is_flame_on();</span></span>
-<span id="L117"><span class="lineNum">     117</span> <span class="tlaGNC">         708 :     bool dhw      = state_.is_dhw_active();</span></span>
-<span id="L118"><span class="lineNum">     118</span> <span class="tlaGNC">         708 :     state_.unlock_shared();</span></span>
-<span id="L119"><span class="lineNum">     119</span>              : </span>
-<span id="L120"><span class="lineNum">     120</span> <span class="tlaGNC">         708 :     dhw_active_ = dhw;</span></span>
-<span id="L121"><span class="lineNum">     121</span>              : </span>
-<span id="L122"><span class="lineNum">     122</span> <span class="tlaGNC">         708 :     if (p_max &gt; 0) p_max_kw_ = p_max;</span></span>
-<span id="L123"><span class="lineNum">     123</span> <span class="tlaGNC">         708 :     if (gas_cal &gt; 0) gas_calorific_ = gas_cal;</span></span>
-<span id="L124"><span class="lineNum">     124</span>              :     // Mark temperature channels valid once non-zero data arrives</span>
-<span id="L125"><span class="lineNum">     125</span>              :     // (CH temps are always &gt;0 in a working system; 0 means &quot;never read&quot;)</span>
-<span id="L126"><span class="lineNum">     126</span> <span class="tlaGNC">         708 :     if (t_flow &gt; 0.0f) flow_temp_valid_ = true;</span></span>
-<span id="L127"><span class="lineNum">     127</span> <span class="tlaGNC">         708 :     if (t_ret  &gt; 0.0f) ret_temp_valid_  = true;</span></span>
-<span id="L128"><span class="lineNum">     128</span>              :     // Update outdoor temperature if value is plausible</span>
-<span id="L129"><span class="lineNum">     129</span> <span class="tlaGNC">         708 :     if (t_out &gt;= -50.0f &amp;&amp; t_out &lt;= 60.0f) {</span></span>
-<span id="L130"><span class="lineNum">     130</span> <span class="tlaGNC">         707 :         outdoor_temp_ = t_out;</span></span>
-<span id="L131"><span class="lineNum">     131</span> <span class="tlaGNC">         707 :         outdoor_temp_valid_ = true;</span></span>
-<span id="L132"><span class="lineNum">     132</span>              :     }</span>
-<span id="L133"><span class="lineNum">     133</span>              : </span>
-<span id="L134"><span class="lineNum">     134</span>              :     // ── Sensor disconnect protection: invalidate outdoor_temp after 6h of steady 0 ──</span>
-<span id="L135"><span class="lineNum">     135</span> <span class="tlaGNC">         708 :     if (t_out == 0.0f &amp;&amp; outdoor_temp_valid_) {</span></span>
-<span id="L136"><span class="lineNum">     136</span> <span class="tlaGNC">         572 :         if (outdoor_zero_start_ms_ == 0) {</span></span>
-<span id="L137"><span class="lineNum">     137</span> <span class="tlaGNC">          20 :             outdoor_zero_start_ms_ = now_ms;</span></span>
-<span id="L138"><span class="lineNum">     138</span> <span class="tlaGNC">         552 :         } else if (now_ms - outdoor_zero_start_ms_ &gt; 6u * 3600000u) {</span></span>
-<span id="L139"><span class="lineNum">     139</span> <span class="tlaUNC tlaBgUNC">           0 :             outdoor_temp_valid_ = false;</span></span>
-<span id="L140"><span class="lineNum">     140</span> <span class="tlaUNC">           0 :             outdoor_temp_ = 0.0f;</span></span>
-<span id="L141"><span class="lineNum">     141</span>              :         }</span>
-<span id="L142"><span class="lineNum">     142</span>              :     } else {</span>
-<span id="L143"><span class="lineNum">     143</span> <span class="tlaGNC tlaBgGNC">         136 :         outdoor_zero_start_ms_ = 0;</span></span>
-<span id="L144"><span class="lineNum">     144</span>              :     }</span>
-<span id="L145"><span class="lineNum">     145</span>              : </span>
-<span id="L146"><span class="lineNum">     146</span>              :     // ── Flame-gating ──────────────────────────────────────</span>
-<span id="L147"><span class="lineNum">     147</span> <span class="tlaGNC">         708 :     if (!flame_prev_ &amp;&amp; flame) {</span></span>
-<span id="L148"><span class="lineNum">     148</span> <span class="tlaGNC">          28 :         ignition_start_ms_ = now_ms;</span></span>
+<span id="L79"><span class="lineNum">      79</span> <span class="tlaGNC">          21 :     float mwt = (flow_temp + ret_temp) / 2.0f;</span></span>
+<span id="L80"><span class="lineNum">      80</span>              :     // Clamp MWT to [40, 70] safe operating range</span>
+<span id="L81"><span class="lineNum">      81</span> <span class="tlaGNC">          21 :     if (mwt &lt; 40.0f) mwt = 40.0f;</span></span>
+<span id="L82"><span class="lineNum">      82</span> <span class="tlaGNC">          21 :     if (mwt &gt; 70.0f) mwt = 70.0f;</span></span>
+<span id="L83"><span class="lineNum">      83</span>              : </span>
+<span id="L84"><span class="lineNum">      84</span>              :     // CH power: interpolate between warm (MWT=40) and hot (MWT=70) parameters from state</span>
+<span id="L85"><span class="lineNum">      85</span> <span class="tlaGNC">          21 :     const float MWT_WARM = 40.0f;</span></span>
+<span id="L86"><span class="lineNum">      86</span> <span class="tlaGNC">          21 :     const float MWT_HOT  = 70.0f;</span></span>
+<span id="L87"><span class="lineNum">      87</span> <span class="tlaGNC">          21 :     float pmin_warm = state_.get_ch_pmin_warm();</span></span>
+<span id="L88"><span class="lineNum">      88</span> <span class="tlaGNC">          21 :     float pmax_warm = state_.get_ch_pmax_warm();</span></span>
+<span id="L89"><span class="lineNum">      89</span> <span class="tlaGNC">          21 :     float pmin_hot  = state_.get_ch_pmin_hot();</span></span>
+<span id="L90"><span class="lineNum">      90</span> <span class="tlaGNC">          21 :     float pmax_hot  = state_.get_ch_pmax_hot();</span></span>
+<span id="L91"><span class="lineNum">      91</span>              : </span>
+<span id="L92"><span class="lineNum">      92</span> <span class="tlaGNC">          21 :     float t = (mwt - MWT_WARM) / (MWT_HOT - MWT_WARM);</span></span>
+<span id="L93"><span class="lineNum">      93</span> <span class="tlaGNC">          21 :     float pmin = pmin_warm + (pmin_hot - pmin_warm) * t;</span></span>
+<span id="L94"><span class="lineNum">      94</span> <span class="tlaGNC">          21 :     float pmax = pmax_warm + (pmax_hot - pmax_warm) * t;</span></span>
+<span id="L95"><span class="lineNum">      95</span>              : </span>
+<span id="L96"><span class="lineNum">      96</span> <span class="tlaGNC">          21 :     return pmin + (pmax - pmin) * modulation_pct / 100.0f;</span></span>
+<span id="L97"><span class="lineNum">      97</span>              : }</span>
+<span id="L98"><span class="lineNum">      98</span>              : </span>
+<span id="L99"><span class="lineNum">      99</span> <span class="tlaGNC">          64 : void GasFlowService::update_ema(float&amp; ema, float val, float alpha)</span></span>
+<span id="L100"><span class="lineNum">     100</span>              : {</span>
+<span id="L101"><span class="lineNum">     101</span> <span class="tlaGNC">          64 :     if (ema == 0) ema = val;</span></span>
+<span id="L102"><span class="lineNum">     102</span> <span class="tlaGNC">          51 :     else ema = alpha * val + (1.0f - alpha) * ema;</span></span>
+<span id="L103"><span class="lineNum">     103</span> <span class="tlaGNC">          64 : }</span></span>
+<span id="L104"><span class="lineNum">     104</span>              : </span>
+<span id="L105"><span class="lineNum">     105</span> <span class="tlaGNC">         734 : void GasFlowService::poll()</span></span>
+<span id="L106"><span class="lineNum">     106</span>              : {</span>
+<span id="L107"><span class="lineNum">     107</span> <span class="tlaGNC">         734 :     uint32_t now_ms = static_cast&lt;uint32_t&gt;(time_.monotonic_ms());</span></span>
+<span id="L108"><span class="lineNum">     108</span> <span class="tlaGNC">         734 :     if (last_update_ms_ == 0) {</span></span>
+<span id="L109"><span class="lineNum">     109</span> <span class="tlaGNC">          26 :         last_update_ms_ = now_ms;</span></span>
+<span id="L110"><span class="lineNum">     110</span> <span class="tlaGNC">          26 :         ema_start_us_ = time_.monotonic_us();</span></span>
+<span id="L111"><span class="lineNum">     111</span> <span class="tlaGNC">          26 :         return;</span></span>
+<span id="L112"><span class="lineNum">     112</span>              :     }</span>
+<span id="L113"><span class="lineNum">     113</span>              : </span>
+<span id="L114"><span class="lineNum">     114</span> <span class="tlaGNC">         708 :     state_.lock_shared();</span></span>
+<span id="L115"><span class="lineNum">     115</span> <span class="tlaGNC">         708 :     float mod_raw = state_.get_modulation();</span></span>
+<span id="L116"><span class="lineNum">     116</span> <span class="tlaGNC">         708 :     float t_ret   = state_.get_return_temp();</span></span>
+<span id="L117"><span class="lineNum">     117</span> <span class="tlaGNC">         708 :     float t_flow  = state_.get_ch_temp();</span></span>
+<span id="L118"><span class="lineNum">     118</span> <span class="tlaGNC">         708 :     float p_max   = state_.get_p_max();</span></span>
+<span id="L119"><span class="lineNum">     119</span> <span class="tlaGNC">         708 :     float gas_cal = state_.get_gas_calorific();</span></span>
+<span id="L120"><span class="lineNum">     120</span> <span class="tlaGNC">         708 :     float t_out   = state_.get_outside_temp();</span></span>
+<span id="L121"><span class="lineNum">     121</span> <span class="tlaGNC">         708 :     bool flame    = state_.is_flame_on();</span></span>
+<span id="L122"><span class="lineNum">     122</span> <span class="tlaGNC">         708 :     bool dhw      = state_.is_dhw_active();</span></span>
+<span id="L123"><span class="lineNum">     123</span> <span class="tlaGNC">         708 :     state_.unlock_shared();</span></span>
+<span id="L124"><span class="lineNum">     124</span>              : </span>
+<span id="L125"><span class="lineNum">     125</span> <span class="tlaGNC">         708 :     dhw_active_ = dhw;</span></span>
+<span id="L126"><span class="lineNum">     126</span>              : </span>
+<span id="L127"><span class="lineNum">     127</span> <span class="tlaGNC">         708 :     if (p_max &gt; 0) p_max_kw_ = p_max;</span></span>
+<span id="L128"><span class="lineNum">     128</span> <span class="tlaGNC">         708 :     if (gas_cal &gt; 0) gas_calorific_ = gas_cal;</span></span>
+<span id="L129"><span class="lineNum">     129</span>              :     // Mark temperature channels valid once non-zero data arrives</span>
+<span id="L130"><span class="lineNum">     130</span>              :     // (CH temps are always &gt;0 in a working system; 0 means &quot;never read&quot;)</span>
+<span id="L131"><span class="lineNum">     131</span> <span class="tlaGNC">         708 :     if (t_flow &gt; 0.0f) flow_temp_valid_ = true;</span></span>
+<span id="L132"><span class="lineNum">     132</span> <span class="tlaGNC">         708 :     if (t_ret  &gt; 0.0f) ret_temp_valid_  = true;</span></span>
+<span id="L133"><span class="lineNum">     133</span>              :     // Update outdoor temperature if value is plausible</span>
+<span id="L134"><span class="lineNum">     134</span> <span class="tlaGNC">         708 :     if (t_out &gt;= -50.0f &amp;&amp; t_out &lt;= 60.0f) {</span></span>
+<span id="L135"><span class="lineNum">     135</span> <span class="tlaGNC">         707 :         outdoor_temp_ = t_out;</span></span>
+<span id="L136"><span class="lineNum">     136</span> <span class="tlaGNC">         707 :         outdoor_temp_valid_ = true;</span></span>
+<span id="L137"><span class="lineNum">     137</span>              :     }</span>
+<span id="L138"><span class="lineNum">     138</span>              : </span>
+<span id="L139"><span class="lineNum">     139</span>              :     // ── Sensor disconnect protection: invalidate outdoor_temp after 6h of steady 0 ──</span>
+<span id="L140"><span class="lineNum">     140</span> <span class="tlaGNC">         708 :     if (t_out == 0.0f &amp;&amp; outdoor_temp_valid_) {</span></span>
+<span id="L141"><span class="lineNum">     141</span> <span class="tlaGNC">         572 :         if (outdoor_zero_start_ms_ == 0) {</span></span>
+<span id="L142"><span class="lineNum">     142</span> <span class="tlaGNC">          20 :             outdoor_zero_start_ms_ = now_ms;</span></span>
+<span id="L143"><span class="lineNum">     143</span> <span class="tlaGNC">         552 :         } else if (now_ms - outdoor_zero_start_ms_ &gt; 6u * 3600000u) {</span></span>
+<span id="L144"><span class="lineNum">     144</span> <span class="tlaUNC tlaBgUNC">           0 :             outdoor_temp_valid_ = false;</span></span>
+<span id="L145"><span class="lineNum">     145</span> <span class="tlaUNC">           0 :             outdoor_temp_ = 0.0f;</span></span>
+<span id="L146"><span class="lineNum">     146</span>              :         }</span>
+<span id="L147"><span class="lineNum">     147</span>              :     } else {</span>
+<span id="L148"><span class="lineNum">     148</span> <span class="tlaGNC tlaBgGNC">         136 :         outdoor_zero_start_ms_ = 0;</span></span>
 <span id="L149"><span class="lineNum">     149</span>              :     }</span>
-<span id="L150"><span class="lineNum">     150</span> <span class="tlaGNC">         708 :     flame_prev_ = flame;</span></span>
-<span id="L151"><span class="lineNum">     151</span>              : </span>
-<span id="L152"><span class="lineNum">     152</span> <span class="tlaGNC">         708 :     if (flame) {</span></span>
-<span id="L153"><span class="lineNum">     153</span>              :         // Kalman filter raw inputs (only while flame is on — prevents filter drift on zeros)</span>
-<span id="L154"><span class="lineNum">     154</span> <span class="tlaGNC">         697 :         float mod_f = kalman_mod_.update(mod_raw);</span></span>
-<span id="L155"><span class="lineNum">     155</span> <span class="tlaGNC">         697 :         float ret_f = kalman_ret_.update(t_ret);</span></span>
-<span id="L156"><span class="lineNum">     156</span> <span class="tlaGNC">         697 :         mod_filtered_val = mod_f;</span></span>
-<span id="L157"><span class="lineNum">     157</span> <span class="tlaGNC">         697 :         t_ret_filtered_val = ret_f;</span></span>
-<span id="L158"><span class="lineNum">     158</span>              : </span>
-<span id="L159"><span class="lineNum">     159</span>              :         // Warmup factor: linear ramp 0.85→1.0 over first 60s after ignition</span>
-<span id="L160"><span class="lineNum">     160</span> <span class="tlaGNC">         697 :         float warmup = 1.0f;</span></span>
-<span id="L161"><span class="lineNum">     161</span> <span class="tlaGNC">         697 :         uint32_t elapsed_ms = now_ms - ignition_start_ms_;</span></span>
-<span id="L162"><span class="lineNum">     162</span> <span class="tlaGNC">         697 :         if (elapsed_ms &lt; 60000u) {</span></span>
-<span id="L163"><span class="lineNum">     163</span> <span class="tlaGNC">         110 :             warmup = 0.85f + 0.15f * (static_cast&lt;float&gt;(elapsed_ms) / 60000.0f);</span></span>
-<span id="L164"><span class="lineNum">     164</span>              :         }</span>
-<span id="L165"><span class="lineNum">     165</span>              : </span>
-<span id="L166"><span class="lineNum">     166</span>              :         // Physical model: flow [m3/h] = k * power_kw / cv / eta * warmup</span>
-<span id="L167"><span class="lineNum">     167</span>              :         // DHW mode: use fixed 0.88 efficiency (no condensate recovery)</span>
-<span id="L168"><span class="lineNum">     168</span> <span class="tlaGNC">         697 :         float eta = dhw_active_ ? 0.88f : efficiency_continuous(ret_f);</span></span>
-<span id="L169"><span class="lineNum">     169</span> <span class="tlaGNC">         697 :         if (eta &lt; 0.01f) eta = 0.88f;</span></span>
-<span id="L170"><span class="lineNum">     170</span> <span class="tlaGNC">         697 :         float cv_eff = corrected_calorific();</span></span>
-<span id="L171"><span class="lineNum">     171</span> <span class="tlaGNC">         697 :         float power_kw = calc_power(mod_f, t_flow, ret_f);</span></span>
-<span id="L172"><span class="lineNum">     172</span> <span class="tlaGNC">         697 :         float flow = k_calib_ * (power_kw / cv_eff) / eta * warmup;</span></span>
-<span id="L173"><span class="lineNum">     173</span> <span class="tlaGNC">         697 :         if (flow &lt; 0) flow = 0;</span></span>
-<span id="L174"><span class="lineNum">     174</span> <span class="tlaGNC">         697 :         latest_flow_ = flow;</span></span>
-<span id="L175"><span class="lineNum">     175</span>              : </span>
-<span id="L176"><span class="lineNum">     176</span>              :         // Integrate flow (only while flame is on)</span>
-<span id="L177"><span class="lineNum">     177</span> <span class="tlaGNC">         697 :         uint32_t dt_ms = now_ms - last_update_ms_;</span></span>
-<span id="L178"><span class="lineNum">     178</span> <span class="tlaGNC">         697 :         if (dt_ms &gt; 0 &amp;&amp; dt_ms &lt; 60000) {</span></span>
-<span id="L179"><span class="lineNum">     179</span> <span class="tlaGNC">         693 :             float dt_h = static_cast&lt;float&gt;(dt_ms) / 3600000.0f;</span></span>
-<span id="L180"><span class="lineNum">     180</span> <span class="tlaGNC">         693 :             integral_m3_ += flow * dt_h;</span></span>
-<span id="L181"><span class="lineNum">     181</span>              :         }</span>
-<span id="L182"><span class="lineNum">     182</span>              :     } else {</span>
-<span id="L183"><span class="lineNum">     183</span> <span class="tlaGNC">          11 :         latest_flow_ = 0;</span></span>
-<span id="L184"><span class="lineNum">     184</span>              :     }</span>
-<span id="L185"><span class="lineNum">     185</span> <span class="tlaGNC">         708 :     last_update_ms_ = now_ms;</span></span>
-<span id="L186"><span class="lineNum">     186</span>              : </span>
-<span id="L187"><span class="lineNum">     187</span>              :     // Ring buffer for sliding window EMA</span>
-<span id="L188"><span class="lineNum">     188</span> <span class="tlaGNC">         708 :     ring_[ring_idx_].flow = latest_flow_;</span></span>
-<span id="L189"><span class="lineNum">     189</span> <span class="tlaGNC">         708 :     ring_idx_ = (ring_idx_ + 1) % RING_SIZE;</span></span>
-<span id="L190"><span class="lineNum">     190</span> <span class="tlaGNC">         708 :     if (ring_count_ &lt; RING_SIZE) ring_count_++;</span></span>
+<span id="L150"><span class="lineNum">     150</span>              : </span>
+<span id="L151"><span class="lineNum">     151</span>              :     // ── Flame-gating ──────────────────────────────────────</span>
+<span id="L152"><span class="lineNum">     152</span> <span class="tlaGNC">         708 :     if (!flame_prev_ &amp;&amp; flame) {</span></span>
+<span id="L153"><span class="lineNum">     153</span> <span class="tlaGNC">          28 :         ignition_start_ms_ = now_ms;</span></span>
+<span id="L154"><span class="lineNum">     154</span>              :     }</span>
+<span id="L155"><span class="lineNum">     155</span> <span class="tlaGNC">         708 :     flame_prev_ = flame;</span></span>
+<span id="L156"><span class="lineNum">     156</span>              : </span>
+<span id="L157"><span class="lineNum">     157</span> <span class="tlaGNC">         708 :     if (flame) {</span></span>
+<span id="L158"><span class="lineNum">     158</span>              :         // Kalman filter raw inputs (only while flame is on — prevents filter drift on zeros)</span>
+<span id="L159"><span class="lineNum">     159</span> <span class="tlaGNC">         697 :         float mod_f = kalman_mod_.update(mod_raw);</span></span>
+<span id="L160"><span class="lineNum">     160</span> <span class="tlaGNC">         697 :         float ret_f = kalman_ret_.update(t_ret);</span></span>
+<span id="L161"><span class="lineNum">     161</span> <span class="tlaGNC">         697 :         mod_filtered_val = mod_f;</span></span>
+<span id="L162"><span class="lineNum">     162</span> <span class="tlaGNC">         697 :         t_ret_filtered_val = ret_f;</span></span>
+<span id="L163"><span class="lineNum">     163</span>              : </span>
+<span id="L164"><span class="lineNum">     164</span>              :         // Warmup factor: linear ramp 0.85→1.0 over first 60s after ignition</span>
+<span id="L165"><span class="lineNum">     165</span> <span class="tlaGNC">         697 :         float warmup = 1.0f;</span></span>
+<span id="L166"><span class="lineNum">     166</span> <span class="tlaGNC">         697 :         uint32_t elapsed_ms = now_ms - ignition_start_ms_;</span></span>
+<span id="L167"><span class="lineNum">     167</span> <span class="tlaGNC">         697 :         if (elapsed_ms &lt; 60000u) {</span></span>
+<span id="L168"><span class="lineNum">     168</span> <span class="tlaGNC">         110 :             warmup = 0.85f + 0.15f * (static_cast&lt;float&gt;(elapsed_ms) / 60000.0f);</span></span>
+<span id="L169"><span class="lineNum">     169</span>              :         }</span>
+<span id="L170"><span class="lineNum">     170</span>              : </span>
+<span id="L171"><span class="lineNum">     171</span>              :         // Physical model: flow [m3/h] = k * power_kw / cv / eta * warmup</span>
+<span id="L172"><span class="lineNum">     172</span>              :         // DHW mode: use fixed 0.88 efficiency (no condensate recovery)</span>
+<span id="L173"><span class="lineNum">     173</span> <span class="tlaGNC">         697 :         float eta = dhw_active_ ? 0.88f : efficiency_continuous(ret_f);</span></span>
+<span id="L174"><span class="lineNum">     174</span> <span class="tlaGNC">         697 :         if (eta &lt; 0.01f) eta = 0.88f;</span></span>
+<span id="L175"><span class="lineNum">     175</span> <span class="tlaGNC">         697 :         float cv_eff = corrected_calorific();</span></span>
+<span id="L176"><span class="lineNum">     176</span> <span class="tlaGNC">         697 :         float power_kw = calc_power(mod_f, t_flow, ret_f);</span></span>
+<span id="L177"><span class="lineNum">     177</span> <span class="tlaGNC">         697 :         float flow = k_calib_ * (power_kw / cv_eff) / eta * warmup;</span></span>
+<span id="L178"><span class="lineNum">     178</span> <span class="tlaGNC">         697 :         if (flow &lt; 0) flow = 0;</span></span>
+<span id="L179"><span class="lineNum">     179</span> <span class="tlaGNC">         697 :         latest_flow_ = flow;</span></span>
+<span id="L180"><span class="lineNum">     180</span>              : </span>
+<span id="L181"><span class="lineNum">     181</span>              :         // Integrate flow (only while flame is on)</span>
+<span id="L182"><span class="lineNum">     182</span> <span class="tlaGNC">         697 :         uint32_t dt_ms = now_ms - last_update_ms_;</span></span>
+<span id="L183"><span class="lineNum">     183</span> <span class="tlaGNC">         697 :         if (dt_ms &gt; 0 &amp;&amp; dt_ms &lt; 60000) {</span></span>
+<span id="L184"><span class="lineNum">     184</span> <span class="tlaGNC">         693 :             float dt_h = static_cast&lt;float&gt;(dt_ms) / 3600000.0f;</span></span>
+<span id="L185"><span class="lineNum">     185</span> <span class="tlaGNC">         693 :             integral_m3_ += flow * dt_h;</span></span>
+<span id="L186"><span class="lineNum">     186</span>              :         }</span>
+<span id="L187"><span class="lineNum">     187</span>              :     } else {</span>
+<span id="L188"><span class="lineNum">     188</span> <span class="tlaGNC">          11 :         latest_flow_ = 0;</span></span>
+<span id="L189"><span class="lineNum">     189</span>              :     }</span>
+<span id="L190"><span class="lineNum">     190</span> <span class="tlaGNC">         708 :     last_update_ms_ = now_ms;</span></span>
 <span id="L191"><span class="lineNum">     191</span>              : </span>
-<span id="L192"><span class="lineNum">     192</span>              :     // Compute EMAs every ~10 samples</span>
-<span id="L193"><span class="lineNum">     193</span> <span class="tlaGNC">         708 :     ema_tick_++;</span></span>
-<span id="L194"><span class="lineNum">     194</span> <span class="tlaGNC">         708 :     if (ema_tick_ &gt;= 10 &amp;&amp; ring_count_ &gt; 0) {</span></span>
-<span id="L195"><span class="lineNum">     195</span> <span class="tlaGNC">          65 :         ema_tick_ = 0;</span></span>
-<span id="L196"><span class="lineNum">     196</span>              :         // Average over recent samples</span>
-<span id="L197"><span class="lineNum">     197</span> <span class="tlaGNC">          65 :         float avg = 0;</span></span>
-<span id="L198"><span class="lineNum">     198</span> <span class="tlaGNC">          65 :         int n = ring_count_ &lt; 10 ? ring_count_ : 10;</span></span>
-<span id="L199"><span class="lineNum">     199</span> <span class="tlaGNC">         710 :         for (int i = 0; i &lt; n; i++) {</span></span>
-<span id="L200"><span class="lineNum">     200</span> <span class="tlaGNC">         645 :             int idx = (ring_idx_ - 1 - i + RING_SIZE) % RING_SIZE;</span></span>
-<span id="L201"><span class="lineNum">     201</span> <span class="tlaGNC">         645 :             avg += ring_[idx].flow;</span></span>
-<span id="L202"><span class="lineNum">     202</span>              :         }</span>
-<span id="L203"><span class="lineNum">     203</span> <span class="tlaGNC">          65 :         avg /= static_cast&lt;float&gt;(n);</span></span>
-<span id="L204"><span class="lineNum">     204</span>              : </span>
-<span id="L205"><span class="lineNum">     205</span> <span class="tlaGNC">          65 :         uint64_t elapsed_us = time_.monotonic_us() - ema_start_us_;</span></span>
-<span id="L206"><span class="lineNum">     206</span> <span class="tlaGNC">          65 :         float elapsed_h = elapsed_us / 3600000000.0f;</span></span>
-<span id="L207"><span class="lineNum">     207</span>              : </span>
-<span id="L208"><span class="lineNum">     208</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 1.0f / 60)  update_ema(ema_1h_,  avg, 0.01f);</span></span>
-<span id="L209"><span class="lineNum">     209</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 3.0f)       update_ema(ema_3h_,  avg, 0.005f);</span></span>
-<span id="L210"><span class="lineNum">     210</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 12.0f)      update_ema(ema_12h_, avg, 0.002f);</span></span>
-<span id="L211"><span class="lineNum">     211</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 24.0f)      update_ema(ema_24h_, avg, 0.001f);</span></span>
-<span id="L212"><span class="lineNum">     212</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 168.0f)     update_ema(ema_7d_,  avg, 0.0005f);</span></span>
-<span id="L213"><span class="lineNum">     213</span>              :     }</span>
-<span id="L214"><span class="lineNum">     214</span>              : }</span>
-<span id="L215"><span class="lineNum">     215</span>              : </span>
-<span id="L216"><span class="lineNum">     216</span> <span class="tlaGNC">          10 : void GasFlowService::reset()</span></span>
-<span id="L217"><span class="lineNum">     217</span>              : {</span>
-<span id="L218"><span class="lineNum">     218</span> <span class="tlaGNC">          10 :     integral_m3_ = 0;</span></span>
-<span id="L219"><span class="lineNum">     219</span> <span class="tlaGNC">          10 :     latest_flow_ = 0;</span></span>
-<span id="L220"><span class="lineNum">     220</span> <span class="tlaGNC">          10 :     ring_idx_ = 0;</span></span>
-<span id="L221"><span class="lineNum">     221</span> <span class="tlaGNC">          10 :     ring_count_ = 0;</span></span>
-<span id="L222"><span class="lineNum">     222</span> <span class="tlaGNC">          10 :     ema_1h_ = ema_3h_ = ema_12h_ = ema_24h_ = ema_7d_ = 0;</span></span>
-<span id="L223"><span class="lineNum">     223</span> <span class="tlaGNC">          10 :     ema_start_us_ = time_.monotonic_us();</span></span>
-<span id="L224"><span class="lineNum">     224</span> <span class="tlaGNC">          10 :     kalman_mod_.reset(0);</span></span>
-<span id="L225"><span class="lineNum">     225</span> <span class="tlaGNC">          10 :     kalman_ret_.reset(0);</span></span>
-<span id="L226"><span class="lineNum">     226</span> <span class="tlaGNC">          10 :     flame_prev_ = false;</span></span>
-<span id="L227"><span class="lineNum">     227</span> <span class="tlaGNC">          10 :     ignition_start_ms_ = 0;</span></span>
-<span id="L228"><span class="lineNum">     228</span> <span class="tlaGNC">          10 :     dhw_active_ = false;</span></span>
-<span id="L229"><span class="lineNum">     229</span> <span class="tlaGNC">          10 :     outdoor_temp_valid_ = false;</span></span>
-<span id="L230"><span class="lineNum">     230</span> <span class="tlaGNC">          10 :     outdoor_zero_start_ms_ = 0;</span></span>
-<span id="L231"><span class="lineNum">     231</span> <span class="tlaGNC">          10 :     flow_temp_valid_ = false;</span></span>
-<span id="L232"><span class="lineNum">     232</span> <span class="tlaGNC">          10 :     ret_temp_valid_  = false;</span></span>
-<span id="L233"><span class="lineNum">     233</span> <span class="tlaGNC">          10 : }</span></span>
+<span id="L192"><span class="lineNum">     192</span>              :     // Ring buffer for sliding window EMA</span>
+<span id="L193"><span class="lineNum">     193</span> <span class="tlaGNC">         708 :     ring_[ring_idx_].flow = latest_flow_;</span></span>
+<span id="L194"><span class="lineNum">     194</span> <span class="tlaGNC">         708 :     ring_idx_ = (ring_idx_ + 1) % RING_SIZE;</span></span>
+<span id="L195"><span class="lineNum">     195</span> <span class="tlaGNC">         708 :     if (ring_count_ &lt; RING_SIZE) ring_count_++;</span></span>
+<span id="L196"><span class="lineNum">     196</span>              : </span>
+<span id="L197"><span class="lineNum">     197</span>              :     // Compute EMAs every ~10 samples</span>
+<span id="L198"><span class="lineNum">     198</span> <span class="tlaGNC">         708 :     ema_tick_++;</span></span>
+<span id="L199"><span class="lineNum">     199</span> <span class="tlaGNC">         708 :     if (ema_tick_ &gt;= 10 &amp;&amp; ring_count_ &gt; 0) {</span></span>
+<span id="L200"><span class="lineNum">     200</span> <span class="tlaGNC">          65 :         ema_tick_ = 0;</span></span>
+<span id="L201"><span class="lineNum">     201</span>              :         // Average over recent samples</span>
+<span id="L202"><span class="lineNum">     202</span> <span class="tlaGNC">          65 :         float avg = 0;</span></span>
+<span id="L203"><span class="lineNum">     203</span> <span class="tlaGNC">          65 :         int n = ring_count_ &lt; 10 ? ring_count_ : 10;</span></span>
+<span id="L204"><span class="lineNum">     204</span> <span class="tlaGNC">         710 :         for (int i = 0; i &lt; n; i++) {</span></span>
+<span id="L205"><span class="lineNum">     205</span> <span class="tlaGNC">         645 :             int idx = (ring_idx_ - 1 - i + RING_SIZE) % RING_SIZE;</span></span>
+<span id="L206"><span class="lineNum">     206</span> <span class="tlaGNC">         645 :             avg += ring_[idx].flow;</span></span>
+<span id="L207"><span class="lineNum">     207</span>              :         }</span>
+<span id="L208"><span class="lineNum">     208</span> <span class="tlaGNC">          65 :         avg /= static_cast&lt;float&gt;(n);</span></span>
+<span id="L209"><span class="lineNum">     209</span>              : </span>
+<span id="L210"><span class="lineNum">     210</span> <span class="tlaGNC">          65 :         uint64_t elapsed_us = time_.monotonic_us() - ema_start_us_;</span></span>
+<span id="L211"><span class="lineNum">     211</span> <span class="tlaGNC">          65 :         float elapsed_h = elapsed_us / 3600000000.0f;</span></span>
+<span id="L212"><span class="lineNum">     212</span>              : </span>
+<span id="L213"><span class="lineNum">     213</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 1.0f / 60)  update_ema(ema_1h_,  avg, 0.01f);</span></span>
+<span id="L214"><span class="lineNum">     214</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 3.0f)       update_ema(ema_3h_,  avg, 0.005f);</span></span>
+<span id="L215"><span class="lineNum">     215</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 12.0f)      update_ema(ema_12h_, avg, 0.002f);</span></span>
+<span id="L216"><span class="lineNum">     216</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 24.0f)      update_ema(ema_24h_, avg, 0.001f);</span></span>
+<span id="L217"><span class="lineNum">     217</span> <span class="tlaGNC">          65 :         if (elapsed_h &gt;= 168.0f)     update_ema(ema_7d_,  avg, 0.0005f);</span></span>
+<span id="L218"><span class="lineNum">     218</span>              :     }</span>
+<span id="L219"><span class="lineNum">     219</span>              : }</span>
+<span id="L220"><span class="lineNum">     220</span>              : </span>
+<span id="L221"><span class="lineNum">     221</span> <span class="tlaGNC">          10 : void GasFlowService::reset()</span></span>
+<span id="L222"><span class="lineNum">     222</span>              : {</span>
+<span id="L223"><span class="lineNum">     223</span> <span class="tlaGNC">          10 :     integral_m3_ = 0;</span></span>
+<span id="L224"><span class="lineNum">     224</span> <span class="tlaGNC">          10 :     latest_flow_ = 0;</span></span>
+<span id="L225"><span class="lineNum">     225</span> <span class="tlaGNC">          10 :     ring_idx_ = 0;</span></span>
+<span id="L226"><span class="lineNum">     226</span> <span class="tlaGNC">          10 :     ring_count_ = 0;</span></span>
+<span id="L227"><span class="lineNum">     227</span> <span class="tlaGNC">          10 :     ema_1h_ = ema_3h_ = ema_12h_ = ema_24h_ = ema_7d_ = 0;</span></span>
+<span id="L228"><span class="lineNum">     228</span> <span class="tlaGNC">          10 :     ema_start_us_ = time_.monotonic_us();</span></span>
+<span id="L229"><span class="lineNum">     229</span> <span class="tlaGNC">          10 :     kalman_mod_.reset(0);</span></span>
+<span id="L230"><span class="lineNum">     230</span> <span class="tlaGNC">          10 :     kalman_ret_.reset(0);</span></span>
+<span id="L231"><span class="lineNum">     231</span> <span class="tlaGNC">          10 :     flame_prev_ = false;</span></span>
+<span id="L232"><span class="lineNum">     232</span> <span class="tlaGNC">          10 :     ignition_start_ms_ = 0;</span></span>
+<span id="L233"><span class="lineNum">     233</span> <span class="tlaGNC">          10 :     dhw_active_ = false;</span></span>
+<span id="L234"><span class="lineNum">     234</span> <span class="tlaGNC">          10 :     outdoor_temp_valid_ = false;</span></span>
+<span id="L235"><span class="lineNum">     235</span> <span class="tlaGNC">          10 :     outdoor_zero_start_ms_ = 0;</span></span>
+<span id="L236"><span class="lineNum">     236</span> <span class="tlaGNC">          10 :     flow_temp_valid_ = false;</span></span>
+<span id="L237"><span class="lineNum">     237</span> <span class="tlaGNC">          10 :     ret_temp_valid_  = false;</span></span>
+<span id="L238"><span class="lineNum">     238</span> <span class="tlaGNC">          10 : }</span></span>
         </pre>
               </td>
             </tr>
