@@ -489,17 +489,30 @@ TEST_CASE("corrected_calorific fallback when outdoor unknown", "[gas_flow][cv]")
 // calc_power — non-linear modulation with Pmin/Pmax vs MWT
 // ═══════════════════════════════════════════════════════════════
 
-TEST_CASE("calc_power at 0pct returns Pmin (3.4-3.7 kW depending on MWT)", "[gas_flow][calc_power]")
+TEST_CASE("calc_power below 1pct returns 0 (burner not firing)", "[gas_flow][calc_power]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    // MWT=70 (80/60 flow/ret) → Pmin=3.4
-    CHECK(svc.calc_power(0.0f, 80.0f, 60.0f) == Approx(3.4f).margin(0.001f));
+    // Modulation < 1% means gas valve is effectively closed
+    CHECK(svc.calc_power(0.0f, 80.0f, 60.0f) == Approx(0.0f).margin(0.001f));
+    CHECK(svc.calc_power(0.0f, 50.0f, 30.0f) == Approx(0.0f).margin(0.001f));
+    CHECK(svc.calc_power(0.5f, 80.0f, 60.0f) == Approx(0.0f).margin(0.001f));
+    CHECK(svc.calc_power(0.99f, 50.0f, 30.0f) == Approx(0.0f).margin(0.001f));
+}
 
-    // MWT=40 (50/30 flow/ret) → Pmin=3.7
-    CHECK(svc.calc_power(0.0f, 50.0f, 30.0f) == Approx(3.7f).margin(0.001f));
+TEST_CASE("calc_power at 1pct or above returns proportional power", "[gas_flow][calc_power]")
+{
+    FakeHeatingStateStore state;
+    FakeTimeSource time;
+    GasFlowService svc(state, time);
+
+    // At exactly 1%, power = pmin + (pmax-pmin)*0.01
+    // MWT=70 (80/60): Pmin=3.4, Pmax=20.0 → 3.4 + 16.6*0.01 = 3.566
+    CHECK(svc.calc_power(1.0f, 80.0f, 60.0f) == Approx(3.566f).margin(0.01f));
+    // MWT=40 (50/30): Pmin=3.7, Pmax=21.8 → 3.7 + 18.1*0.01 = 3.881
+    CHECK(svc.calc_power(1.0f, 50.0f, 30.0f) == Approx(3.881f).margin(0.01f));
 }
 
 TEST_CASE("calc_power at 100pct returns Pmax (20.0-21.8 kW depending on MWT)", "[gas_flow][calc_power]")

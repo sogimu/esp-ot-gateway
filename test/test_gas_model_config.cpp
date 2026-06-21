@@ -33,9 +33,9 @@ TEST_CASE("calc_power uses dhw params when dhw_active", "[gas_model][dhw]")
     float power = svc.calc_power(100.0f, 80.0f, 60.0f);
     CHECK(power == Approx(30.0f).margin(0.001f));
 
-    // mod=0% should give pmin (6 kW)
+    // mod=0% → 0 kW (burner not firing)
     power = svc.calc_power(0.0f, 80.0f, 60.0f);
-    CHECK(power == Approx(6.0f).margin(0.001f));
+    CHECK(power == Approx(0.0f).margin(0.001f));
 
     // mod=50% should give midpoint
     power = svc.calc_power(50.0f, 80.0f, 60.0f);
@@ -118,9 +118,10 @@ TEST_CASE("calc_power uses ch_pmin_warm from state", "[gas_model][ch]")
     // Set a non-default ch_pmin_warm
     state.set_ch_pmin_warm(5.0f);
 
-    // MWT=40, mod=0% → should use ch_pmin_warm (5.0)
-    float power = svc.calc_power(0.0f, 50.0f, 30.0f);
-    CHECK(power == Approx(5.0f).margin(0.001f));
+    // MWT=40, mod=1% → ch_pmin_warm (5.0) + (pmax-pmin)*0.01
+    // pmax_warm default=21.8 → 5.0 + 16.8*0.01 = 5.168
+    float power = svc.calc_power(1.0f, 50.0f, 30.0f);
+    CHECK(power == Approx(5.168f).margin(0.01f));
 }
 
 TEST_CASE("calc_power uses ch_pmax_hot from state", "[gas_model][ch]")

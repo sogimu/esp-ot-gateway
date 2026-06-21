@@ -17,6 +17,8 @@ public:
     using ITimeSource::now_ms;
     using ITimeSource::now_s;
     void set_timezone(int) override {}
+    bool is_synced() const override { return synced_; }
+    void set_synced(bool v) { synced_ = v; }
 
     /// Advance time by given microseconds.
     void advance_us(uint64_t delta_us) { us_ += delta_us; }
@@ -32,4 +34,5 @@ public:
 
 private:
     uint64_t us_;
+    bool synced_ = true;
 };

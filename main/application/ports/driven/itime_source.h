@@ -48,5 +48,8 @@ public:
     /// Update system timezone offset.
     virtual void set_timezone(int offset) = 0;
 
+    /// Has time been synchronised (SNTP or manual)?
+    virtual bool is_synced() const = 0;
+
     virtual ~ITimeSource() = default;
 };

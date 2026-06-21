@@ -166,8 +166,8 @@ TEST_CASE("JSON stats contains gas_error_pct with 2 corrections", "[integration]
 TEST_CASE("gas_error_pct with real error scenario", "[integration][gas][json]")
 {
     // Simulate: estimated underestimates consumption
-    // Corr1: actual=100, estimated=100 (diff=0)
-    // Corr2: actual=104, estimated=103 (diff=1, actual_consumed=4)
+    // Corr1: actual=104, estimated=104 (perfect match, diff=0)
+    // Corr2: actual=108, estimated=107 (diff=1, actual_consumed=4)
     // error_pct = 1/4*100 = 25%
     FakeHeatingStateStore state;
     FakeTimeSource time;
@@ -184,14 +184,16 @@ TEST_CASE("gas_error_pct with real error scenario", "[integration][gas][json]")
     gas_corr.set_gas_flow(&gas_flow);
     gas_corr.set_time_source(&time);
 
-    // Correction 1: perfect match
-    gas_flow.set_integral(0.0f);
-    gas_corr.add_meter_correction(100.0f);
+    // Correction 1: perfect match (actual = base + integral)
+    // integral must be >= 0.001 — correction requires real consumption
+    gas_flow.set_integral(4.0f);
+    gas_corr.add_meter_correction(104.0f);
 
-    // Correction 2: 2 days later, estimated=103, actual=104
+    // Correction 2: 2 days later, estimated=104+3=107, actual=108
+    // actual_consumed=4, estimated_consumed=3, error=25%
     time.advance_sec(172800);
     gas_flow.set_integral(3.0f);
-    gas_corr.add_meter_correction(104.0f);
+    gas_corr.add_meter_correction(108.0f);
 
     WebPresenterAdapter presenter;
     presenter.set_state(&state);

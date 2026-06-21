@@ -84,7 +84,8 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"sched_on\":0,\"hour\":%d,\"time\":\"%s\",\"tz_offset\":%d,"
         "\"utc_time\":\"%s\",\"uptime_sec\":%lu,\"total_uptime_sec\":%lu,"
         "\"dhw_hyst_on\":%.1f,"
-        "\"sntp_server0\":\"%s\",\"sntp_server1\":\"%s\","
+        "\"time_synced\":%d,"
+"\"sntp_server0\":\"%s\",\"sntp_server1\":\"%s\","
         "\"pid_enabled\":%d,\"pid_active\":%d,\"pid_output\":%.0f,"
         "\"pid_p\":%.1f,\"pid_i\":%.1f,\"pid_d\":%.1f,"
         "\"pid_room_temp\":%.1f,\"pid_target_room\":%.1f,"
@@ -117,6 +118,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         (unsigned long)(time_ ? time_->monotonic_us() / 1000000 : 0),
         (unsigned long)(total_uptime_base_ + (time_ ? time_->monotonic_us() / 1000000 : 0)),
         (double)state_->get_dhw_hysteresis(),
+        time_ ? (time_->is_synced() ? 1 : 0) : 0,
         state_->get_sntp_server0(), state_->get_sntp_server1(),
         state_->get_pid_enabled() ? 1 : 0, state_->get_pid_active() ? 1 : 0,
         (double)state_->get_pid_output(),

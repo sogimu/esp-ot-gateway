@@ -57,6 +57,11 @@ float GasFlowService::calc_power(float modulation_pct, float flow_temp, float re
     if (modulation_pct < 0.0f) modulation_pct = 0.0f;
     if (modulation_pct > 100.0f) modulation_pct = 100.0f;
 
+    // Modulation < 1 % means the burner is not actually firing
+    // (gas valve closed or in pre-purge).  Real modulating boilers
+    // never operate below ~20 % in steady state.
+    if (modulation_pct < 1.0f) return 0.0f;
+
     // ── DHW-ветка: фиксированные параметры мощности ──
     if (dhw_active_) {
         float pmin = state_.get_dhw_pmin();
