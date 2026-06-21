@@ -389,10 +389,6 @@ void BoilerPollInteractor::do_extra_step()
         auto r = boiler_.read(OT_ID_MODULATION);
         if (r.success && !std::isnan(r.value_f88)) {
             float m = r.value_f88;
-            state_.lock_shared();
-            bool flame_on = state_.is_flame_on();
-            state_.unlock_shared();
-            if (m == 0.0f && flame_on) m = 0.3f;
             state_.lock_exclusive();
             state_.set_modulation(m);
             state_.unlock_exclusive();

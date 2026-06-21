@@ -94,6 +94,7 @@ esp_err_t HttpControllerAdapter::handler_status(httpd_req_t* req) {
     static char buf[2048];
     self->presenter_->render_status(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     return httpd_resp_sendstr(req, buf);
 }
 
@@ -162,6 +163,7 @@ esp_err_t HttpControllerAdapter::handler_log(httpd_req_t* req) {
     auto* self = s_self;
     if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{\"count\":0,\"events\":[]}"); return ESP_FAIL; }
     httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     const char* json = self->presenter_->log_json();
     return httpd_resp_sendstr(req, json ? json : "{\"count\":0,\"events\":[]}");
 }
@@ -258,6 +260,7 @@ esp_err_t HttpControllerAdapter::handler_stats(httpd_req_t* req) {
     static char buf[6144];  // room for stats + 32 correction log entries
     self->presenter_->render_stats(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     return httpd_resp_sendstr(req, buf);
 }
 

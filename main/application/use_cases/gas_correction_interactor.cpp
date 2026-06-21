@@ -76,9 +76,10 @@ void GasCorrectionInteractor::add_meter_correction(float reading)
     meter_blob_.base_reading = base;
     float diff = reading - estimated;
 
-    // Avoid division by zero or tiny values
-    if (estimated < 0.001f) {
-        log_.event(ILogger::USER, "Объём~0: сверка отменена");
+    // Reject correction if no gas consumption since last correction
+    // (integral only accumulates while flame is on)
+    if (integral < 0.001f) {
+        log_.event(ILogger::USER, "Нет потребления: сверка отменена");
         return;
     }
 

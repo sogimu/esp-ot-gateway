@@ -213,7 +213,7 @@ TEST_CASE("GasCorrection: add_meter_correction with near-zero estimated aborts",
 
     // Should abort without crashing, log error
     REQUIRE(log.event_count_ > 0);
-    REQUIRE(strstr(log.last_msg_, "~0") != nullptr);
+    REQUIRE(strstr(log.last_msg_, "потребления") != nullptr);
     REQUIRE(config.meter_save_called_ == false);
 }
 
@@ -272,24 +272,25 @@ TEST_CASE("GasCorrection: ring buffer wraps at CORRECTION_LOG_SIZE", "[gas][orch
     gas.set_gas_flow(&gas_flow_svc);
 
     // Fill up to CORRECTION_LOG_SIZE with distinct readings
+    // Start from i=1 — integral must be >= 0.001 for correction to be accepted
     const int N = CORRECTION_LOG_SIZE;
-    for (int i = 0; i < N; i++) {
+    for (int i = 1; i <= N; i++) {
         gas_flow_svc.set_integral((float)i * 10.0f);
         gas.add_meter_correction(100.0f + (float)i);
     }
     REQUIRE(config.saved_meter_blob_.corrections_count == N);
     REQUIRE(config.saved_meter_blob_.corrections_head == 0); // wrapped
 
-    // One more correction — oldest (i=0) is overwritten
-    gas_flow_svc.set_integral((float)N * 10.0f);
-    gas.add_meter_correction(100.0f + (float)N);
+    // One more correction — oldest (i=1) is overwritten
+    gas_flow_svc.set_integral((float)(N + 1) * 10.0f);
+    gas.add_meter_correction(100.0f + (float)(N + 1));
 
     // count stays at max, head advances past oldest
     REQUIRE(config.saved_meter_blob_.corrections_count == N);
     REQUIRE(config.saved_meter_blob_.corrections_head == 1);
 
-    // Oldest entry (idx 0) is now the overwritten one (was reading #0, now reading #N)
-    REQUIRE(config.saved_meter_blob_.corrections[0].actual_reading == Approx(100.0f + N));
+    // Oldest entry (idx 0) is now the overwritten one (was reading #1, now reading #N+1)
+    REQUIRE(config.saved_meter_blob_.corrections[0].actual_reading == Approx(100.0f + (N + 1)));
 }
 
 // ── set_gas_meter_base also persists meter blob ─────────────────────
@@ -539,7 +540,7 @@ TEST_CASE("GasCorrection: after correction base equals reading and integral is z
     // So calculated = base + integral = 155 + 0 = 155 == reading
 }
 
-TEST_CASE("GasCorrection: after correction calculated equals reading even with zero integral before", "[gas][correction][sync]")
+TEST_CASE("GasCorrection: correction with zero integral is rejected", "[gas][correction][sync]")
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
@@ -550,16 +551,21 @@ TEST_CASE("GasCorrection: after correction calculated equals reading even with z
     state.set_gas_meter_base(200.0f);
 
     GasFlowService gas_flow_svc(state, time);
-    gas_flow_svc.set_integral(0.0f); // estimated = 200 + 0 = 200
+    gas_flow_svc.set_integral(0.0f); // нет потребления с момента последней коррекции
 
     GasCorrectionInteractor gas(state, config, log);
     gas.set_gas_flow(&gas_flow_svc);
 
     gas.add_meter_correction(200.0f);
 
-    // Base stays at reading, integral stays at 0
+    // Коррекция должна быть отклонена — нет потребления
+    REQUIRE(log.event_count_ > 0);
+    REQUIRE(strstr(log.last_msg_, "потребления") != nullptr);
+    REQUIRE(config.meter_save_called_ == false);
+    // K не изменился
+    REQUIRE(state.get_k_calib() == Approx(1.0f));
+    // base не изменился
     REQUIRE(state.get_gas_meter_base() == Approx(200.0f));
-    REQUIRE(gas_flow_svc.integral_m3() == Approx(0.0f));
 }
 
 // ── Сброс журнала коррекций и K ─────────────────────────────────

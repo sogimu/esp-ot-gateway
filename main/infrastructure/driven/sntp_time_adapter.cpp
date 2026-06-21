@@ -37,58 +37,73 @@ void SntpTimeAdapter::start()
     // unaffected by any wrong timezone that may be stored in NVS.
     set_timezone(0);
 
-    ESP_LOGI(TAG, "Инициализация SNTP (серверы: %s, %s)...", srv0_, srv1_);
-    if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: запрос к %s", srv0_);
+    const char* s0 = srv0_[0] ? srv0_ : "pool.ntp.org";
+    const char* s1 = srv1_[0] ? srv1_ : "";
+    ESP_LOGI(TAG, "Инициализация SNTP (серверы: %s, %s)...", s0, s1);
+    if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: запрос к %s", s0);
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    esp_sntp_setservername(0, srv0_);
-    esp_sntp_setservername(1, srv1_);
+    esp_sntp_setservername(0, s0);
+    esp_sntp_setservername(1, s1);
     esp_sntp_init();
 
-    // Wait for first sync (max 15 seconds). The RTC may retain a wrong
-    // time from a previous boot, so sntp_get_sync_status() alone is not
-    // enough — we also verify the time is >= build timestamp, meaning SNTP
-    // has actually adjusted the clock forward from the retained value.
-    ESP_LOGI(TAG, "Ожидание синхронизации SNTP...");
-
-    // Blink onboard LED (GPIO2) while waiting for sync
-    gpio_set_direction(SNTP_LED_GPIO, GPIO_MODE_OUTPUT);
-    int led_state = 0;
-
+    // Compute build timestamp once for validity checks
     time_t build_ts = 0;
     {
         struct tm build_tm = {};
         strptime(__DATE__ " " __TIME__, "%b %d %Y %H:%M:%S", &build_tm);
         build_ts = mktime(&build_tm);
     }
+
+    // If system clock already shows a time past the build timestamp,
+    // the RTC retained a valid time from a previous sync — accept it.
+    time_t now;
+    std::time(&now);
+    if (now > build_ts) {
+        uint64_t real_us = (uint64_t)now * 1000000ULL;
+        uint64_t boot_us = esp_timer_get_time();
+        boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
+        time_synced_ = true;
+        ESP_LOGI(TAG, "SNTP: время действительно (сохранено с предыдущей синхр.)");
+        return;
+    }
+
+    // Wait for first sync (max 30 seconds).
+    ESP_LOGI(TAG, "Ожидание синхронизации SNTP...");
+
+    // Blink onboard LED (GPIO2) while waiting for sync
+    gpio_set_direction(SNTP_LED_GPIO, GPIO_MODE_OUTPUT);
+    int led_state = 0;
+
+    bool synced_in_loop = false;
     for (int i = 0; i < 600; i++) {
-        // Toggle LED every 100ms (every 2 iterations of 50ms)
         if (i % 2 == 0) {
             led_state = !led_state;
             gpio_set_level(SNTP_LED_GPIO, led_state);
         }
-        time_t now;
         std::time(&now);
         if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
             gpio_set_level(SNTP_LED_GPIO, 0);  // LED off
-            // Compute offset from boot time to real Unix epoch
             uint64_t real_us = (uint64_t)now * 1000000ULL;
             uint64_t boot_us = esp_timer_get_time();
             boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
-            ESP_LOGI(TAG, "SNTP синхронизирован, UTC: %lld", (long long)now);
-            if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: синхр. OK, UNIX-время %lld с",
-                                        (long long)now);
+            synced_in_loop = true;
+            time_synced_ = true;
+            ESP_LOGI(TAG, "SNTP синхронизирован через %s, UTC: %lld", s0, (long long)now);
+            if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: синхр. через %s, UNIX %lld с",
+                                        s0, (long long)now);
             break;
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-    if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED) {
+    if (!synced_in_loop) {
         gpio_set_level(SNTP_LED_GPIO, 0);  // LED off
-        sntp_synced_ = false;
+        time_synced_ = false;
         ESP_LOGW(TAG, "SNTP: таймаут синхронизации");
         if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: таймаут");
 
         // Try restoring manual time offset from NVS
         if (restore_time_offset()) {
+            time_synced_ = true;
             ESP_LOGI(TAG, "SNTP недоступен — используется сохранённое время");
             if (logger_) logger_->event(ILogger::SYSTEM,
                 "SNTP: недоступен, время из NVS");
@@ -97,8 +112,6 @@ void SntpTimeAdapter::start()
             if (logger_) logger_->event(ILogger::SYSTEM,
                 "SNTP: недоступен, время не задано");
         }
-    } else {
-        sntp_synced_ = true;
     }
 }
 
@@ -134,6 +147,36 @@ ITimeSource::time_point SntpTimeAdapter::now() const
     return time_point(since_boot + boot_offset_us_);
 }
 
+bool SntpTimeAdapter::is_synced() const
+{
+    if (time_synced_) return true;
+    if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
+        time_t now;
+        std::time(&now);
+        uint64_t real_us = (uint64_t)now * 1000000ULL;
+        uint64_t boot_us = esp_timer_get_time();
+        boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
+        time_synced_ = true;
+        const char* srv = srv0_[0] ? srv0_ : "pool.ntp.org";
+        ESP_LOGI(TAG, "SNTP: синхронизирован через %s, UTC: %lld", srv, (long long)now);
+        if (logger_) logger_->event(ILogger::SYSTEM,
+            "SNTP: синхр. через %s, UNIX %lld с", srv, (long long)now);
+        return true;
+    }
+    // SNTP daemon may have failed because WiFi wasn't ready at boot.
+    // Retry once per minute until sync succeeds.
+    uint64_t now_ms = esp_timer_get_time() / 1000;
+    if (now_ms - last_sntp_retry_ms_ > 60000) {
+        last_sntp_retry_ms_ = now_ms;
+        const char* srv = srv0_[0] ? srv0_ : "pool.ntp.org";
+        ESP_LOGI(TAG, "SNTP: повторная попытка через %s...", srv);
+        if (logger_) logger_->event(ILogger::SYSTEM,
+            "SNTP: повторный запрос к %s", srv);
+        sntp_restart();
+    }
+    return false;
+}
+
 // ── Manual time ──────────────────────────────────────────
 
 void SntpTimeAdapter::set_manual_time(time_t epoch_sec)
@@ -141,6 +184,7 @@ void SntpTimeAdapter::set_manual_time(time_t epoch_sec)
     uint64_t real_us = (uint64_t)epoch_sec * 1000000ULL;
     uint64_t boot_us = esp_timer_get_time();
     boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
+    time_synced_ = true;
     ESP_LOGI(TAG, "Время установлено вручную: %lld", (long long)epoch_sec);
     if (logger_) logger_->event(ILogger::SYSTEM,
         "Время установлено вручную: %lld с", (long long)epoch_sec);
@@ -171,6 +215,7 @@ bool SntpTimeAdapter::restore_time_offset()
 
     if (err == ESP_OK && offset != 0) {
         boot_offset_us_ = microseconds(offset);
+        time_synced_ = true;
         ESP_LOGI(TAG, "Смещение времени загружено из NVS: %lld us", (long long)offset);
         return true;
     }
