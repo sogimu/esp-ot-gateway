@@ -2,6 +2,7 @@
 
 #include "application/ports/driving/igas_calibration.h"
 #include "nvs_config_adapter.h"  // NvsMeterBlob, NvsCorrLogEntry, CORRECTION_LOG_SIZE
+#include "domain/services/kalman1d.h"
 
 class IHeatingStateStore;
 class IConfigurationStore;
@@ -47,4 +48,5 @@ private:
     ITimeSource*         time_ = nullptr;
     GasFlowService*      gas_flow_ = nullptr;
     NvsMeterBlob         meter_blob_;
+    Kalman1D             kalman_k_{1.0f, 0.02f, 1.0f};
 };

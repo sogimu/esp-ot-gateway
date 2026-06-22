@@ -19,6 +19,7 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 - **DHW via CH2 enable** — On Baxi boilers, DHW mode requires the `CH2_ENABLE` flag to switch the 3-way valve, even though `SlaveConfig` reports CH2=0
 - **DHW session prediction** — Kalman2D filter estimates remaining heating time and uncertainty for the current DHW cycle, displayed on the web dashboard
 - **Gas flow estimation** — Estimates instant gas flow (m³/h) from burner modulation and return temperature, with multi-window EMA averaging (1h / 3h / 12h / 24h / 7d) and cumulative integral tracking
+- **Gas meter correction journal** — Compare the estimated gas total to the physical meter reading. A correction coefficient (k_calib) is maintained via a Kalman filter across recent corrections, smoothing out noise from small-consumption periods. Logs up to 10 correction entries with timestamps. k_calib survives reboots
 - **Fault monitoring** — ASF flags, OEM diagnostic codes, one-shot fault reset
 - **Event log** — 512-entry ring buffer with 5 categories (System, User, Equipment, Mode, Boot) and real-time filtering in the web UI
 - **Crash diagnostics** — Reset reason detection on every boot, core dump saved to flash on panic, backtrace decoded offline via `decode_crash.sh`
@@ -272,7 +273,7 @@ idf.py -p /dev/ttyUSB0 flash
 
 ## Web Dashboard
 
-The dashboard auto-refreshes and features 6 tabbed views:
+The dashboard auto-refreshes and features 7 tabbed views:
 
 ### Status tab
 
@@ -303,10 +304,16 @@ Real-time event feed with category filter buttons: System, User, Equipment, Mode
 | Average burn / pause | Mean duration of burn and pause phases |
 | Burner runtime | Total hours of burner operation |
 | Ratio p90/max, p10/p50, p99−p90 | Modulation distribution coefficients |
-| Gas instant flow | Estimated gas consumption (m³/h) |
-| Gas integral | Cumulative gas volume (m³) |
-| Gas averages | 1h / 3h / 12h / 24h / 7d rolling averages |
-| Corrections log | Gas meter calibration correction history |
+
+### Gas Meter tab
+
+The gas flow is estimated from a physical boiler model: instant flow (m³/h) is computed from burner modulation, return temperature, and a 3-point efficiency curve, corrected for gas calorific value via Boyle's law (T_gas = T_outdoor + offset). The result is multiplied by a calibration coefficient **K** refined through periodic meter corrections using a Kalman filter across recent corrections.
+
+| Section | Description |
+|---------|-------------|
+| Gas flow | Instant flow (m³/h), cumulative integral (m³), and multi-window averages: 1h / 3h / 12h / 24h / 7d |
+| Meter correction | Set the physical meter reading to compare against the estimated total. The correction coefficient K is Kalman-smoothed across multiple corrections, preventing wild swings when gas consumption between readings is small. K survives reboots. Correction journal shows actual reading, estimated total, difference, error %, and K before/after each entry |
+| Boiler model | Configurable physical model parameters: CH power (warm/hot curves), DHW power, 3-point efficiency curve (T_return → η), and gas temperature offset |
 
 ### Control tab
 

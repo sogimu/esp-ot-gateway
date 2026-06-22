@@ -92,6 +92,9 @@ void NvsConfigAdapter::load_all(IHeatingStateStore& s)
             s.set_ch_pmax_hot(cal.ch_pmax_hot);
             s.set_dhw_pmin(cal.dhw_pmin);
             s.set_dhw_pmax(cal.dhw_pmax);
+            s.set_k_calib(cal.k_calib);
+            s.set_p_max(cal.p_max);
+            s.set_gas_calorific(cal.gas_calorific);
             s.unlock_exclusive();
         }
     }
@@ -232,6 +235,36 @@ bool NvsConfigAdapter::load_meter(IHeatingStateStore& s, void* blob)
     memset(&b, 0, sizeof(b));
     size_t sz = sizeof(b);
     bool ok = (nvs_get_blob(n, "data", &b, &sz) == ESP_OK);
+
+    // Migration from old 32-entry blob (CORRECTION_LOG_SIZE was 32 before)
+    if (!ok) {
+        // Legacy struct matching the old on-disk format with 32 entries
+        struct NvsMeterBlob32 {
+            float base_reading, last_correction_actual, integral_at_last_correction;
+            int32_t corrections_head, corrections_count;
+            NvsCorrLogEntry corrections[32];
+        } old;
+        memset(&old, 0, sizeof(old));
+        sz = sizeof(old);
+        if (nvs_get_blob(n, "data", &old, &sz) == ESP_OK && sz == sizeof(old)) {
+            b.base_reading = old.base_reading;
+            b.last_correction_actual = old.last_correction_actual;
+            b.integral_at_last_correction = old.integral_at_last_correction;
+            int keep = old.corrections_count < 10 ? old.corrections_count : 10;
+            b.corrections_count = keep;
+            if (keep > 0) {
+                int old_head = old.corrections_head;
+                // Copy newest `keep` entries in order (oldest first)
+                for (int i = 0; i < keep; i++) {
+                    int src = (old_head - keep + i + 32) % 32;
+                    b.corrections[i] = old.corrections[src];
+                }
+                b.corrections_head = keep % 10;
+            }
+            ok = true;
+        }
+    }
+
     nvs_close(n);
     if (ok) {
         s.lock_exclusive();
