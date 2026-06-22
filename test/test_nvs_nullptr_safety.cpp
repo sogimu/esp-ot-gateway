@@ -205,6 +205,6 @@ TEST_CASE("ConfigStore: blob size invariants are documented", "[nvs][struct]")
     REQUIRE(sizeof(NvsCycleBlob) == 1040);
     REQUIRE(sizeof(NvsGasEmaBlob) == 28);
     REQUIRE(sizeof(NvsCalibBlob) == 40);
-    REQUIRE(sizeof(NvsMeterBlob) == 788);
+    REQUIRE(sizeof(NvsMeterBlob) == 260);
     REQUIRE(sizeof(NvsPredictBlob) == 20);
 }

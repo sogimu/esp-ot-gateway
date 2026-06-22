@@ -21,6 +21,7 @@ void GasCorrectionInteractor::init()
         log_.event(ILogger::SYSTEM, "Журнал сверки: %lu записей",
                    (unsigned long)meter_blob_.corrections_count);
     }
+    kalman_k_.reset(state_.get_k_calib());
 }
 
 void GasCorrectionInteractor::set_k_calib(float v)
@@ -85,7 +86,8 @@ void GasCorrectionInteractor::add_meter_correction(float reading)
 
     float prev_k = state_.get_k_calib();
     auto m = compute_correction_metrics(base, base, reading, estimated);
-    float new_k = prev_k * m.k_factor();
+    float raw_k = prev_k * m.k_factor();
+    float new_k = kalman_k_.update(raw_k);
     if (new_k < 0.1f) new_k = 0.1f;
     if (new_k > 10.0f) new_k = 10.0f;
 
@@ -144,6 +146,7 @@ void GasCorrectionInteractor::reset_corrections()
     state_.lock_exclusive();
     state_.set_k_calib(1.0f);
     state_.unlock_exclusive();
+    kalman_k_.reset(1.0f);
     config_.save_meter(state_, &meter_blob_);
     config_.save_config(state_);
     log_.event(ILogger::USER, "Журнал сверки и K сброшены");

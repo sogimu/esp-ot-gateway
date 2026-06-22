@@ -7,7 +7,7 @@
 
 #define HIST_BINS 1000
 #define CYCLE_RING 256
-#define CORRECTION_LOG_SIZE 32
+#define CORRECTION_LOG_SIZE 10
 
 struct __attribute__((packed)) NvsHistBlob {
     uint32_t samples;
@@ -55,7 +55,7 @@ struct __attribute__((packed)) NvsMeterBlob {
     int32_t corrections_head, corrections_count;
     NvsCorrLogEntry corrections[CORRECTION_LOG_SIZE];
 };
-static_assert(sizeof(NvsMeterBlob) == 4 + 4 + 4 + 4 + 4 + 32 * (4 + 4 + 4 + 4 + 4 + 4), "NvsMeterBlob size mismatch");
+static_assert(sizeof(NvsMeterBlob) == 4 + 4 + 4 + 4 + 4 + 10 * (4 + 4 + 4 + 4 + 4 + 4), "NvsMeterBlob size mismatch");
 
 struct __attribute__((packed)) NvsPredictBlob { float rates[3]; int32_t idx, count; };
 static_assert(sizeof(NvsPredictBlob) == 3 * 4 + 4 + 4, "NvsPredictBlob size mismatch");
