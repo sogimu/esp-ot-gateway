@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-21 10:06:42</td>
+            <td class="headerValue">2026-06-22 04:38:59</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
@@ -64,52 +64,54 @@
 <span id="L2"><span class="lineNum">       2</span>              : </span>
 <span id="L3"><span class="lineNum">       3</span>              : #include &quot;application/ports/driving/igas_calibration.h&quot;</span>
 <span id="L4"><span class="lineNum">       4</span>              : #include &quot;nvs_config_adapter.h&quot;  // NvsMeterBlob, NvsCorrLogEntry, CORRECTION_LOG_SIZE</span>
-<span id="L5"><span class="lineNum">       5</span>              : </span>
-<span id="L6"><span class="lineNum">       6</span>              : class IHeatingStateStore;</span>
-<span id="L7"><span class="lineNum">       7</span>              : class IConfigurationStore;</span>
-<span id="L8"><span class="lineNum">       8</span>              : class ILogger;</span>
-<span id="L9"><span class="lineNum">       9</span>              : class ITimeSource;</span>
-<span id="L10"><span class="lineNum">      10</span>              : class GasFlowService;</span>
-<span id="L11"><span class="lineNum">      11</span>              : </span>
-<span id="L12"><span class="lineNum">      12</span>              : /// Implements gas meter correction use case.</span>
-<span id="L13"><span class="lineNum">      13</span>              : /// Owns the in-memory correction log (NvsMeterBlob) and persists it via IConfigurationStore.</span>
-<span id="L14"><span class="lineNum">      14</span>              : class GasCorrectionInteractor : public IGasCalibration {</span>
-<span id="L15"><span class="lineNum">      15</span>              : public:</span>
-<span id="L16"><span class="lineNum">      16</span>              :     GasCorrectionInteractor(IHeatingStateStore&amp; state, IConfigurationStore&amp; config, ILogger&amp; log);</span>
-<span id="L17"><span class="lineNum">      17</span>              : </span>
-<span id="L18"><span class="lineNum">      18</span>              :     void set_k_calib(float) override;</span>
-<span id="L19"><span class="lineNum">      19</span>              :     void set_p_max(float) override;</span>
-<span id="L20"><span class="lineNum">      20</span>              :     void set_gas_calorific(float) override;</span>
-<span id="L21"><span class="lineNum">      21</span>              :     void set_gas_meter_base(float) override;</span>
-<span id="L22"><span class="lineNum">      22</span>              :     void add_meter_correction(float reading) override;</span>
-<span id="L23"><span class="lineNum">      23</span>              :     void reset_corrections() override;</span>
-<span id="L24"><span class="lineNum">      24</span>              : </span>
-<span id="L25"><span class="lineNum">      25</span>              :     // ── Boiler model config setters with validation ──────────</span>
-<span id="L26"><span class="lineNum">      26</span>              :     void set_gas_temp_offset(float v) override;</span>
-<span id="L27"><span class="lineNum">      27</span>              :     void set_ch_power(float pmin_warm, float pmax_warm, float pmin_hot, float pmax_hot) override;</span>
-<span id="L28"><span class="lineNum">      28</span>              :     void set_dhw_power(float pmin, float pmax) override;</span>
-<span id="L29"><span class="lineNum">      29</span>              :     void set_efficiency_points(float t1, float v1, float t2, float v2, float t3, float v3) override;</span>
-<span id="L30"><span class="lineNum">      30</span>              : </span>
-<span id="L31"><span class="lineNum">      31</span>              :     /// Wire up the gas flow service (needed for integral_m3 in correction calc).</span>
-<span id="L32"><span class="lineNum">      32</span> <span class="tlaGNC tlaBgGNC">          17 :     void set_gas_flow(GasFlowService* gf) { gas_flow_ = gf; }</span></span>
-<span id="L33"><span class="lineNum">      33</span>              : </span>
-<span id="L34"><span class="lineNum">      34</span>              :     /// Wire up time source (needed for correction timestamps).</span>
-<span id="L35"><span class="lineNum">      35</span> <span class="tlaGNC">           5 :     void set_time_source(ITimeSource* t) { time_ = t; }</span></span>
-<span id="L36"><span class="lineNum">      36</span>              : </span>
-<span id="L37"><span class="lineNum">      37</span>              :     /// Restore persisted correction log from NVS on boot.</span>
-<span id="L38"><span class="lineNum">      38</span>              :     void init();</span>
-<span id="L39"><span class="lineNum">      39</span>              : </span>
-<span id="L40"><span class="lineNum">      40</span>              :     /// Read-only access to the correction log for web rendering.</span>
-<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">          23 :     const NvsMeterBlob&amp; meter_blob() const { return meter_blob_; }</span></span>
-<span id="L42"><span class="lineNum">      42</span>              : </span>
-<span id="L43"><span class="lineNum">      43</span>              : private:</span>
-<span id="L44"><span class="lineNum">      44</span>              :     IHeatingStateStore&amp;  state_;</span>
-<span id="L45"><span class="lineNum">      45</span>              :     IConfigurationStore&amp; config_;</span>
-<span id="L46"><span class="lineNum">      46</span>              :     ILogger&amp;             log_;</span>
-<span id="L47"><span class="lineNum">      47</span>              :     ITimeSource*         time_ = nullptr;</span>
-<span id="L48"><span class="lineNum">      48</span>              :     GasFlowService*      gas_flow_ = nullptr;</span>
-<span id="L49"><span class="lineNum">      49</span>              :     NvsMeterBlob         meter_blob_;</span>
-<span id="L50"><span class="lineNum">      50</span>              : };</span>
+<span id="L5"><span class="lineNum">       5</span>              : #include &quot;domain/services/kalman1d.h&quot;</span>
+<span id="L6"><span class="lineNum">       6</span>              : </span>
+<span id="L7"><span class="lineNum">       7</span>              : class IHeatingStateStore;</span>
+<span id="L8"><span class="lineNum">       8</span>              : class IConfigurationStore;</span>
+<span id="L9"><span class="lineNum">       9</span>              : class ILogger;</span>
+<span id="L10"><span class="lineNum">      10</span>              : class ITimeSource;</span>
+<span id="L11"><span class="lineNum">      11</span>              : class GasFlowService;</span>
+<span id="L12"><span class="lineNum">      12</span>              : </span>
+<span id="L13"><span class="lineNum">      13</span>              : /// Implements gas meter correction use case.</span>
+<span id="L14"><span class="lineNum">      14</span>              : /// Owns the in-memory correction log (NvsMeterBlob) and persists it via IConfigurationStore.</span>
+<span id="L15"><span class="lineNum">      15</span>              : class GasCorrectionInteractor : public IGasCalibration {</span>
+<span id="L16"><span class="lineNum">      16</span>              : public:</span>
+<span id="L17"><span class="lineNum">      17</span>              :     GasCorrectionInteractor(IHeatingStateStore&amp; state, IConfigurationStore&amp; config, ILogger&amp; log);</span>
+<span id="L18"><span class="lineNum">      18</span>              : </span>
+<span id="L19"><span class="lineNum">      19</span>              :     void set_k_calib(float) override;</span>
+<span id="L20"><span class="lineNum">      20</span>              :     void set_p_max(float) override;</span>
+<span id="L21"><span class="lineNum">      21</span>              :     void set_gas_calorific(float) override;</span>
+<span id="L22"><span class="lineNum">      22</span>              :     void set_gas_meter_base(float) override;</span>
+<span id="L23"><span class="lineNum">      23</span>              :     void add_meter_correction(float reading) override;</span>
+<span id="L24"><span class="lineNum">      24</span>              :     void reset_corrections() override;</span>
+<span id="L25"><span class="lineNum">      25</span>              : </span>
+<span id="L26"><span class="lineNum">      26</span>              :     // ── Boiler model config setters with validation ──────────</span>
+<span id="L27"><span class="lineNum">      27</span>              :     void set_gas_temp_offset(float v) override;</span>
+<span id="L28"><span class="lineNum">      28</span>              :     void set_ch_power(float pmin_warm, float pmax_warm, float pmin_hot, float pmax_hot) override;</span>
+<span id="L29"><span class="lineNum">      29</span>              :     void set_dhw_power(float pmin, float pmax) override;</span>
+<span id="L30"><span class="lineNum">      30</span>              :     void set_efficiency_points(float t1, float v1, float t2, float v2, float t3, float v3) override;</span>
+<span id="L31"><span class="lineNum">      31</span>              : </span>
+<span id="L32"><span class="lineNum">      32</span>              :     /// Wire up the gas flow service (needed for integral_m3 in correction calc).</span>
+<span id="L33"><span class="lineNum">      33</span> <span class="tlaGNC tlaBgGNC">          17 :     void set_gas_flow(GasFlowService* gf) { gas_flow_ = gf; }</span></span>
+<span id="L34"><span class="lineNum">      34</span>              : </span>
+<span id="L35"><span class="lineNum">      35</span>              :     /// Wire up time source (needed for correction timestamps).</span>
+<span id="L36"><span class="lineNum">      36</span> <span class="tlaGNC">           5 :     void set_time_source(ITimeSource* t) { time_ = t; }</span></span>
+<span id="L37"><span class="lineNum">      37</span>              : </span>
+<span id="L38"><span class="lineNum">      38</span>              :     /// Restore persisted correction log from NVS on boot.</span>
+<span id="L39"><span class="lineNum">      39</span>              :     void init();</span>
+<span id="L40"><span class="lineNum">      40</span>              : </span>
+<span id="L41"><span class="lineNum">      41</span>              :     /// Read-only access to the correction log for web rendering.</span>
+<span id="L42"><span class="lineNum">      42</span> <span class="tlaGNC">          23 :     const NvsMeterBlob&amp; meter_blob() const { return meter_blob_; }</span></span>
+<span id="L43"><span class="lineNum">      43</span>              : </span>
+<span id="L44"><span class="lineNum">      44</span>              : private:</span>
+<span id="L45"><span class="lineNum">      45</span>              :     IHeatingStateStore&amp;  state_;</span>
+<span id="L46"><span class="lineNum">      46</span>              :     IConfigurationStore&amp; config_;</span>
+<span id="L47"><span class="lineNum">      47</span>              :     ILogger&amp;             log_;</span>
+<span id="L48"><span class="lineNum">      48</span>              :     ITimeSource*         time_ = nullptr;</span>
+<span id="L49"><span class="lineNum">      49</span>              :     GasFlowService*      gas_flow_ = nullptr;</span>
+<span id="L50"><span class="lineNum">      50</span>              :     NvsMeterBlob         meter_blob_;</span>
+<span id="L51"><span class="lineNum">      51</span>              :     Kalman1D             kalman_k_{1.0f, 0.02f, 1.0f};</span>
+<span id="L52"><span class="lineNum">      52</span>              : };</span>
         </pre>
               </td>
             </tr>
