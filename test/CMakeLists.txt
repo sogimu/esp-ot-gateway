@@ -92,6 +92,18 @@ set(TEST_SRCS
     test_wifi_validation.cpp
     test_manual_time_offset.cpp
     test_wifi_apsta_adapter.cpp
+
+    # Gas correction metrics (domain pure function)
+    test_gas_correction_metrics.cpp
+
+    # Gas integration (JSON rendering, end-to-end)
+    test_gas_integration.cpp
+
+    # Boiler model config (blob sizes, defaults, validation)
+    test_boiler_model_config.cpp
+
+    # GasFlowService model configuration (DHW, efficiency, gas temp offset)
+    test_gas_model_config.cpp
 )
 
 # ── Stubs (replace ESP-IDF-dependent implementations) ──────
@@ -116,10 +128,10 @@ set(APP_SRCS
     ${MAIN_DIR}/domain/value_objects/wifi_validation.cpp
     ${MAIN_DIR}/infrastructure/driving/wifi_apsta_adapter.cpp
     ${MAIN_DIR}/infrastructure/driven/dns_captive_server.cpp
-
     # MQTT interactor (testable on host — no ESP-IDF deps)
     ${MAIN_DIR}/infrastructure/driving/mqtt_interactor.cpp
-
+    ${MAIN_DIR}/infrastructure/driven/web_presenter_adapter.cpp
+    ${MAIN_DIR}/infrastructure/driven/event_log_adapter.cpp
 )
 
 # ── Test executable ───────────────────────────────────────

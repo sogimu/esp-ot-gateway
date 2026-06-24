@@ -2,6 +2,7 @@
 
 #include "application/ports/driving/igas_calibration.h"
 #include "nvs_config_adapter.h"  // NvsMeterBlob, NvsCorrLogEntry, CORRECTION_LOG_SIZE
+#include "domain/services/kalman1d.h"
 
 class IHeatingStateStore;
 class IConfigurationStore;
@@ -19,8 +20,14 @@ public:
     void set_p_max(float) override;
     void set_gas_calorific(float) override;
     void set_gas_meter_base(float) override;
-    void add_meter_correction(float reading) override;
+    bool add_meter_correction(float reading) override;
     void reset_corrections() override;
+
+    // ── Boiler model config setters with validation ──────────
+    void set_gas_temp_offset(float v) override;
+    void set_ch_power(float pmin, float pmax) override;
+    void set_dhw_power(float pmin, float pmax) override;
+    void set_efficiency_points(float t1, float v1, float t2, float v2, float t3, float v3) override;
 
     /// Wire up the gas flow service (needed for integral_m3 in correction calc).
     void set_gas_flow(GasFlowService* gf) { gas_flow_ = gf; }
@@ -41,4 +48,5 @@ private:
     ITimeSource*         time_ = nullptr;
     GasFlowService*      gas_flow_ = nullptr;
     NvsMeterBlob         meter_blob_;
+    Kalman1D             kalman_k_{1.0f, 0.02f, 1.0f};
 };

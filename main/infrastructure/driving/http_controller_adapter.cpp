@@ -2,6 +2,7 @@
 #include "infrastructure/driven/web_presenter_adapter.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driving/web_page.h"
+#include "infrastructure/driving/web_page_gz.inc"
 #include "infrastructure/driving/json_helpers.h"
 #include "application/ports/driving/iconfigure_system.h"
 #include "application/ports/driving/iwifi_manager.h"
@@ -87,8 +88,10 @@ void HttpControllerAdapter::start()
 void HttpControllerAdapter::stop() { if (server_) { httpd_stop(server_); server_ = nullptr; } }
 
 esp_err_t HttpControllerAdapter::handler_root(httpd_req_t* req) {
+    httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
     httpd_resp_set_type(req, "text/html; charset=utf-8");
-    return httpd_resp_send(req, WEB_PAGE, HTTPD_RESP_USE_STRLEN);
+    return httpd_resp_send(req, (const char*)WEB_PAGE_GZ, WEB_PAGE_GZ_LEN);
 }
 
 esp_err_t HttpControllerAdapter::handler_status(httpd_req_t* req) {
@@ -97,6 +100,7 @@ esp_err_t HttpControllerAdapter::handler_status(httpd_req_t* req) {
     static char buf[2048];
     self->presenter_->render_status(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     return httpd_resp_sendstr(req, buf);
 }
 
@@ -155,7 +159,14 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
         v = json_get_int(body, "\"reset_corrections\""); if (v > 0) self->gas_->reset_corrections();
         f = json_get_float(body, "\"k_calib\""); if (f > -1e37f) self->gas_->set_k_calib(f);
         f = json_get_float(body, "\"gas_meter_base\""); if (f > -1e37f) self->gas_->set_gas_meter_base(f);
-        f = json_get_float(body, "\"gas_meter_correct\""); if (f > -1e37f) self->gas_->add_meter_correction(f);
+        f = json_get_float(body, "\"gas_meter_correct\"");
+        if (f > -1e37f) {
+            bool ok = self->gas_->add_meter_correction(f);
+            if (!ok) {
+                httpd_resp_set_type(req, "application/json");
+                return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"rejected\"}");
+            }
+        }
     }
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, "{\"ok\":true}");
@@ -165,6 +176,7 @@ esp_err_t HttpControllerAdapter::handler_log(httpd_req_t* req) {
     auto* self = s_self;
     if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{\"count\":0,\"events\":[]}"); return ESP_FAIL; }
     httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     const char* json = self->presenter_->log_json();
     return httpd_resp_sendstr(req, json ? json : "{\"count\":0,\"events\":[]}");
 }
@@ -258,9 +270,10 @@ esp_err_t HttpControllerAdapter::handler_pid_schedule(httpd_req_t* req) {
 esp_err_t HttpControllerAdapter::handler_stats(httpd_req_t* req) {
     auto* self = s_self;
     if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{}"); return ESP_FAIL; }
-    static char buf[2048];
+    static char buf[6144];  // room for stats + 32 correction log entries
     self->presenter_->render_stats(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     return httpd_resp_sendstr(req, buf);
 }
 

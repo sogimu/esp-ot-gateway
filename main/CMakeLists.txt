@@ -66,3 +66,21 @@ idf_component_register(
         espcoredump
         mqtt
 )
+
+# Ensure http_controller_adapter.cpp is recompiled when web_page_gz.inc changes
+# by touching the source file, forcing the build system to detect the change.
+set(WEB_PAGE_GZ_INC "${CMAKE_CURRENT_SOURCE_DIR}/infrastructure/driving/web_page_gz.inc")
+set(WEB_PAGE_H     "${CMAKE_CURRENT_SOURCE_DIR}/infrastructure/driving/web_page.h")
+set(HTTP_CTRL_CPP  "${CMAKE_CURRENT_SOURCE_DIR}/infrastructure/driving/http_controller_adapter.cpp")
+set(COMPRESS_PY    "${CMAKE_CURRENT_SOURCE_DIR}/../compress_web_page.py")
+
+add_custom_command(
+    OUTPUT ${WEB_PAGE_GZ_INC}
+    COMMAND python3 ${COMPRESS_PY} ${WEB_PAGE_H} ${WEB_PAGE_GZ_INC}
+    COMMAND ${CMAKE_COMMAND} -E touch ${HTTP_CTRL_CPP}
+    DEPENDS ${WEB_PAGE_H} ${COMPRESS_PY}
+    COMMENT "Compressing web page (web_page.h → web_page_gz.inc) + marking .cpp for rebuild"
+    VERBATIM
+)
+
+add_custom_target(web_page_gz DEPENDS ${WEB_PAGE_GZ_INC})

@@ -53,6 +53,17 @@ IMPL_GETSET_F(float, p_max)
 IMPL_GETSET_F(float, gas_calorific)
 IMPL_GETSET_F(float, gas_meter_base)
 IMPL_GETSET_F(float, dhw_hysteresis)
+IMPL_GETSET_F(float, gas_temp_offset)
+IMPL_GETSET_F(float, ch_pmin)
+IMPL_GETSET_F(float, ch_pmax)
+IMPL_GETSET_F(float, dhw_pmin)
+IMPL_GETSET_F(float, dhw_pmax)
+IMPL_GETSET_F(float, eff_t1)
+IMPL_GETSET_F(float, eff_v1)
+IMPL_GETSET_F(float, eff_t2)
+IMPL_GETSET_F(float, eff_v2)
+IMPL_GETSET_F(float, eff_t3)
+IMPL_GETSET_F(float, eff_v3)
 
 #define IMPL_GETSET_B(type, name) \
   void HeatingStateAdapter::set_##name(type v) { state_.name##_ = v; } \

@@ -9,13 +9,13 @@
 
 #define HIST_BINS 1000
 #define CYCLE_RING 256
-#define CORRECTION_LOG_SIZE 32
+#define CORRECTION_LOG_SIZE 10
 
 struct __attribute__((packed)) NvsHistBlob {
     uint32_t samples;
-    uint16_t hist[HIST_BINS];  // NVS storage: 16-bit (blob fits in 2KB limit)
+    uint32_t hist[HIST_BINS];  // 32-bit to prevent overflow (>65535 in single bin)
 };
-static_assert(sizeof(NvsHistBlob) == 4 + 1000 * 2, "NvsHistBlob size mismatch");
+static_assert(sizeof(NvsHistBlob) == 4 + 1000 * 4, "NvsHistBlob size mismatch");
 
 struct __attribute__((packed)) NvsCycleBlob {
     uint32_t burner_sec; uint32_t cycle_cnt;
@@ -30,8 +30,21 @@ struct __attribute__((packed)) NvsGasEmaBlob {
 };
 static_assert(sizeof(NvsGasEmaBlob) == 5 * 4 + 8, "NvsGasEmaBlob size mismatch");
 
-struct __attribute__((packed)) NvsCalibBlob { float k_calib, p_max, gas_calorific; };
-static_assert(sizeof(NvsCalibBlob) == 12, "NvsCalibBlob size mismatch");
+// ── Boiler model config blob (on-disk format) ──────────────────
+struct __attribute__((packed)) NvsCalibBlob {
+    float k_calib, p_max, gas_calorific;     // existing (offset 0)
+    float gas_temp_offset;                   // default -5.0
+    float ch_pmin, ch_pmax;                  // default 5.5, 24.0 (input power)
+    float dhw_pmin,     dhw_pmax;            // default 5.5, 24.0
+};
+static_assert(sizeof(NvsCalibBlob) == 32, "NvsCalibBlob size mismatch");
+
+struct __attribute__((packed)) NvsEfficiencyBlob {
+    float t1, v1;  // 30, 0.98
+    float t2, v2;  // 55, 0.93
+    float t3, v3;  // 80, 0.88
+};
+static_assert(sizeof(NvsEfficiencyBlob) == 24, "NvsEfficiencyBlob size mismatch");
 
 struct __attribute__((packed)) NvsCorrLogEntry {
     uint32_t timestamp; float actual_reading, estimated_total, difference, prev_k_calib, new_k_calib;
@@ -43,7 +56,7 @@ struct __attribute__((packed)) NvsMeterBlob {
     int32_t corrections_head, corrections_count;
     NvsCorrLogEntry corrections[CORRECTION_LOG_SIZE];
 };
-static_assert(sizeof(NvsMeterBlob) == 4 + 4 + 4 + 4 + 4 + 32 * (4 + 4 + 4 + 4 + 4 + 4), "NvsMeterBlob size mismatch");
+static_assert(sizeof(NvsMeterBlob) == 4 + 4 + 4 + 4 + 4 + 10 * (4 + 4 + 4 + 4 + 4 + 4), "NvsMeterBlob size mismatch");
 
 struct __attribute__((packed)) NvsPredictBlob { float rates[3]; int32_t idx, count; };
 static_assert(sizeof(NvsPredictBlob) == 3 * 4 + 4 + 4, "NvsPredictBlob size mismatch");
@@ -68,6 +81,9 @@ public:
     bool load_total_uptime(uint32_t& total_uptime_sec) override;
 
     void save_integral(float value) override;
+
+    bool save_eff(const IHeatingStateStore& state);
+    bool load_eff(IHeatingStateStore& state);
 
     void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
                          uint32_t inter_pause_sec, uint32_t inter_cnt,

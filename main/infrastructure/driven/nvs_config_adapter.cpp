@@ -79,6 +79,61 @@ void NvsConfigAdapter::load_all(IHeatingStateStore& s)
     }
     s.unlock_exclusive();
 
+    // Boiler model config — gas_temp_offset, CH/DHW power params, efficiency points
+    {
+        // Query actual blob size first (for format migration)
+        sz = 0;
+        nvs_get_blob(h, "boiler", nullptr, &sz);
+        if (sz == 40) {
+            // Migration from old format: 4 CH params (warm/hot) → 2 (input)
+            struct __attribute__((packed)) NvsCalibBlob40 {
+                float k_calib, p_max, gas_calorific;
+                float gas_temp_offset;
+                float ch_pmin_warm, ch_pmax_warm;
+                float ch_pmin_hot,  ch_pmax_hot;
+                float dhw_pmin, dhw_pmax;
+            } old_cal;
+            size_t osz = sizeof(old_cal);
+            if (nvs_get_blob(h, "boiler", &old_cal, &osz) == ESP_OK && osz == 40) {
+                s.lock_exclusive();
+                // Keep: k_calib, p_max, gas_calorific, gas_temp_offset (dimensionless/scalar — still valid)
+                s.set_k_calib(old_cal.k_calib);
+                s.set_p_max(old_cal.p_max);
+                s.set_gas_calorific(old_cal.gas_calorific);
+                s.set_gas_temp_offset(old_cal.gas_temp_offset);
+                // CH/DHW power: discard old output-power values, use new input-power defaults
+                // (old model stored output kW; new model needs nameplate input kW)
+                s.unlock_exclusive();
+            }
+        } else if (sz == sizeof(NvsCalibBlob)) {
+            NvsCalibBlob cal;
+            size_t nsz = sizeof(cal);
+            if (nvs_get_blob(h, "boiler", &cal, &nsz) == ESP_OK) {
+                s.lock_exclusive();
+                s.set_gas_temp_offset(cal.gas_temp_offset);
+                s.set_ch_pmin(cal.ch_pmin);
+                s.set_ch_pmax(cal.ch_pmax);
+                s.set_dhw_pmin(cal.dhw_pmin);
+                s.set_dhw_pmax(cal.dhw_pmax);
+                s.set_k_calib(cal.k_calib);
+                s.set_p_max(cal.p_max);
+                s.set_gas_calorific(cal.gas_calorific);
+                s.unlock_exclusive();
+            }
+        }
+    }
+    {
+        sz = sizeof(NvsEfficiencyBlob);
+        NvsEfficiencyBlob eff;
+        if (nvs_get_blob(h, "eff", &eff, &sz) == ESP_OK && sz >= 24) {
+            s.lock_exclusive();
+            s.set_eff_t1(eff.t1); s.set_eff_v1(eff.v1);
+            s.set_eff_t2(eff.t2); s.set_eff_v2(eff.v2);
+            s.set_eff_t3(eff.t3); s.set_eff_v3(eff.v3);
+            s.unlock_exclusive();
+        }
+    }
+
     nvs_close(h);
 }
 
@@ -112,6 +167,27 @@ void NvsConfigAdapter::save_config(const IHeatingStateStore& s)
         s.get_pid_schedule(&ps);
         nvs_set_blob(h, "pid_sched", &ps, sizeof(ps));
     }
+    // Boiler model config
+    {
+        NvsCalibBlob cal;
+        cal.k_calib = s.get_k_calib();
+        cal.p_max = s.get_p_max();
+        cal.gas_calorific = s.get_gas_calorific();
+        cal.gas_temp_offset = s.get_gas_temp_offset();
+        cal.ch_pmin = s.get_ch_pmin();
+        cal.ch_pmax = s.get_ch_pmax();
+        cal.dhw_pmin = s.get_dhw_pmin();
+        cal.dhw_pmax = s.get_dhw_pmax();
+        nvs_set_blob(h, "boiler", &cal, sizeof(cal));
+    }
+    {
+        NvsEfficiencyBlob eff;
+        eff.t1 = s.get_eff_t1(); eff.v1 = s.get_eff_v1();
+        eff.t2 = s.get_eff_t2(); eff.v2 = s.get_eff_v2();
+        eff.t3 = s.get_eff_t3(); eff.v3 = s.get_eff_v3();
+        nvs_set_blob(h, "eff", &eff, sizeof(eff));
+    }
+
     nvs_commit(h); nvs_close(h);
 }
 
@@ -192,9 +268,43 @@ bool NvsConfigAdapter::load_stats(uint32_t& bs, float& im3,
     float fv=0; size_t sz=sizeof(fv);
     if (nvs_get_blob(n, "integ_m3", &fv, &sz)==ESP_OK) im3=fv;
     if (e)   { sz=sizeof(NvsGasEmaBlob); nvs_get_blob(n, "gas_ema", e, &sz); }
-    if (h)   { sz=sizeof(NvsHistBlob);   nvs_get_blob(n, "hist", h, &sz); }
+    if (h)   {
+        sz = sizeof(NvsHistBlob);
+        if (nvs_get_blob(n, "hist", h, &sz) != ESP_OK || sz == 2004) {
+            // Migration from old 16-bit histogram format
+            struct { uint32_t samples; uint16_t bins[HIST_BINS]; } old_hist;
+            size_t osz = sizeof(old_hist);
+            if (nvs_get_blob(n, "hist", &old_hist, &osz) == ESP_OK && osz == 2004) {
+                auto* nh = static_cast<NvsHistBlob*>(h);
+                nh->samples = old_hist.samples;
+                for (int i = 0; i < HIST_BINS; i++) nh->hist[i] = old_hist.bins[i];
+            }
+        }
+    }
     if (c)   { sz=sizeof(NvsCycleBlob);  nvs_get_blob(n, "cycles", c, &sz); }
-    if (cal) { sz=sizeof(NvsCalibBlob);  nvs_get_blob(n, "calib", cal, &sz); }
+    if (cal) {
+        sz = 0;
+        if (nvs_get_blob(n, "calib", nullptr, &sz) == ESP_OK) {
+            if (sz == 12) {
+                // Migration from old 3-float blob — read old fields; new fields remain zero (caller fills defaults)
+                nvs_get_blob(n, "calib", cal, &sz);
+            } else if (sz == 40) {
+                // Migration from old 4-CH-param blob — map to new 2-CH-param
+                struct __attribute__((packed)) { float k,p,g,gt,cpw1,cpw2,cph1,cph2,dp1,dp2; } old;
+                size_t osz = sizeof(old);
+                if (nvs_get_blob(n, "calib", &old, &osz) == ESP_OK && osz == 40) {
+                    auto* c = static_cast<NvsCalibBlob*>(cal);
+                    // Keep scalar fields; leave CH/DHW at zero (caller fills defaults)
+                    c->k_calib = old.k; c->p_max = old.p; c->gas_calorific = old.g;
+                    c->gas_temp_offset = old.gt;
+                    // ch_pmin, ch_pmax, dhw_pmin, dhw_pmax stay at zero (old output-power values incompatible)
+                }
+            } else if (sz == sizeof(NvsCalibBlob)) {
+                sz = sizeof(NvsCalibBlob);
+                nvs_get_blob(n, "calib", cal, &sz);
+            }
+        }
+    }
     nvs_close(n); return true;
 }
 
@@ -212,7 +322,7 @@ void NvsConfigAdapter::save_stats(const IHeatingStateStore&,
         nvs_set_blob(n, "gas_ema", e, sizeof(NvsGasEmaBlob));
     }
     if (h) {
-        assert(sizeof(NvsHistBlob) == 2004);
+        assert(sizeof(NvsHistBlob) == 4004); // 4 + 1000*4
         nvs_set_blob(n, "hist", h, sizeof(NvsHistBlob));
     }
     if (c) {
@@ -220,7 +330,7 @@ void NvsConfigAdapter::save_stats(const IHeatingStateStore&,
         nvs_set_blob(n, "cycles", c, sizeof(NvsCycleBlob));
     }
     if (cal) {
-        assert(sizeof(NvsCalibBlob) == 12); // 3 floats
+        assert(sizeof(NvsCalibBlob) == 32); // 8 floats
         nvs_set_blob(n, "calib", cal, sizeof(NvsCalibBlob));
     }
     nvs_commit(n); nvs_close(n);
@@ -236,6 +346,36 @@ bool NvsConfigAdapter::load_meter(IHeatingStateStore& s, void* blob)
     memset(&b, 0, sizeof(b));
     size_t sz = sizeof(b);
     bool ok = (nvs_get_blob(n, "data", &b, &sz) == ESP_OK);
+
+    // Migration from old 32-entry blob (CORRECTION_LOG_SIZE was 32 before)
+    if (!ok) {
+        // Legacy struct matching the old on-disk format with 32 entries
+        struct NvsMeterBlob32 {
+            float base_reading, last_correction_actual, integral_at_last_correction;
+            int32_t corrections_head, corrections_count;
+            NvsCorrLogEntry corrections[32];
+        } old;
+        memset(&old, 0, sizeof(old));
+        sz = sizeof(old);
+        if (nvs_get_blob(n, "data", &old, &sz) == ESP_OK && sz == sizeof(old)) {
+            b.base_reading = old.base_reading;
+            b.last_correction_actual = old.last_correction_actual;
+            b.integral_at_last_correction = old.integral_at_last_correction;
+            int keep = old.corrections_count < 10 ? old.corrections_count : 10;
+            b.corrections_count = keep;
+            if (keep > 0) {
+                int old_head = old.corrections_head;
+                // Copy newest `keep` entries in order (oldest first)
+                for (int i = 0; i < keep; i++) {
+                    int src = (old_head - keep + i + 32) % 32;
+                    b.corrections[i] = old.corrections[src];
+                }
+                b.corrections_head = keep % 10;
+            }
+            ok = true;
+        }
+    }
+
     nvs_close(n);
     if (ok) {
         s.lock_exclusive();
@@ -353,4 +493,39 @@ void NvsConfigAdapter::save_integral(float value)
     nvs_set_blob(n, "integ_m3", &value, sizeof(value));
     nvs_commit(n);
     nvs_close(n);
+}
+
+// ── Efficiency blob (stats namespace, "eff" key) ──────────────
+
+bool NvsConfigAdapter::save_eff(const IHeatingStateStore& state)
+{
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return false;
+    NvsEfficiencyBlob eff;
+    eff.t1 = state.get_eff_t1(); eff.v1 = state.get_eff_v1();
+    eff.t2 = state.get_eff_t2(); eff.v2 = state.get_eff_v2();
+    eff.t3 = state.get_eff_t3(); eff.v3 = state.get_eff_v3();
+    esp_err_t r = nvs_set_blob(n, "eff", &eff, sizeof(eff));
+    nvs_commit(n);
+    nvs_close(n);
+    return r == ESP_OK;
+}
+
+bool NvsConfigAdapter::load_eff(IHeatingStateStore& state)
+{
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READONLY, &n) != ESP_OK) return false;
+    NvsEfficiencyBlob eff;
+    size_t sz = sizeof(eff);
+    bool ok = false;
+    if (nvs_get_blob(n, "eff", &eff, &sz) == ESP_OK && sz >= sizeof(eff)) {
+        state.lock_exclusive();
+        state.set_eff_t1(eff.t1); state.set_eff_v1(eff.v1);
+        state.set_eff_t2(eff.t2); state.set_eff_v2(eff.v2);
+        state.set_eff_t3(eff.t3); state.set_eff_v3(eff.v3);
+        state.unlock_exclusive();
+        ok = true;
+    }
+    nvs_close(n);
+    return ok;
 }

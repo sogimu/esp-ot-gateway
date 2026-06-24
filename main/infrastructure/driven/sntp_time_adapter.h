@@ -29,8 +29,8 @@ public:
     /// Restore boot_offset_us_ from NVS. Returns true if valid offset loaded.
     bool restore_time_offset();
 
-    /// Has SNTP successfully synced at least once?
-    bool is_synced() const { return sntp_synced_; }
+    /// Is time valid (SNTP, manual, or restored from NVS)?
+    bool is_synced() const override;
 
     /// Do we have any valid time reference (SNTP or manual/NVS)?
     bool has_valid_time() const { return boot_offset_us_.count() != 0; }
@@ -40,7 +40,8 @@ private:
     char srv0_[64] = {};
     char srv1_[64] = {};
     bool started_ = false;
-    bool sntp_synced_ = false;
+    mutable bool time_synced_ = false;
+    mutable uint64_t last_sntp_retry_ms_ = 0;
     mutable microseconds boot_offset_us_{0}; // offset from boot time to Unix epoch
     ILogger* logger_ = nullptr;
     static const char* TAG;

@@ -40,3 +40,7 @@ CONFIG_ESP_COREDUMP_LOGGING=n
 # Оптимизация Flash: сжатие и скорость
 CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+
+# TCP buffer sizes — увеличены для снижения фрагментации при отправке больших ответов
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=8192
+CONFIG_LWIP_TCP_WND_DEFAULT=8192

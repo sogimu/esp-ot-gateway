@@ -155,20 +155,24 @@ extern "C" void app_main(void)
         }
     }
 
-    // Restore modulation histogram from NVS (NvsHistBlob)
+    // Restore modulation histogram from NVS (NvsHistBlob — heap, too large for stack)
     {
-        NvsHistBlob hist_blob;
-        memset(&hist_blob, 0, sizeof(hist_blob));
+        NvsHistBlob* hist_blob = static_cast<NvsHistBlob*>(malloc(sizeof(NvsHistBlob)));
+        if (!hist_blob) { ESP_LOGE("main", "OOM: NvsHistBlob"); }
+        else {
+            memset(hist_blob, 0, sizeof(NvsHistBlob));
         float saved_integ_m3 = 0;
         uint32_t saved_burner_sec_hist = 0;
         if (nvs.load_stats(saved_burner_sec_hist, saved_integ_m3,
-                           &hist_blob, nullptr, nullptr, nullptr)) {
-            *mod_stats.samples_ptr() = hist_blob.samples;
+                           hist_blob, nullptr, nullptr, nullptr)) {
+            *mod_stats.samples_ptr() = hist_blob->samples;
             for (int i = 0; i < HIST_BINS; i++)
-                mod_stats.hist_ptr()[i] = hist_blob.hist[i];
+                mod_stats.hist_ptr()[i] = hist_blob->hist[i];
             gas_flow.set_integral(saved_integ_m3);
             ESP_LOGI("main", "NVS: восстановлена гистограмма (samples=%" PRIu32 ") и integral_m3=%.3f",
-                     hist_blob.samples, (double)saved_integ_m3);
+                     hist_blob->samples, (double)saved_integ_m3);
+        }
+        free(hist_blob);
         }
     }
 
@@ -269,15 +273,17 @@ extern "C" void app_main(void)
                                 burn_cycles.inter_session_cnt(),
                                 burn_cycles.modulation_pause_sec(),
                                 burn_cycles.modulation_cnt());
-            // Save modulation histogram
-            NvsHistBlob hist_blob;
-            hist_blob.samples = mod_stats.samples();
-            for (int i = 0; i < HIST_BINS; i++) {
-                uint32_t v = mod_stats.hist_ptr()[i];
-                hist_blob.hist[i] = v > 65535 ? 65535 : (uint16_t)v;
+            // Save modulation histogram (heap — 4KB, too large for stack)
+            NvsHistBlob* hist_blob = static_cast<NvsHistBlob*>(malloc(sizeof(NvsHistBlob)));
+            if (hist_blob) {
+                hist_blob->samples = mod_stats.samples();
+                for (int i = 0; i < HIST_BINS; i++) {
+                    hist_blob->hist[i] = mod_stats.hist_ptr()[i];  // uint32_t no overflow
+                }
+                nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
+                               hist_blob, nullptr, nullptr, nullptr);
+                free(hist_blob);
             }
-            nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
-                           &hist_blob, nullptr, nullptr, nullptr);
             // Save total uptime
             nvs.save_total_uptime(total_uptime_base_sec +
                                   (uint32_t)(ca_time.monotonic_us() / 1000000));
