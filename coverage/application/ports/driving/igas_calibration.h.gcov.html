@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-06-22 04:39:01</td>
+            <td class="headerValue">2026-06-24 13:01:48</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryLo">50.0&nbsp;%</td>
@@ -69,16 +69,16 @@
 <span id="L7"><span class="lineNum">       7</span>              :     virtual void set_p_max(float) = 0;</span>
 <span id="L8"><span class="lineNum">       8</span>              :     virtual void set_gas_calorific(float) = 0;</span>
 <span id="L9"><span class="lineNum">       9</span>              :     virtual void set_gas_meter_base(float) = 0;</span>
-<span id="L10"><span class="lineNum">      10</span>              :     virtual void add_meter_correction(float reading) = 0;</span>
+<span id="L10"><span class="lineNum">      10</span>              :     virtual bool add_meter_correction(float reading) = 0;</span>
 <span id="L11"><span class="lineNum">      11</span>              :     virtual void reset_corrections() = 0;</span>
 <span id="L12"><span class="lineNum">      12</span>              : </span>
 <span id="L13"><span class="lineNum">      13</span>              :     // ── Boiler model config ──────────────────────────────────</span>
 <span id="L14"><span class="lineNum">      14</span>              :     virtual void set_gas_temp_offset(float v) = 0;      // clamp [-20, +10]</span>
-<span id="L15"><span class="lineNum">      15</span>              :     virtual void set_ch_power(float pmin_warm, float pmax_warm, float pmin_hot, float pmax_hot) = 0;</span>
+<span id="L15"><span class="lineNum">      15</span>              :     virtual void set_ch_power(float pmin, float pmax) = 0;</span>
 <span id="L16"><span class="lineNum">      16</span>              :     virtual void set_dhw_power(float pmin, float pmax) = 0;</span>
 <span id="L17"><span class="lineNum">      17</span>              :     virtual void set_efficiency_points(float t1, float v1, float t2, float v2, float t3, float v3) = 0;</span>
 <span id="L18"><span class="lineNum">      18</span>              : </span>
-<span id="L19"><span class="lineNum">      19</span> <span class="tlaGNC tlaBgGNC">          38 :     virtual ~IGasCalibration() = default;</span></span>
+<span id="L19"><span class="lineNum">      19</span> <span class="tlaGNC tlaBgGNC">          41 :     virtual ~IGasCalibration() = default;</span></span>
 <span id="L20"><span class="lineNum">      20</span>              : };</span>
         </pre>
               </td>
