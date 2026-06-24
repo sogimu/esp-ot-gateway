@@ -14,8 +14,8 @@ using Catch::Approx;
 
 // ── Blob size checks ───────────────────────────────────────────
 
-TEST_CASE("NvsCalibBlob size is 40", "[boiler_model]") {
-    REQUIRE(sizeof(NvsCalibBlob) == 40);
+TEST_CASE("NvsCalibBlob size is 32", "[boiler_model]") {
+    REQUIRE(sizeof(NvsCalibBlob) == 32);
 }
 
 TEST_CASE("NvsEfficiencyBlob size is 24", "[boiler_model]") {
@@ -32,16 +32,12 @@ TEST_CASE("default values match Baxi datasheet", "[boiler_model]") {
     // Gas temp offset
     REQUIRE(state.get_gas_temp_offset() == Approx(-5.0f));
 
-    // CH power — warm MWT (40C)
-    REQUIRE(state.get_ch_pmin_warm() == Approx(3.7f));
-    REQUIRE(state.get_ch_pmax_warm() == Approx(21.8f));
+    // CH power — input (nameplate), flat across MWT
+    REQUIRE(state.get_ch_pmin() == Approx(5.5f));
+    REQUIRE(state.get_ch_pmax() == Approx(24.0f));
 
-    // CH power — hot MWT (70C)
-    REQUIRE(state.get_ch_pmin_hot() == Approx(3.4f));
-    REQUIRE(state.get_ch_pmax_hot() == Approx(20.0f));
-
-    // DHW power
-    REQUIRE(state.get_dhw_pmin() == Approx(5.0f));
+    // DHW power — input (nameplate)
+    REQUIRE(state.get_dhw_pmin() == Approx(5.5f));
     REQUIRE(state.get_dhw_pmax() == Approx(24.0f));
 
     // Efficiency curve points
@@ -95,21 +91,14 @@ TEST_CASE("ch_power validates pmin < pmax", "[boiler_model][validation]") {
     GasCorrectionInteractor gas(state, config, log);
 
     // Set invalid: pmin >= pmax — should reset to defaults
-    state.set_ch_pmin_warm(10.0f);
-    state.set_ch_pmax_warm(5.0f);
-    gas.set_ch_power(10.0f, 5.0f, 10.0f, 5.0f);
-    // Both warm AND hot pairs should be fixed
-    REQUIRE(state.get_ch_pmin_warm() == Approx(3.7f));
-    REQUIRE(state.get_ch_pmax_warm() == Approx(21.8f));
-    REQUIRE(state.get_ch_pmin_hot() == Approx(3.4f));
-    REQUIRE(state.get_ch_pmax_hot() == Approx(20.0f));
+    gas.set_ch_power(10.0f, 5.0f);
+    REQUIRE(state.get_ch_pmin() == Approx(5.5f));
+    REQUIRE(state.get_ch_pmax() == Approx(24.0f));
 
     // Valid values pass through
-    gas.set_ch_power(5.0f, 25.0f, 4.0f, 22.0f);
-    REQUIRE(state.get_ch_pmin_warm() == Approx(5.0f));
-    REQUIRE(state.get_ch_pmax_warm() == Approx(25.0f));
-    REQUIRE(state.get_ch_pmin_hot() == Approx(4.0f));
-    REQUIRE(state.get_ch_pmax_hot() == Approx(22.0f));
+    gas.set_ch_power(5.0f, 25.0f);
+    REQUIRE(state.get_ch_pmin() == Approx(5.0f));
+    REQUIRE(state.get_ch_pmax() == Approx(25.0f));
 }
 
 // ── Validation: DHW power pmin < pmax ──────────────────────────
@@ -122,7 +111,7 @@ TEST_CASE("dhw_power validates pmin < pmax", "[boiler_model][validation]") {
 
     // Set invalid: pmin >= pmax — should reset to defaults
     gas.set_dhw_power(20.0f, 5.0f);
-    REQUIRE(state.get_dhw_pmin() == Approx(5.0f));
+    REQUIRE(state.get_dhw_pmin() == Approx(5.5f));
     REQUIRE(state.get_dhw_pmax() == Approx(24.0f));
 }
 
@@ -175,23 +164,19 @@ TEST_CASE("NvsCalibBlob defaults in struct match specification", "[boiler_model]
     memset(&b, 0, sizeof(b));
     b.k_calib = 1.0f; b.p_max = 24.0f; b.gas_calorific = 9.5f;
     b.gas_temp_offset = -5.0f;
-    b.ch_pmin_warm = 3.7f; b.ch_pmax_warm = 21.8f;
-    b.ch_pmin_hot = 3.4f;  b.ch_pmax_hot = 20.0f;
-    b.dhw_pmin = 5.0f;     b.dhw_pmax = 24.0f;
+    b.ch_pmin = 5.5f; b.ch_pmax = 24.0f;
+    b.dhw_pmin = 5.5f; b.dhw_pmax = 24.0f;
 
-    // Verify memory offsets: first 3 floats (12 bytes) match old format
+    // Verify memory offsets: 8 floats (32 bytes)
     float* pf = &b.k_calib;
     REQUIRE(pf[0] == Approx(1.0f));
     REQUIRE(pf[1] == Approx(24.0f));
     REQUIRE(pf[2] == Approx(9.5f));
-    // New fields start at offset 12
     REQUIRE(pf[3] == Approx(-5.0f));
-    REQUIRE(pf[4] == Approx(3.7f));
-    REQUIRE(pf[5] == Approx(21.8f));
-    REQUIRE(pf[6] == Approx(3.4f));
-    REQUIRE(pf[7] == Approx(20.0f));
-    REQUIRE(pf[8] == Approx(5.0f));
-    REQUIRE(pf[9] == Approx(24.0f));
+    REQUIRE(pf[4] == Approx(5.5f));
+    REQUIRE(pf[5] == Approx(24.0f));
+    REQUIRE(pf[6] == Approx(5.5f));
+    REQUIRE(pf[7] == Approx(24.0f));
 }
 
 // ── NvsEfficiencyBlob defaults ─────────────────────────────────
@@ -211,7 +196,7 @@ TEST_CASE("NvsEfficiencyBlob defaults match specification", "[boiler_model]") {
     REQUIRE(b.v3 == Approx(0.88f));
 }
 
-// ── Calib blob migration (12-byte → 40-byte) ───────────────────
+// ── Calib blob migration (12-byte → 32-byte and 40-byte → 32-byte) ──
 
 TEST_CASE("calib blob migration: can parse 12-byte blob with new defaults", "[boiler_model][migration]") {
     // Simulate old-format blob: 3 floats (12 bytes)
@@ -231,5 +216,49 @@ TEST_CASE("calib blob migration: can parse 12-byte blob with new defaults", "[bo
     REQUIRE(new_blob.gas_calorific == Approx(9.8f));
     // New fields are zero after memcpy of old blob + zeroing rest
     REQUIRE(new_blob.gas_temp_offset == Approx(0.0f));
-    REQUIRE(new_blob.ch_pmin_warm == Approx(0.0f));
+    REQUIRE(new_blob.ch_pmin == Approx(0.0f));
+}
+
+// ── Calib blob migration (40-byte → 32-byte) ───────────────────
+
+TEST_CASE("calib blob migration: 40-byte old format → 32-byte (CH/DHW reset to defaults)", "[boiler_model][migration]") {
+    // Simulate old-format blob with 4 CH params (warm/hot)
+    struct __attribute__((packed)) OldBlob {
+        float k_calib, p_max, gas_calorific;
+        float gas_temp_offset;
+        float ch_pmin_warm, ch_pmax_warm;
+        float ch_pmin_hot,  ch_pmax_hot;
+        float dhw_pmin,     dhw_pmax;
+    } old;
+    old.k_calib = 1.35f;
+    old.p_max = 22.0f;
+    old.gas_calorific = 9.7f;
+    old.gas_temp_offset = -6.0f;
+    old.ch_pmin_warm = 3.5f;  old.ch_pmax_warm = 20.0f;
+    old.ch_pmin_hot  = 3.0f;  old.ch_pmax_hot  = 18.0f;
+    old.dhw_pmin = 5.5f;      old.dhw_pmax = 24.0f;
+    REQUIRE(sizeof(old) == 40);
+
+    // Migration: keep scalar fields (k_calib, p_max, gas_calorific, gas_temp_offset)
+    // Discard old output-power values — caller fills new input-power defaults
+    NvsCalibBlob new_blob;
+    memset(&new_blob, 0, sizeof(new_blob));
+    new_blob.k_calib = old.k_calib;
+    new_blob.p_max = old.p_max;
+    new_blob.gas_calorific = old.gas_calorific;
+    new_blob.gas_temp_offset = old.gas_temp_offset;
+    // ch_pmin, ch_pmax, dhw_pmin, dhw_pmax stay at 0 (defaults applied by caller)
+
+    REQUIRE(new_blob.k_calib == Approx(1.35f));
+    REQUIRE(new_blob.p_max == Approx(22.0f));
+    REQUIRE(new_blob.gas_calorific == Approx(9.7f));
+    REQUIRE(new_blob.gas_temp_offset == Approx(-6.0f));
+    // CH/DHW power params reset to 0 (caller fills new defaults: 5.5/24.0)
+    REQUIRE(new_blob.ch_pmin == Approx(0.0f));
+    REQUIRE(new_blob.ch_pmax == Approx(0.0f));
+    REQUIRE(new_blob.dhw_pmin == Approx(0.0f));
+    REQUIRE(new_blob.dhw_pmax == Approx(0.0f));
+
+    // Verify new blob size
+    REQUIRE(sizeof(new_blob) == 32);
 }

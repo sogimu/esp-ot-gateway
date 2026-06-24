@@ -51,7 +51,7 @@ float GasFlowService::corrected_calorific() const
     return gas_calorific_ * f_t;
 }
 
-float GasFlowService::calc_power(float modulation_pct, float flow_temp, float ret_temp) const
+float GasFlowService::calc_power(float modulation_pct, float /*flow_temp*/, float /*ret_temp*/) const
 {
     // Clamp modulation to valid range
     if (modulation_pct < 0.0f) modulation_pct = 0.0f;
@@ -62,37 +62,10 @@ float GasFlowService::calc_power(float modulation_pct, float flow_temp, float re
     // never operate below ~20 % in steady state.
     if (modulation_pct < 1.0f) return 0.0f;
 
-    // ── DHW-ветка: фиксированные параметры мощности ──
-    if (dhw_active_) {
-        float pmin = state_.get_dhw_pmin();
-        float pmax = state_.get_dhw_pmax();
-        return pmin + (pmax - pmin) * modulation_pct / 100.0f;
-    }
-
-    // Fallback when temperature channel is uninitialized (flag=false AND value=0).
-    if ((!flow_temp_valid_ && flow_temp == 0.0f) || (!ret_temp_valid_ && ret_temp == 0.0f)) {
-        float pmin = state_.get_ch_pmin_warm();
-        float pmax = state_.get_ch_pmax_warm();
-        return pmin + (pmax - pmin) * modulation_pct / 100.0f;
-    }
-
-    float mwt = (flow_temp + ret_temp) / 2.0f;
-    // Clamp MWT to [40, 70] safe operating range
-    if (mwt < 40.0f) mwt = 40.0f;
-    if (mwt > 70.0f) mwt = 70.0f;
-
-    // CH power: interpolate between warm (MWT=40) and hot (MWT=70) parameters from state
-    const float MWT_WARM = 40.0f;
-    const float MWT_HOT  = 70.0f;
-    float pmin_warm = state_.get_ch_pmin_warm();
-    float pmax_warm = state_.get_ch_pmax_warm();
-    float pmin_hot  = state_.get_ch_pmin_hot();
-    float pmax_hot  = state_.get_ch_pmax_hot();
-
-    float t = (mwt - MWT_WARM) / (MWT_HOT - MWT_WARM);
-    float pmin = pmin_warm + (pmin_hot - pmin_warm) * t;
-    float pmax = pmax_warm + (pmax_hot - pmax_warm) * t;
-
+    // Input (nameplate) power: modulation % is relative to nameplate max.
+    // Does not depend on MWT — gas valve delivers the same gas at the same modulation.
+    float pmin = dhw_active_ ? state_.get_dhw_pmin() : state_.get_ch_pmin();
+    float pmax = dhw_active_ ? state_.get_dhw_pmax() : state_.get_ch_pmax();
     return pmin + (pmax - pmin) * modulation_pct / 100.0f;
 }
 
@@ -115,7 +88,6 @@ void GasFlowService::poll()
     float mod_raw = state_.get_modulation();
     float t_ret   = state_.get_return_temp();
     float t_flow  = state_.get_ch_temp();
-    float p_max   = state_.get_p_max();
     float gas_cal = state_.get_gas_calorific();
     float t_out   = state_.get_outside_temp();
     bool flame    = state_.is_flame_on();
@@ -124,7 +96,6 @@ void GasFlowService::poll()
 
     dhw_active_ = dhw;
 
-    if (p_max > 0) p_max_kw_ = p_max;
     if (gas_cal > 0) gas_calorific_ = gas_cal;
     // Mark temperature channels valid once non-zero data arrives
     // (CH temps are always >0 in a working system; 0 means "never read")
@@ -168,13 +139,11 @@ void GasFlowService::poll()
             warmup = 0.85f + 0.15f * (static_cast<float>(elapsed_ms) / 60000.0f);
         }
 
-        // Physical model: flow [m3/h] = k * power_kw / cv / eta * warmup
-        // DHW mode: use fixed 0.88 efficiency (no condensate recovery)
-        float eta = dhw_active_ ? 0.88f : efficiency_continuous(ret_f);
-        if (eta < 0.01f) eta = 0.88f;
-        float cv_eff = corrected_calorific();
+        // Physical model: flow [m3/h] = k * power_kw_input / cv * warmup
+        // Input power is nameplate — no efficiency needed (gas meter measures input energy)
         float power_kw = calc_power(mod_f, t_flow, ret_f);
-        float flow = k_calib_ * (power_kw / cv_eff) / eta * warmup;
+        float cv_eff = corrected_calorific();
+        float flow = k_calib_ * (power_kw / cv_eff) * warmup;
         if (flow < 0) flow = 0;
         latest_flow_ = flow;
 

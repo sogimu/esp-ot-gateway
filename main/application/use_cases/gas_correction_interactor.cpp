@@ -22,6 +22,8 @@ void GasCorrectionInteractor::init()
                    (unsigned long)meter_blob_.corrections_count);
     }
     kalman_k_.reset(state_.get_k_calib());
+    // Sync gas_flow with persisted k_calib (survives reboots)
+    if (gas_flow_) gas_flow_->set_k_calib(state_.get_k_calib());
 }
 
 void GasCorrectionInteractor::set_k_calib(float v)
@@ -31,6 +33,7 @@ void GasCorrectionInteractor::set_k_calib(float v)
     state_.lock_exclusive();
     state_.set_k_calib(v);
     state_.unlock_exclusive();
+    if (gas_flow_) gas_flow_->set_k_calib(v);
     config_.save_config(state_);
     log_.event(ILogger::USER, "K_калиб: %.3f", (double)v);
 }
@@ -62,11 +65,11 @@ void GasCorrectionInteractor::set_gas_meter_base(float v)
     log_.event(ILogger::USER, "База счётчика: %.3f", (double)v);
 }
 
-void GasCorrectionInteractor::add_meter_correction(float reading)
+bool GasCorrectionInteractor::add_meter_correction(float reading)
 {
     if (!gas_flow_) {
         log_.event(ILogger::USER, "Нет gas_flow: сверка отменена");
-        return;
+        return false;
     }
 
     float base = state_.get_gas_meter_base();
@@ -77,16 +80,25 @@ void GasCorrectionInteractor::add_meter_correction(float reading)
     meter_blob_.base_reading = base;
     float diff = reading - estimated;
 
-    // Reject correction if no gas consumption since last correction
-    // (integral only accumulates while flame is on)
-    if (integral < 0.001f) {
-        log_.event(ILogger::USER, "Нет потребления: сверка отменена");
-        return;
+    // Reject correction if estimated consumption is too small
+    // compared to actual — guards against integral loss from reboots
+    float actual_consumed = reading - base;
+    if (actual_consumed < 0.01f) {
+        log_.event(ILogger::USER, "Расход < 0.01 м³: сверка отменена");
+        return false;
+    }
+    if (integral < actual_consumed * 0.1f) {
+        log_.event(ILogger::USER, "Интеграл (%.3f) < 10%% расхода (%.3f): сверка отменена",
+                   (double)integral, (double)actual_consumed);
+        return false;
     }
 
     float prev_k = state_.get_k_calib();
     auto m = compute_correction_metrics(base, base, reading, estimated);
     float raw_k = prev_k * m.k_factor();
+    // Clamp raw correction factor to prevent extreme swings from tiny samples
+    if (raw_k < 0.5f) raw_k = 0.5f;
+    if (raw_k > 2.0f) raw_k = 2.0f;
     float new_k = kalman_k_.update(raw_k);
     if (new_k < 0.1f) new_k = 0.1f;
     if (new_k > 10.0f) new_k = 10.0f;
@@ -95,6 +107,7 @@ void GasCorrectionInteractor::add_meter_correction(float reading)
     state_.lock_exclusive();
     state_.set_k_calib(new_k);
     state_.unlock_exclusive();
+    if (gas_flow_) gas_flow_->set_k_calib(new_k);
     config_.save_config(state_);
 
     // Add entry to correction log (ring buffer)
@@ -135,6 +148,7 @@ void GasCorrectionInteractor::add_meter_correction(float reading)
     log_.event(ILogger::USER,
                "Сверка: K%.4f>%.4f откл=%.3f",
                (double)prev_k, (double)new_k, (double)diff);
+    return true;
 }
 
 void GasCorrectionInteractor::reset_corrections()
@@ -147,6 +161,7 @@ void GasCorrectionInteractor::reset_corrections()
     state_.set_k_calib(1.0f);
     state_.unlock_exclusive();
     kalman_k_.reset(1.0f);
+    if (gas_flow_) gas_flow_->set_k_calib(1.0f);
     config_.save_meter(state_, &meter_blob_);
     config_.save_config(state_);
     log_.event(ILogger::USER, "Журнал сверки и K сброшены");
@@ -163,28 +178,20 @@ void GasCorrectionInteractor::set_gas_temp_offset(float v)
     log_.event(ILogger::USER, "Δt газа: %.1f °C", (double)v);
 }
 
-void GasCorrectionInteractor::set_ch_power(float pmin_warm, float pmax_warm,
-                                             float pmin_hot,  float pmax_hot)
+void GasCorrectionInteractor::set_ch_power(float pmin, float pmax)
 {
-    if (pmin_warm < 1.0f)  pmin_warm = 1.0f;
-    if (pmin_warm > 15.0f) pmin_warm = 15.0f;
-    if (pmax_warm < 10.0f) pmax_warm = 10.0f;
-    if (pmax_warm > 40.0f) pmax_warm = 40.0f;
-    if (pmin_hot < 1.0f)   pmin_hot = 1.0f;
-    if (pmin_hot > 15.0f)  pmin_hot = 15.0f;
-    if (pmax_hot < 10.0f)  pmax_hot = 10.0f;
-    if (pmax_hot > 40.0f)  pmax_hot = 40.0f;
-    if (pmin_warm >= pmax_warm) { pmin_warm = 3.7f; pmax_warm = 21.8f; }
-    if (pmin_hot >= pmax_hot)   { pmin_hot = 3.4f;  pmax_hot = 20.0f; }
+    if (pmin < 1.0f)  pmin = 1.0f;
+    if (pmin > 15.0f) pmin = 15.0f;
+    if (pmax < 10.0f) pmax = 10.0f;
+    if (pmax > 40.0f) pmax = 40.0f;
+    if (pmin >= pmax) { pmin = 5.5f; pmax = 24.0f; }
     state_.lock_exclusive();
-    state_.set_ch_pmin_warm(pmin_warm);
-    state_.set_ch_pmax_warm(pmax_warm);
-    state_.set_ch_pmin_hot(pmin_hot);
-    state_.set_ch_pmax_hot(pmax_hot);
+    state_.set_ch_pmin(pmin);
+    state_.set_ch_pmax(pmax);
     state_.unlock_exclusive();
     config_.save_config(state_);
-    log_.event(ILogger::USER, "CH мощность: тёпл %.1f–%.1f гор %.1f–%.1f кВт",
-               (double)pmin_warm, (double)pmax_warm, (double)pmin_hot, (double)pmax_hot);
+    log_.event(ILogger::USER, "CH мощность: %.1f–%.1f кВт (входная)",
+               (double)pmin, (double)pmax);
 }
 
 void GasCorrectionInteractor::set_dhw_power(float pmin, float pmax)
@@ -193,7 +200,7 @@ void GasCorrectionInteractor::set_dhw_power(float pmin, float pmax)
     if (pmin > 15.0f) pmin = 15.0f;
     if (pmax < 10.0f) pmax = 10.0f;
     if (pmax > 40.0f) pmax = 40.0f;
-    if (pmin >= pmax) { pmin = 5.0f; pmax = 24.0f; }
+    if (pmin >= pmax) { pmin = 5.5f; pmax = 24.0f; }
     state_.lock_exclusive();
     state_.set_dhw_pmin(pmin);
     state_.set_dhw_pmax(pmax);

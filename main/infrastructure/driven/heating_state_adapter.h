@@ -168,14 +168,10 @@ public:
     void set_gas_temp_offset(float v) override;
     float get_gas_temp_offset() const override;
     // Boiler model config — CH power
-    void set_ch_pmin_warm(float v) override;
-    float get_ch_pmin_warm() const override;
-    void set_ch_pmax_warm(float v) override;
-    float get_ch_pmax_warm() const override;
-    void set_ch_pmin_hot(float v) override;
-    float get_ch_pmin_hot() const override;
-    void set_ch_pmax_hot(float v) override;
-    float get_ch_pmax_hot() const override;
+    void set_ch_pmin(float v) override;
+    float get_ch_pmin() const override;
+    void set_ch_pmax(float v) override;
+    float get_ch_pmax() const override;
     // Boiler model config — DHW power
     void set_dhw_pmin(float v) override;
     float get_dhw_pmin() const override;
@@ -247,9 +243,8 @@ private:
         float gas_meter_base_ = 0;
         // Boiler model config
         float gas_temp_offset_ = -5.0f;
-        float ch_pmin_warm_ = 3.7f, ch_pmax_warm_ = 21.8f;
-        float ch_pmin_hot_ = 3.4f, ch_pmax_hot_ = 20.0f;
-        float dhw_pmin_ = 5.0f, dhw_pmax_ = 24.0f;
+        float ch_pmin_ = 5.5f, ch_pmax_ = 24.0f;
+        float dhw_pmin_ = 5.5f, dhw_pmax_ = 24.0f;
         // Efficiency curve points
         float eff_t1_ = 30.0f, eff_v1_ = 0.98f;
         float eff_t2_ = 55.0f, eff_v2_ = 0.93f;

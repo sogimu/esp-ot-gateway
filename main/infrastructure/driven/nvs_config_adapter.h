@@ -11,9 +11,9 @@
 
 struct __attribute__((packed)) NvsHistBlob {
     uint32_t samples;
-    uint16_t hist[HIST_BINS];  // NVS storage: 16-bit (blob fits in 2KB limit)
+    uint32_t hist[HIST_BINS];  // 32-bit to prevent overflow (>65535 in single bin)
 };
-static_assert(sizeof(NvsHistBlob) == 4 + 1000 * 2, "NvsHistBlob size mismatch");
+static_assert(sizeof(NvsHistBlob) == 4 + 1000 * 4, "NvsHistBlob size mismatch");
 
 struct __attribute__((packed)) NvsCycleBlob {
     uint32_t burner_sec; uint32_t cycle_cnt;
@@ -32,11 +32,10 @@ static_assert(sizeof(NvsGasEmaBlob) == 5 * 4 + 8, "NvsGasEmaBlob size mismatch")
 struct __attribute__((packed)) NvsCalibBlob {
     float k_calib, p_max, gas_calorific;     // existing (offset 0)
     float gas_temp_offset;                   // default -5.0
-    float ch_pmin_warm, ch_pmax_warm;        // default 3.7, 21.8
-    float ch_pmin_hot,  ch_pmax_hot;         // default 3.4, 20.0
-    float dhw_pmin,     dhw_pmax;            // default 5.0, 24.0
+    float ch_pmin, ch_pmax;                  // default 5.5, 24.0 (input power)
+    float dhw_pmin,     dhw_pmax;            // default 5.5, 24.0
 };
-static_assert(sizeof(NvsCalibBlob) == 40, "NvsCalibBlob size mismatch");
+static_assert(sizeof(NvsCalibBlob) == 32, "NvsCalibBlob size mismatch");
 
 struct __attribute__((packed)) NvsEfficiencyBlob {
     float t1, v1;  // 30, 0.98

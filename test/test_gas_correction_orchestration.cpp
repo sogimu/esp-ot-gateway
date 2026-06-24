@@ -204,17 +204,80 @@ TEST_CASE("GasCorrection: add_meter_correction with near-zero estimated aborts",
     GasCorrTestLogger log;
     FakeTimeSource time;
 
-    // base=0, integral=0 → estimated≈0
+    // base=0, integral=0 → actual_consumed=0 → < 0.01 threshold
     GasFlowService gas_flow_svc(state, time);
     GasCorrectionInteractor gas(state, config, log);
     gas.set_gas_flow(&gas_flow_svc);
 
-    gas.add_meter_correction(100.0f);
+    bool ok = gas.add_meter_correction(0.005f);  // actual_consumed = 0.005 < 0.01
 
-    // Should abort without crashing, log error
+    REQUIRE(ok == false);
     REQUIRE(log.event_count_ > 0);
-    REQUIRE(strstr(log.last_msg_, "потребления") != nullptr);
+    REQUIRE(strstr(log.last_msg_, "Расход") != nullptr);
     REQUIRE(config.meter_save_called_ == false);
+}
+
+TEST_CASE("GasCorrection: rejects when actual_consumed < 0.01", "[gas][orchestration][reject]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource time;
+
+    state.set_gas_meter_base(100.0f);
+    GasFlowService gas_flow_svc(state, time);
+    gas_flow_svc.set_integral(0.1f);  // integral > 0 but actual_consumed too small
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+
+    bool ok = gas.add_meter_correction(100.005f);  // actual_consumed = 0.005 < 0.01
+
+    REQUIRE(ok == false);
+    REQUIRE(strstr(log.last_msg_, "Расход") != nullptr);
+    REQUIRE(config.meter_save_called_ == false);
+}
+
+TEST_CASE("GasCorrection: rejects when integral < 10% of actual", "[gas][orchestration][reject]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource time;
+
+    state.set_gas_meter_base(100.0f);
+    GasFlowService gas_flow_svc(state, time);
+    gas_flow_svc.set_integral(0.002f);  // integral only 4% of actual_consumed
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+
+    bool ok = gas.add_meter_correction(100.050f);  // actual=0.05, integral=0.002 (< 10%)
+
+    REQUIRE(ok == false);
+    REQUIRE(strstr(log.last_msg_, "Интеграл") != nullptr);
+    REQUIRE(config.meter_save_called_ == false);
+}
+
+TEST_CASE("GasCorrection: successful correction returns true", "[gas][orchestration][reject]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    GasCorrTestLogger log;
+    FakeTimeSource time;
+
+    state.set_gas_meter_base(100.0f);
+    state.set_gas_calorific(9.5f);
+    GasFlowService gas_flow_svc(state, time);
+    gas_flow_svc.set_integral(0.5f);  // integral = actual (100% of consumption)
+    gas_flow_svc.set_k_calib(1.0f);
+    GasCorrectionInteractor gas(state, config, log);
+    gas.set_gas_flow(&gas_flow_svc);
+    gas.set_time_source(&time);
+    gas.init();
+
+    bool ok = gas.add_meter_correction(100.5f);  // actual=0.5, integral=0.5 (100%)
+
+    REQUIRE(ok == true);
+    REQUIRE(config.meter_save_called_ == true);
 }
 
 // ── Multiple corrections / ring buffer ──────────────────────────────
@@ -560,7 +623,7 @@ TEST_CASE("GasCorrection: correction with zero integral is rejected", "[gas][cor
 
     // Коррекция должна быть отклонена — нет потребления
     REQUIRE(log.event_count_ > 0);
-    REQUIRE(strstr(log.last_msg_, "потребления") != nullptr);
+    REQUIRE(strstr(log.last_msg_, "Расход") != nullptr);
     REQUIRE(config.meter_save_called_ == false);
     // K не изменился
     REQUIRE(state.get_k_calib() == Approx(1.0f));
@@ -587,9 +650,9 @@ TEST_CASE("GasCorrection: reset_corrections clears log and resets k_calib to 1.0
     gas.set_gas_flow(&gas_flow_svc);
 
     // Добавляем пару коррекций
-    gas.add_meter_correction(410.0f);
+    gas.add_meter_correction(410.0f);   // base=300, integral=100 → actual=110, integral=100 → OK
     gas_flow_svc.set_integral(50.0f);
-    gas.add_meter_correction(360.0f);
+    gas.add_meter_correction(465.0f);   // base=410, integral=50 → actual=55, integral=50 → OK
 
     REQUIRE(gas.meter_blob().corrections_count == 2);
 
@@ -602,7 +665,7 @@ TEST_CASE("GasCorrection: reset_corrections clears log and resets k_calib to 1.0
     // K сброшен в 1.0
     REQUIRE(state.get_k_calib() == Approx(1.0f));
     // base_reading сохранён
-    REQUIRE(gas.meter_blob().base_reading == Approx(360.0f));
+    REQUIRE(gas.meter_blob().base_reading == Approx(465.0f));
     // Лог содержит сообщение о сбросе
     REQUIRE(log.event_count_ > 0);
     REQUIRE(strstr(log.last_msg_, "сброшены") != nullptr);
