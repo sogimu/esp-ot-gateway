@@ -38,28 +38,24 @@ void SntpTimeAdapter::start()
     set_timezone(0);
 
     ESP_LOGI(TAG, "Инициализация SNTP (серверы: %s, %s)...", srv0_, srv1_);
-    if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: запрос к %s", srv0_);
+    if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: запрос к %s, %s", srv0_, srv1_);
     esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
     esp_sntp_setservername(0, srv0_);
     esp_sntp_setservername(1, srv1_);
+    esp_sntp_setservername(2, "216.239.35.0");  // time.google.com IP — fallback без DNS
     esp_sntp_init();
 
-    // Wait for first sync (max 15 seconds). The RTC may retain a wrong
-    // time from a previous boot, so sntp_get_sync_status() alone is not
-    // enough — we also verify the time is >= build timestamp, meaning SNTP
-    // has actually adjusted the clock forward from the retained value.
+    // Wait for first sync (max 30 seconds).
     ESP_LOGI(TAG, "Ожидание синхронизации SNTP...");
 
     // Blink onboard LED (GPIO2) while waiting for sync
     gpio_set_direction(SNTP_LED_GPIO, GPIO_MODE_OUTPUT);
     int led_state = 0;
 
-    time_t build_ts = 0;
-    {
-        struct tm build_tm = {};
-        strptime(__DATE__ " " __TIME__, "%b %d %Y %H:%M:%S", &build_tm);
-        build_ts = mktime(&build_tm);
-    }
+    // Build timestamp is informative only — RTC check uses absolute threshold.
+    // (mktime/timegm would be affected by TZ, so we avoid comparing against build time.)
+
+    bool synced = false;
     for (int i = 0; i < 600; i++) {
         // Toggle LED every 100ms (every 2 iterations of 50ms)
         if (i % 2 == 0) {
@@ -68,37 +64,57 @@ void SntpTimeAdapter::start()
         }
         time_t now;
         std::time(&now);
-        if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
+        // SNTP reports COMPLETED and time is post-2020 (plausible, not epoch)
+        if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED
+            && now >= 1577836800) {  // 2020-01-01 00:00:00 UTC
             gpio_set_level(SNTP_LED_GPIO, 0);  // LED off
-            // Compute offset from boot time to real Unix epoch
             uint64_t real_us = (uint64_t)now * 1000000ULL;
             uint64_t boot_us = esp_timer_get_time();
             boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
+            sntp_synced_ = true;
+            synced = true;
             ESP_LOGI(TAG, "SNTP синхронизирован, UTC: %lld", (long long)now);
-            if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: синхр. OK, UNIX-время %lld с",
-                                        (long long)now);
+            if (logger_) logger_->event(ILogger::SYSTEM,
+                "SNTP: синхр. OK, time=%lld с", (long long)now);
             break;
+        }
+        // Diagnostic: log status every 5 seconds
+        if (i > 0 && i % 100 == 0) {
+            ESP_LOGI(TAG, "SNTP: ожидание %d/%d с, status=%d, RTC=%lld",
+                     i / 20, 30, sntp_get_sync_status(), (long long)now);
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-    if (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED) {
+
+    if (!synced) {
         gpio_set_level(SNTP_LED_GPIO, 0);  // LED off
         sntp_synced_ = false;
-        ESP_LOGW(TAG, "SNTP: таймаут синхронизации");
-        if (logger_) logger_->event(ILogger::SYSTEM, "SNTP: таймаут");
+        ESP_LOGW(TAG, "SNTP: таймаут (30 с) — сервер %s недоступен", srv0_);
+        if (logger_) logger_->event(ILogger::SYSTEM,
+            "SNTP: таймаут, сервер %s недоступен", srv0_);
 
         // Try restoring manual time offset from NVS
         if (restore_time_offset()) {
-            ESP_LOGI(TAG, "SNTP недоступен — используется сохранённое время");
+            ESP_LOGI(TAG, "SNTP недоступен — используется сохранённое время из NVS");
             if (logger_) logger_->event(ILogger::SYSTEM,
-                "SNTP: недоступен, время из NVS");
+                "SNTP: недоступен, время восстановлено из NVS");
         } else {
-            ESP_LOGW(TAG, "SNTP недоступен, ручное время не задано");
-            if (logger_) logger_->event(ILogger::SYSTEM,
-                "SNTP: недоступен, время не задано");
+            // Last resort: check if RTC retained a plausible time (post-2020)
+            time_t rtc_now;
+            std::time(&rtc_now);
+            if (rtc_now >= 1577836800) {  // 2020-01-01
+                uint64_t real_us = (uint64_t)rtc_now * 1000000ULL;
+                uint64_t boot_us = esp_timer_get_time();
+                boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
+                ESP_LOGW(TAG, "SNTP недоступен — используется время RTC: %lld", (long long)rtc_now);
+                if (logger_) logger_->event(ILogger::SYSTEM,
+                    "SNTP: недоступен, время RTC: %lld с", (long long)rtc_now);
+            } else {
+                ESP_LOGW(TAG, "SNTP недоступен, время RTC недостоверно (%lld)", (long long)rtc_now);
+                if (logger_) logger_->event(ILogger::SYSTEM,
+                    "SNTP: недоступен, время RTC недостоверно");
+            }
         }
-    } else {
-        sntp_synced_ = true;
     }
 }
 

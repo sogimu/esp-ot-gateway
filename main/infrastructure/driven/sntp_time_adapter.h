@@ -32,6 +32,9 @@ public:
     /// Has SNTP successfully synced at least once?
     bool is_synced() const { return sntp_synced_; }
 
+    /// Do we have any valid time reference (SNTP or manual/NVS)?
+    bool has_valid_time() const { return boot_offset_us_.count() != 0; }
+
 private:
     int  tz_offset_ = 3;
     char srv0_[64] = {};

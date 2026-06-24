@@ -30,6 +30,7 @@ bool MqttClientAdapter::connect(const char* uri, const char* user, const char* p
 {
     if (client_) {
         disconnect();
+        vTaskDelay(pdMS_TO_TICKS(200));  // дать TCP-стеку время закрыть соединение
     }
 
     esp_mqtt_client_config_t cfg = {};
@@ -111,11 +112,8 @@ int MqttClientAdapter::subscribe(const char* topic, QoS qos)
 {
     if (!client_) return -1;
 
-    int msg_id = esp_mqtt_client_subscribe(
-        (esp_mqtt_client_handle_t)client_, topic, (int)qos);
-
-    // Проверка дубликата — не добавляем повторно
-    if (msg_id > 0 && sub_count_ < MAX_SUBS) {
+    // Сохраняем топик всегда (даже если ещё не подключены — подпишемся при CONNECTED)
+    if (sub_count_ < MAX_SUBS) {
         bool duplicate = false;
         for (int i = 0; i < sub_count_; i++) {
             if (strcmp(subs_[i].topic, topic) == 0) { duplicate = true; break; }
@@ -128,7 +126,11 @@ int MqttClientAdapter::subscribe(const char* topic, QoS qos)
         }
     }
 
-    return msg_id;
+    // Отправляем SUBSCRIBE только если уже подключены (иначе — при CONNECTED)
+    if (!connected_) return 0;
+
+    return esp_mqtt_client_subscribe(
+        (esp_mqtt_client_handle_t)client_, topic, (int)qos);
 }
 
 int MqttClientAdapter::unsubscribe(const char* topic)

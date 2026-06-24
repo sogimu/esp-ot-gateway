@@ -102,6 +102,9 @@ extern "C" void app_main(void)
         // Full SNTP sync (STA mode has internet)
         ca_time.start();
         ca_time.set_timezone(ca_state.get_tz_offset());
+        if (ca_time.is_synced()) {
+            ca_time.save_time_offset();  // сохранить смещение в NVS для будущих загрузок
+        }
     } else {
         // No internet — try restoring manual time offset from NVS
         if (ca_time.restore_time_offset()) {
@@ -184,14 +187,20 @@ extern "C" void app_main(void)
                         nvs,           // IMqttConfigPersistence
                         ca_state,
                         sys_cfg,       // IConfigureSystem
-                        sys_cfg,       // IConfigurePid
-                        gas_corr,      // IGasCalibration
-                        sys_cfg,       // IFaultReset
-                        sys_cfg,       // IResetStatistics
                         ca_log,
                         ca_time,
                         ca_mqtt_renderer);  // IMqttStateRenderer
-    mqtt.init();
+
+    // MQTT подключается только после получения достоверного времени
+    // (SNTP или ручная установка через NVS).
+    if (ca_time.has_valid_time()) {
+        ESP_LOGI("main", "SNTP: время достоверно — запуск MQTT");
+        ca_log.event(ILogger::SYSTEM, "SNTP: время достоверно, MQTT запускается");
+        mqtt.init();
+    } else {
+        ESP_LOGW("main", "SNTP: время НЕ достоверно — MQTT отключён");
+        ca_log.event(ILogger::SYSTEM, "SNTP: время недостоверно, MQTT отключён");
+    }
 
     // ── Phase 6: Main poller ─────────────────────────────
     MainPollerInteractor main_poller;
