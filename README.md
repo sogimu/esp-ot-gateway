@@ -18,8 +18,8 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 - **DHW priority logic** — Automatic 3-way valve control with configurable hysteresis for indirect hot water tanks
 - **DHW via CH2 enable** — On Baxi boilers, DHW mode requires the `CH2_ENABLE` flag to switch the 3-way valve, even though `SlaveConfig` reports CH2=0
 - **DHW session prediction** — Kalman2D filter estimates remaining heating time and uncertainty for the current DHW cycle, displayed on the web dashboard
-- **Gas flow estimation** — Estimates instant gas flow (m³/h) from burner modulation and return temperature, with multi-window EMA averaging (1h / 3h / 12h / 24h / 7d) and cumulative integral tracking
-- **Gas meter correction journal** — Compare the estimated gas total to the physical meter reading. A correction coefficient (k_calib) is maintained via a Kalman filter across recent corrections, smoothing out noise from small-consumption periods. Logs up to 10 correction entries with timestamps. k_calib survives reboots
+- **Gas flow estimation** — Estimates instant gas flow (m³/h) from input (nameplate) power and burner modulation, with Kalman filtering on modulation and return temperature, a warmup ramp after ignition, calorific value correction via Boyle's law (gas temperature = outdoor + offset), and multi-window EMA averaging (1h / 3h / 12h / 24h / 7d) with cumulative integral tracking. Efficiency is not in the flow formula — the gas meter measures input energy, not output
+- **Gas meter correction journal** — Compare the estimated gas total to the physical meter reading. A correction coefficient (k_calib) is Kalman-smoothed across multiple corrections, preventing wild swings when gas consumption between readings is small. Corrections are rejected when the integral is less than 10% of actual consumption or when no gas has been consumed since the last correction. k_calib survives reboots. Logs up to 10 correction entries with timestamps
 - **Fault monitoring** — ASF flags, OEM diagnostic codes, one-shot fault reset
 - **Event log** — 512-entry ring buffer with 5 categories (System, User, Equipment, Mode, Boot) and real-time filtering in the web UI
 - **Crash diagnostics** — Reset reason detection on every boot, core dump saved to flash on panic, backtrace decoded offline via `decode_crash.sh`
@@ -307,13 +307,13 @@ Real-time event feed with category filter buttons: System, User, Equipment, Mode
 
 ### Gas Meter tab
 
-The gas flow is estimated from a physical boiler model: instant flow (m³/h) is computed from burner modulation, return temperature, and a 3-point efficiency curve, corrected for gas calorific value via Boyle's law (T_gas = T_outdoor + offset). The result is multiplied by a calibration coefficient **K** refined through periodic meter corrections using a Kalman filter across recent corrections.
+The gas flow is estimated from a physical boiler model: instant flow (m³/h) = k × input_power_kW / calorific_value. Input (nameplate) power is computed from burner modulation relative to configured Pmin/Pmax, so efficiency is not needed in the flow formula — the gas meter measures input energy. Calorific value is corrected for gas temperature via Boyle's law (T_gas = T_outdoor + offset). The result is multiplied by a calibration coefficient **K** refined through periodic meter corrections using a Kalman filter across recent corrections.
 
 | Section | Description |
 |---------|-------------|
 | Gas flow | Instant flow (m³/h), cumulative integral (m³), and multi-window averages: 1h / 3h / 12h / 24h / 7d |
 | Meter correction | Set the physical meter reading to compare against the estimated total. The correction coefficient K is Kalman-smoothed across multiple corrections, preventing wild swings when gas consumption between readings is small. K survives reboots. Correction journal shows actual reading, estimated total, difference, error %, and K before/after each entry |
-| Boiler model | Configurable physical model parameters: CH power (warm/hot curves), DHW power, 3-point efficiency curve (T_return → η), and gas temperature offset |
+| Boiler model | Configurable physical model parameters: CH power (Pmin/Pmax), DHW power, 3-point efficiency curve (T_return → η), and gas temperature offset |
 
 ### Control tab
 
@@ -481,7 +481,7 @@ esp-ot-gateway/
 │   ├── CMakeLists.txt                # Host-only: Catch2, sanitizers, coverage
 │   ├── run_tests.sh
 │   ├── fakes/                        # Fake adapters for testing
-│   └── test_*.cpp                    # 181 tests, 443 assertions
+│   └── test_*.cpp                    # 359 tests, 878 assertions
 ├── docs/
 │   └── *.pdf
 └── scripts/
