@@ -192,19 +192,19 @@ TEST_CASE("ConfigStore: blob size invariants are documented", "[nvs][struct]")
     // These must match the static_assert values in nvs_config_adapter.h
     // If any fail, the static_assert catches it at compile time.
 
-    // NvsHistBlob: 4 (samples) + 1000 * 2 (hist) = 2004
+    // NvsHistBlob: 4 (samples) + 1000 * 4 (hist) = 4004
     // NvsCycleBlob: 4+4+4+4 + 256*2 + 256*2 = 1040
     // NvsGasEmaBlob: 5*4 + 8 = 28
-    // NvsCalibBlob: 10*4 = 40
+    // NvsCalibBlob: 8*4 = 32
     // NvsMeterBlob: 4+4+4+4+4 + 32*(4+4+4+4+4+4) = 20 + 32*24 = 788
     // NvsPredictBlob: 3*4 + 4 + 4 = 20
 
     // Volatile test — verifies sizeof at runtime as a sanity check
     // (the real guard is static_assert in nvs_config_adapter.h)
-    REQUIRE(sizeof(NvsHistBlob) == 2004);
+    REQUIRE(sizeof(NvsHistBlob) == 4004);
     REQUIRE(sizeof(NvsCycleBlob) == 1040);
     REQUIRE(sizeof(NvsGasEmaBlob) == 28);
-    REQUIRE(sizeof(NvsCalibBlob) == 40);
+    REQUIRE(sizeof(NvsCalibBlob) == 32);
     REQUIRE(sizeof(NvsMeterBlob) == 260);
     REQUIRE(sizeof(NvsPredictBlob) == 20);
 }
