@@ -64,11 +64,10 @@ TEST_CASE("calc_power ignores MWT in DHW mode", "[gas_model][dhw]")
 // DHW: efficiency
 // ═══════════════════════════════════════════════════════════════
 
-TEST_CASE("efficiency is 0.88 in DHW mode regardless of T_ret", "[gas_model][dhw]")
+TEST_CASE("DHW and CH have same flow with same power params", "[gas_model][dhw]")
 {
-    // This test verifies the eta selection in poll(), which uses dhw_active_
-    // to choose between 0.88 (fixed DHW) and efficiency_continuous().
-    // We test by setting up the service and checking the flow calculation path.
+    // With input-power model, flow depends only on input power and cv,
+    // not on efficiency. CH and DHW with same modulation and params → same flow.
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
@@ -80,10 +79,9 @@ TEST_CASE("efficiency is 0.88 in DHW mode regardless of T_ret", "[gas_model][dhw
     state.set_flame(true);
     svc.set_k_calib(1.0f);
 
-    // First poll: CH mode (dhw_active_ = false) → uses efficiency_continuous
+    // First poll: CH mode — run many iterations for Kalman convergence
     svc.poll();
-    time.advance_ms(10000);
-    svc.poll();
+    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.poll(); }
     float flow_ch = svc.instant_flow();
     INFO("flow in CH mode: " << flow_ch);
 
@@ -92,86 +90,66 @@ TEST_CASE("efficiency is 0.88 in DHW mode regardless of T_ret", "[gas_model][dhw
     state.set_dhw_active(true);
     state.set_flame(true);
     svc.poll();
-    time.advance_ms(10000);
-    svc.poll();
+    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.poll(); }
     float flow_dhw = svc.instant_flow();
     INFO("flow in DHW mode: " << flow_dhw);
 
-    // In DHW mode, eta = 0.88 (lower than CH at 40C return which is 0.98)
-    // Lower eta → higher flow (flow ∝ 1/eta), so flow_dhw > flow_ch
     CHECK(flow_ch > 0.0f);
     CHECK(flow_dhw > 0.0f);
-    // DHW should have higher flow due to lower fixed efficiency (0.88 vs ~0.98)
-    CHECK(flow_dhw > flow_ch);
+    // With same params, CH and DHW should have equal flow (no efficiency term)
+    CHECK(flow_ch == Approx(flow_dhw).margin(0.01f));
 }
 
 // ═══════════════════════════════════════════════════════════════
 // CH: calc_power with state parameters
 // ═══════════════════════════════════════════════════════════════
 
-TEST_CASE("calc_power uses ch_pmin_warm from state", "[gas_model][ch]")
+TEST_CASE("calc_power uses ch_pmin from state", "[gas_model][ch]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    // Set a non-default ch_pmin_warm
-    state.set_ch_pmin_warm(5.0f);
+    // Set a non-default ch_pmin
+    state.set_ch_pmin(5.0f);
 
-    // MWT=40, mod=1% → ch_pmin_warm (5.0) + (pmax-pmin)*0.01
-    // pmax_warm default=21.8 → 5.0 + 16.8*0.01 = 5.168
+    // mod=1% → ch_pmin (5.0) + (pmax-pmin)*0.01
+    // default ch_pmax=24.0 → 5.0 + 19.0*0.01 = 5.19
     float power = svc.calc_power(1.0f, 50.0f, 30.0f);
-    CHECK(power == Approx(5.168f).margin(0.01f));
+    CHECK(power == Approx(5.19f).margin(0.01f));
 }
 
-TEST_CASE("calc_power uses ch_pmax_hot from state", "[gas_model][ch]")
+TEST_CASE("calc_power uses ch_pmax from state", "[gas_model][ch]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    // Set a non-default ch_pmax_hot
-    state.set_ch_pmax_hot(25.0f);
-    state.set_ch_pmin_hot(3.0f);
+    // Set a non-default ch_pmax
+    state.set_ch_pmax(25.0f);
+    state.set_ch_pmin(3.0f);
 
-    // Set validity flags so MWT path is used, not fallback
-    svc.flow_temp_valid_ = true;
-    svc.ret_temp_valid_  = true;
-
-    // MWT=70, mod=100% → should use ch_pmax_hot (25.0)
+    // mod=100% → should use ch_pmax (25.0) — independent of MWT
     float power = svc.calc_power(100.0f, 80.0f, 60.0f);
     CHECK(power == Approx(25.0f).margin(0.001f));
+
+    // Same at any MWT (input power doesn't depend on temperatures)
+    float power2 = svc.calc_power(100.0f, 40.0f, 30.0f);
+    CHECK(power2 == Approx(25.0f).margin(0.001f));
 }
 
-TEST_CASE("calc_power uses ch_pmax_warm from state at MWT=40", "[gas_model][ch]")
+TEST_CASE("calc_power with non-default ch_pmin/ch_pmax", "[gas_model][ch]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    state.set_ch_pmax_warm(22.0f);
-    state.set_ch_pmin_warm(4.0f);
+    state.set_ch_pmin(4.0f);
+    state.set_ch_pmax(18.0f);
 
-    svc.flow_temp_valid_ = true;
-    svc.ret_temp_valid_  = true;
-
-    // MWT=40, mod=100% → should use ch_pmax_warm (22.0)
-    float power = svc.calc_power(100.0f, 50.0f, 30.0f);
-    CHECK(power == Approx(22.0f).margin(0.001f));
-}
-
-TEST_CASE("calc_power fallback uses warm params from state", "[gas_model][ch]")
-{
-    FakeHeatingStateStore state;
-    FakeTimeSource time;
-    GasFlowService svc(state, time);
-
-    state.set_ch_pmin_warm(4.0f);
-    state.set_ch_pmax_warm(18.0f);
-
-    // Both temps zero → fallback to warm params
+    // mod=50% → 4.0 + (18.0-4.0)*0.5 = 11.0 kW
     float power = svc.calc_power(50.0f, 0.0f, 0.0f);
-    CHECK(power == Approx(4.0f + (18.0f - 4.0f) * 0.5f).margin(0.001f));
+    CHECK(power == Approx(11.0f).margin(0.001f));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -288,4 +266,24 @@ TEST_CASE("corrected_calorific offset positive raises CV", "[gas_model][cv]")
     // T_gas = 0 + 5 = 5C. CV = 9.5 * 288.15 / (5+273.15) = 9.5 * 288.15/278.15
     float expected = 9.5f * (288.15f / 278.15f);
     CHECK(svc.corrected_calorific() == Approx(expected).margin(0.001f));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DHW: dynamic param changes
+// ═══════════════════════════════════════════════════════════════
+
+TEST_CASE("calc_power respects dhw_pmin after state change", "[gas_model][dhw]")
+{
+    FakeHeatingStateStore state;
+    FakeTimeSource time;
+    GasFlowService svc(state, time);
+
+    // Start with defaults — CH and DHW both 5.5/24.0
+    svc.dhw_active_ = true;
+    CHECK(svc.calc_power(50.0f, 0.0f, 0.0f) == Approx(14.75f).margin(0.001f));
+
+    // Change DHW max — should affect next calc_power
+    state.set_dhw_pmax(20.0f);
+    // power = 5.5 + (20.0-5.5)*0.5 = 5.5 + 7.25 = 12.75
+    CHECK(svc.calc_power(50.0f, 0.0f, 0.0f) == Approx(12.75f).margin(0.001f));
 }

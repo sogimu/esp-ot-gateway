@@ -153,7 +153,14 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
         v = json_get_int(body, "\"reset_corrections\""); if (v > 0) self->gas_->reset_corrections();
         f = json_get_float(body, "\"k_calib\""); if (f > -1e37f) self->gas_->set_k_calib(f);
         f = json_get_float(body, "\"gas_meter_base\""); if (f > -1e37f) self->gas_->set_gas_meter_base(f);
-        f = json_get_float(body, "\"gas_meter_correct\""); if (f > -1e37f) self->gas_->add_meter_correction(f);
+        f = json_get_float(body, "\"gas_meter_correct\"");
+        if (f > -1e37f) {
+            bool ok = self->gas_->add_meter_correction(f);
+            if (!ok) {
+                httpd_resp_set_type(req, "application/json");
+                return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"rejected\"}");
+            }
+        }
     }
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, "{\"ok\":true}");

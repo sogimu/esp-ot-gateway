@@ -240,8 +240,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         "\"mod_filt\":%.1f,\"t_ret_filt\":%.1f,"
         "\"k_calib\":%.3f,\"p_max\":%.1f,\"gas_cal\":%.1f,"
         "\"gas_temp_offset\":%.1f,"
-        "\"ch_pmin_warm\":%.1f,\"ch_pmax_warm\":%.1f,"
-        "\"ch_pmin_hot\":%.1f,\"ch_pmax_hot\":%.1f,"
+        "\"ch_pmin\":%.1f,\"ch_pmax\":%.1f,"
         "\"dhw_pmin\":%.1f,\"dhw_pmax\":%.1f,"
         "\"eff_t1\":%.0f,\"eff_v1\":%.2f,"
         "\"eff_t2\":%.0f,\"eff_v2\":%.2f,"
@@ -271,8 +270,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         (double)gas_flow_->k_calib(),
         (double)state_->get_p_max(), (double)state_->get_gas_calorific(),
         (double)state_->get_gas_temp_offset(),
-        (double)state_->get_ch_pmin_warm(), (double)state_->get_ch_pmax_warm(),
-        (double)state_->get_ch_pmin_hot(), (double)state_->get_ch_pmax_hot(),
+        (double)state_->get_ch_pmin(), (double)state_->get_ch_pmax(),
         (double)state_->get_dhw_pmin(), (double)state_->get_dhw_pmax(),
         (double)state_->get_eff_t1(), (double)state_->get_eff_v1(),
         (double)state_->get_eff_t2(), (double)state_->get_eff_v2(),

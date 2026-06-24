@@ -256,11 +256,9 @@ TEST_CASE("render_stats contains gas_temp_offset and model fields", "[integratio
 
     // Set boiler model values
     state.set_gas_temp_offset(-5.0f);
-    state.set_ch_pmin_warm(3.7f);
-    state.set_ch_pmax_warm(21.8f);
-    state.set_ch_pmin_hot(3.4f);
-    state.set_ch_pmax_hot(20.0f);
-    state.set_dhw_pmin(5.0f);
+    state.set_ch_pmin(5.5f);
+    state.set_ch_pmax(24.0f);
+    state.set_dhw_pmin(5.5f);
     state.set_dhw_pmax(24.0f);
     state.set_eff_t1(30.0f);
     state.set_eff_v1(0.98f);
@@ -283,10 +281,8 @@ TEST_CASE("render_stats contains gas_temp_offset and model fields", "[integratio
     INFO("JSON output: " << buf);
 
     CHECK(json_has_key(buf, "\"gas_temp_offset\""));
-    CHECK(json_has_key(buf, "\"ch_pmin_warm\""));
-    CHECK(json_has_key(buf, "\"ch_pmax_warm\""));
-    CHECK(json_has_key(buf, "\"ch_pmin_hot\""));
-    CHECK(json_has_key(buf, "\"ch_pmax_hot\""));
+    CHECK(json_has_key(buf, "\"ch_pmin\""));
+    CHECK(json_has_key(buf, "\"ch_pmax\""));
     CHECK(json_has_key(buf, "\"dhw_pmin\""));
     CHECK(json_has_key(buf, "\"dhw_pmax\""));
     CHECK(json_has_key(buf, "\"eff_t1\""));

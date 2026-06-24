@@ -64,7 +64,6 @@ private:
     Kalman1D kalman_ret_{0, 0.05f, 0.3f};
 
     float k_calib_ = 1.0f;
-    float p_max_kw_ = 20.0f;
     float gas_calorific_ = 9.5f;
     float outdoor_temp_ = 0.0f;
     bool outdoor_temp_valid_ = false;

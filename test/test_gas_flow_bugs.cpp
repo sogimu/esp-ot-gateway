@@ -339,15 +339,16 @@ TEST_CASE("flow with eta in denominator", "[gas_flow][efficiency]")
     }
 
     float flow = svc.instant_flow();
-    INFO("flow with mod=50%, CV=9.45, eta=0.90, calc_power fallback (T_flow=0): " << flow);
-    // calc_power uses fallback (flow_temp=0): ch_pmin_warm=3.7, ch_pmax_warm=21.8
-    // => 3.7+18.1*0.5=12.75 kW → flow = 1.0 * 12.75 / 9.45 / 0.90 ≈ 1.499
-    CHECK(flow == Approx(12.75f / (9.45f * 0.90f)).margin(0.06f));
+    INFO("flow with mod=50%, CV=9.45, ch_pmin=5.5 ch_pmax=24.0: " << flow);
+    // Input power: ch_pmin=5.5, ch_pmax=24.0 → 5.5+18.5*0.5=14.75 kW
+    // flow = 1.0 * 14.75 / 9.45 ≈ 1.561
+    CHECK(flow == Approx(14.75f / 9.45f).margin(0.06f));
 }
 
-TEST_CASE("higher efficiency gives lower flow", "[gas_flow][efficiency]")
+TEST_CASE("efficiency does not affect gas flow", "[gas_flow][efficiency]")
 {
-    // With eta in denominator: flow ∝ 1/eta, so higher eta → lower flow
+    // With input-power model: flow = k * P_input / cv, no eta term
+    // Efficiency only affects heat output, not gas consumption
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
@@ -358,26 +359,24 @@ TEST_CASE("higher efficiency gives lower flow", "[gas_flow][efficiency]")
     state.set_flame(true);
     svc.set_k_calib(1.0f);
 
-    // First poll at high efficiency (low return temp)
-    state.set_return_temp(25.0f);   // eta = 0.98
+    // Poll at low return temp (high condensing efficiency)
+    state.set_return_temp(25.0f);
     svc.poll(); // setup
-    time.advance_ms(10000);
-    svc.poll();
-    float flow_high_eff = svc.instant_flow();
-    INFO("flow with eta=0.98: " << flow_high_eff);
+    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.poll(); }
+    float flow_cold = svc.instant_flow();
+    INFO("flow at ret=25C: " << flow_cold);
 
-    // Then at low efficiency (high return temp)
+    // Poll at high return temp (low efficiency)
     svc.reset();
-    state.set_return_temp(85.0f);   // eta = 0.88
-    state.set_flame(true); // reset clears flame_prev_, need to re-set
+    state.set_return_temp(85.0f);
+    state.set_flame(true);
     svc.poll(); // setup
-    time.advance_ms(10000);
-    svc.poll();
-    float flow_low_eff = svc.instant_flow();
-    INFO("flow with eta=0.88: " << flow_low_eff);
+    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.poll(); }
+    float flow_hot = svc.instant_flow();
+    INFO("flow at ret=85C: " << flow_hot);
 
-    // Higher efficiency (0.98) should give lower flow than lower efficiency (0.88)
-    CHECK(flow_high_eff < flow_low_eff);
+    // Flow should be the same — efficiency does NOT affect gas input
+    CHECK(flow_cold == Approx(flow_hot).margin(0.01f));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -508,50 +507,44 @@ TEST_CASE("calc_power at 1pct or above returns proportional power", "[gas_flow][
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    // At exactly 1%, power = pmin + (pmax-pmin)*0.01
-    // MWT=70 (80/60): Pmin=3.4, Pmax=20.0 → 3.4 + 16.6*0.01 = 3.566
-    CHECK(svc.calc_power(1.0f, 80.0f, 60.0f) == Approx(3.566f).margin(0.01f));
-    // MWT=40 (50/30): Pmin=3.7, Pmax=21.8 → 3.7 + 18.1*0.01 = 3.881
-    CHECK(svc.calc_power(1.0f, 50.0f, 30.0f) == Approx(3.881f).margin(0.01f));
+    // Default ch_pmin=5.5, ch_pmax=24.0 → 5.5 + 18.5*0.01 = 5.685
+    // Input power is independent of MWT
+    CHECK(svc.calc_power(1.0f, 80.0f, 60.0f) == Approx(5.685f).margin(0.01f));
+    CHECK(svc.calc_power(1.0f, 50.0f, 30.0f) == Approx(5.685f).margin(0.01f));
 }
 
-TEST_CASE("calc_power at 100pct returns Pmax (20.0-21.8 kW depending on MWT)", "[gas_flow][calc_power]")
+TEST_CASE("calc_power at 100pct returns Pmax (24.0 kW)", "[gas_flow][calc_power]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    // MWT=70 (80/60 flow/ret) → Pmax=20.0
-    CHECK(svc.calc_power(100.0f, 80.0f, 60.0f) == Approx(20.0f).margin(0.001f));
-
-    // MWT=40 (50/30 flow/ret) → Pmax=21.8
-    CHECK(svc.calc_power(100.0f, 50.0f, 30.0f) == Approx(21.8f).margin(0.001f));
+    // Input power = 24.0 kW at 100% modulation (independent of MWT)
+    CHECK(svc.calc_power(100.0f, 80.0f, 60.0f) == Approx(24.0f).margin(0.001f));
+    CHECK(svc.calc_power(100.0f, 50.0f, 30.0f) == Approx(24.0f).margin(0.001f));
 }
 
-TEST_CASE("calc_power at 50pct 80/60 returns ~11.7 kW", "[gas_flow][calc_power]")
+TEST_CASE("calc_power at 50pct returns ~14.75 kW", "[gas_flow][calc_power]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    // MWT=70: Pmin=3.4, Pmax=20.0 → 3.4 + (20.0-3.4)*0.5 = 3.4 + 8.3 = 11.7
-    CHECK(svc.calc_power(50.0f, 80.0f, 60.0f) == Approx(11.7f).margin(0.001f));
+    // ch_pmin=5.5, ch_pmax=24.0 → 5.5 + 18.5*0.5 = 14.75
+    CHECK(svc.calc_power(50.0f, 80.0f, 60.0f) == Approx(14.75f).margin(0.001f));
 }
 
-TEST_CASE("calc_power with zero flow/ret temp uses fallback warm params", "[gas_flow][calc_power]")
+TEST_CASE("calc_power uses ch_pmin/ch_pmax independent of temperatures", "[gas_flow][calc_power]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    // Both zero → fallback: ch_pmin_warm=3.7, ch_pmax_warm=21.8 → 3.7 + 18.1*0.5 = 12.75
-    CHECK(svc.calc_power(50.0f, 0.0f, 0.0f) == Approx(12.75f).margin(0.001f));
-
-    // flow=0 only → fallback
-    CHECK(svc.calc_power(50.0f, 0.0f, 60.0f) == Approx(12.75f).margin(0.001f));
-
-    // ret=0 only → fallback
-    CHECK(svc.calc_power(50.0f, 80.0f, 0.0f) == Approx(12.75f).margin(0.001f));
+    // Default ch_pmin=5.5, ch_pmax=24.0 → 5.5 + 18.5*0.5 = 14.75 kW
+    // Input power does not depend on MWT — same at any temperature
+    CHECK(svc.calc_power(50.0f, 0.0f, 0.0f) == Approx(14.75f).margin(0.001f));
+    CHECK(svc.calc_power(50.0f, 80.0f, 60.0f) == Approx(14.75f).margin(0.001f));
+    CHECK(svc.calc_power(50.0f, 40.0f, 30.0f) == Approx(14.75f).margin(0.001f));
 }
 
 TEST_CASE("calc_power monotonic with modulation", "[gas_flow][calc_power]")
@@ -700,19 +693,6 @@ TEST_CASE("warmup factor 1.0 after 60 seconds", "[gas_flow][flame][warmup]")
     CHECK(flow_after_warmup > 0.0f);
 }
 
-// ═══════════════════════════════════════════════════════════════
-// p_max_kw_ default
-// ═══════════════════════════════════════════════════════════════
-
-TEST_CASE("p_max_kw_ default is 20.0", "[gas_flow][p_max]")
-{
-    FakeHeatingStateStore state;
-    FakeTimeSource time;
-    GasFlowService svc(state, time);
-
-    // Access the private field via #define private public
-    CHECK(svc.p_max_kw_ == 20.0f);
-}
 
 // ═══════════════════════════════════════════════════════════════
 // outdoor_temp_valid_ flag lifecycle
@@ -907,27 +887,26 @@ TEST_CASE("calc_power uses MWT after validity flags set, not fallback", "[gas_fl
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    // Set flags directly then call calc_power with non-zero data
+    // Input power is flat — same at any MWT or flag state
     svc.flow_temp_valid_ = true;
     svc.ret_temp_valid_  = true;
 
-    // MWT=(80+60)/2=70 → Pmin=3.4, Pmax=20.0 → power = 3.4+16.6*0.5 = 11.7
+    // ch_pmin=5.5, ch_pmax=24.0 → 5.5 + 18.5*0.5 = 14.75
     float power = svc.calc_power(50.0f, 80.0f, 60.0f);
-    CHECK(power == Approx(11.7f).margin(0.001f));
+    CHECK(power == Approx(14.75f).margin(0.001f));
 }
 
 TEST_CASE("calc_power with flags false but non-zero params still works", "[gas_flow][temp_valid]")
 {
-    // The combined check (flag==false && value==0) means direct test calls
-    // with non-zero params work even with flags=false — backward compat.
+    // Input power does not depend on temp validity flags
     FakeHeatingStateStore state;
     FakeTimeSource time;
     GasFlowService svc(state, time);
 
-    // Both flags false (default), but passing non-zero values
+    // Both flags false (default), passing non-zero values
     float power = svc.calc_power(50.0f, 80.0f, 60.0f);
-    // Should use MWT=70 → Pmin=3.4, Pmax=20.0 → 11.7
-    CHECK(power == Approx(11.7f).margin(0.001f));
+    // ch_pmin=5.5, ch_pmax=24.0 → 5.5 + 18.5*0.5 = 14.75
+    CHECK(power == Approx(14.75f).margin(0.001f));
 }
 
 TEST_CASE("temp_valid flags reset", "[gas_flow][temp_valid]")

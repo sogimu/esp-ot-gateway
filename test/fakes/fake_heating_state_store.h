@@ -38,9 +38,8 @@ public:
         sntp_srv0_.clear(); sntp_srv1_.clear();
         k_calib_ = 1.0f; p_max_ = 24.0f; gas_calorific_ = 9.5f; gas_meter_base_ = 0;
         gas_temp_offset_ = -5.0f;
-        ch_pmin_warm_ = 3.7f; ch_pmax_warm_ = 21.8f;
-        ch_pmin_hot_ = 3.4f; ch_pmax_hot_ = 20.0f;
-        dhw_pmin_ = 5.0f; dhw_pmax_ = 24.0f;
+        ch_pmin_ = 5.5f; ch_pmax_ = 24.0f;
+        dhw_pmin_ = 5.5f; dhw_pmax_ = 24.0f;
         eff_t1_ = 30.0f; eff_v1_ = 0.98f;
         eff_t2_ = 55.0f; eff_v2_ = 0.93f;
         eff_t3_ = 80.0f; eff_v3_ = 0.88f;
@@ -221,14 +220,10 @@ public:
     // Boiler model config
     void set_gas_temp_offset(float v) override { gas_temp_offset_ = v; }
     float get_gas_temp_offset() const override { return gas_temp_offset_; }
-    void set_ch_pmin_warm(float v) override { ch_pmin_warm_ = v; }
-    float get_ch_pmin_warm() const override { return ch_pmin_warm_; }
-    void set_ch_pmax_warm(float v) override { ch_pmax_warm_ = v; }
-    float get_ch_pmax_warm() const override { return ch_pmax_warm_; }
-    void set_ch_pmin_hot(float v) override { ch_pmin_hot_ = v; }
-    float get_ch_pmin_hot() const override { return ch_pmin_hot_; }
-    void set_ch_pmax_hot(float v) override { ch_pmax_hot_ = v; }
-    float get_ch_pmax_hot() const override { return ch_pmax_hot_; }
+    void set_ch_pmin(float v) override { ch_pmin_ = v; }
+    float get_ch_pmin() const override { return ch_pmin_; }
+    void set_ch_pmax(float v) override { ch_pmax_ = v; }
+    float get_ch_pmax() const override { return ch_pmax_; }
     void set_dhw_pmin(float v) override { dhw_pmin_ = v; }
     float get_dhw_pmin() const override { return dhw_pmin_; }
     void set_dhw_pmax(float v) override { dhw_pmax_ = v; }
@@ -283,9 +278,8 @@ public:
     std::string sntp_srv0_, sntp_srv1_;
     float  k_calib_ = 1.0f, p_max_ = 24.0f, gas_calorific_ = 9.5f, gas_meter_base_ = 0;
     float  gas_temp_offset_ = -5.0f;
-    float  ch_pmin_warm_ = 3.7f, ch_pmax_warm_ = 21.8f;
-    float  ch_pmin_hot_ = 3.4f, ch_pmax_hot_ = 20.0f;
-    float  dhw_pmin_ = 5.0f, dhw_pmax_ = 24.0f;
+    float  ch_pmin_ = 5.5f, ch_pmax_ = 24.0f;
+    float  dhw_pmin_ = 5.5f, dhw_pmax_ = 24.0f;
     float  eff_t1_ = 30.0f, eff_v1_ = 0.98f;
     float  eff_t2_ = 55.0f, eff_v2_ = 0.93f;
     float  eff_t3_ = 80.0f, eff_v3_ = 0.88f;
