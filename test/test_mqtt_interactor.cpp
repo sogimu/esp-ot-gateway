@@ -29,10 +29,10 @@ using Catch::Approx;
 
 struct SpySystemConfig : public IConfigureSystem {
     void set_ch_mode(CHMode) override {}
-    void set_ch_enable(bool) override {}
+    void set_ch_enable(bool v) override { ch_enable_ = v; ch_enable_set_ = true; }
     void set_dhw_enable(bool v) override { dhw_enable_ = v; dhw_enable_set_ = true; }
-    void set_ch_setpoint(float) override {}
-    void set_dhw_setpoint(float) override {}
+    void set_ch_setpoint(float v) override { ch_setpoint_ = v; ch_setpoint_set_ = true; }
+    void set_dhw_setpoint(float v) override { dhw_setpoint_ = v; dhw_setpoint_set_ = true; }
     void set_dhw_hysteresis(float) override {}
     void set_schedule(const CH_Schedule&) override {}
     void set_pid_schedule(const PID_Schedule&) override {}
@@ -42,8 +42,10 @@ struct SpySystemConfig : public IConfigureSystem {
     void reset_cycle_stats() override {}
     void reset_gas_stats() override {}
 
-    bool dhw_enable_set_ = false;
-    bool dhw_enable_ = false;
+    bool ch_enable_set_ = false, dhw_enable_set_ = false;
+    bool ch_enable_ = false, dhw_enable_ = false;
+    bool ch_setpoint_set_ = false, dhw_setpoint_set_ = false;
+    float ch_setpoint_ = 0, dhw_setpoint_ = 0;
 };
 
 struct MqttTestLogger : public ILogger {
@@ -161,28 +163,108 @@ TEST_CASE("MqttInteractor: handle_control dhw_enable=0 выключает БКН
     REQUIRE_FALSE(f.spy.dhw_enable_);
 }
 
-TEST_CASE("MqttInteractor: handle_control игнорирует прочие поля", "[mqtt][interactor][control]") {
+TEST_CASE("MqttInteractor: handle_control ch_enable и ch_setpoint", "[mqtt][interactor][control]") {
     MqttTestFixture f;
     f.cfg.preset("h", 1883, "", "", "gw", true, false);
     f.interactor.init();
     f.mqtt.inject_connected();
     f.interactor.poll();
 
-    // Отправляем команду с кучей полей — только dhw_enable должен сработать
+    IMqttMessageSink::Message cmd;
+    snprintf(cmd.topic, sizeof(cmd.topic), "gw/cmd/control");
+    snprintf(cmd.payload, sizeof(cmd.payload), "{\"ch_enable\":1,\"ch_setpoint\":65}");
+    cmd.payload_len = (int)strlen(cmd.payload);
+    f.sink.push(cmd);
+    f.interactor.poll();
+
+    REQUIRE(f.spy.ch_enable_set_);
+    REQUIRE(f.spy.ch_enable_);
+    REQUIRE(f.spy.ch_setpoint_set_);
+    REQUIRE(f.spy.ch_setpoint_ == Approx(65.0f));
+}
+
+TEST_CASE("MqttInteractor: handle_control dhw_setpoint", "[mqtt][interactor][control]") {
+    MqttTestFixture f;
+    f.cfg.preset("h", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+
+    IMqttMessageSink::Message cmd;
+    snprintf(cmd.topic, sizeof(cmd.topic), "gw/cmd/control");
+    snprintf(cmd.payload, sizeof(cmd.payload), "{\"dhw_setpoint\":60}");
+    cmd.payload_len = (int)strlen(cmd.payload);
+    f.sink.push(cmd);
+    f.interactor.poll();
+
+    REQUIRE(f.spy.dhw_setpoint_set_);
+    REQUIRE(f.spy.dhw_setpoint_ == Approx(60.0f));
+}
+
+TEST_CASE("MqttInteractor: handle_control clamping значений", "[mqtt][interactor][control]") {
+    MqttTestFixture f;
+    f.cfg.preset("h", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+
+    // ch_setpoint выше максимума → clamp to 80
+    IMqttMessageSink::Message cmd;
+    snprintf(cmd.topic, sizeof(cmd.topic), "gw/cmd/control");
+    snprintf(cmd.payload, sizeof(cmd.payload), "{\"ch_setpoint\":999}");
+    cmd.payload_len = (int)strlen(cmd.payload);
+    f.sink.push(cmd);
+    f.interactor.poll();
+    REQUIRE(f.spy.ch_setpoint_ == Approx(80.0f));
+
+    // ch_setpoint ниже минимума → clamp to 20
+    f.spy.ch_setpoint_set_ = false;
+    snprintf(cmd.payload, sizeof(cmd.payload), "{\"ch_setpoint\":-5}");
+    cmd.payload_len = (int)strlen(cmd.payload);
+    f.sink.push(cmd);
+    f.interactor.poll();
+    REQUIRE(f.spy.ch_setpoint_ == Approx(20.0f));
+
+    // dhw_setpoint ниже минимума → clamp to 35
+    snprintf(cmd.payload, sizeof(cmd.payload), "{\"dhw_setpoint\":10}");
+    cmd.payload_len = (int)strlen(cmd.payload);
+    f.sink.push(cmd);
+    f.interactor.poll();
+    REQUIRE(f.spy.dhw_setpoint_ == Approx(35.0f));
+
+    // dhw_setpoint выше максимума → clamp to 80
+    f.spy.dhw_setpoint_set_ = false;
+    snprintf(cmd.payload, sizeof(cmd.payload), "{\"dhw_setpoint\":999}");
+    cmd.payload_len = (int)strlen(cmd.payload);
+    f.sink.push(cmd);
+    f.interactor.poll();
+    REQUIRE(f.spy.dhw_setpoint_ == Approx(80.0f));
+}
+
+TEST_CASE("MqttInteractor: handle_control все поля в одном сообщении", "[mqtt][interactor][control]") {
+    MqttTestFixture f;
+    f.cfg.preset("h", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+
     IMqttMessageSink::Message cmd;
     snprintf(cmd.topic, sizeof(cmd.topic), "gw/cmd/control");
     snprintf(cmd.payload, sizeof(cmd.payload),
-        "{\"ch_enable\":1,\"ch_setpoint\":80,\"dhw_setpoint\":70,"
-        "\"dhw_enable\":1,\"pid_kp\":5,\"fault_reset\":1}");
+        "{\"dhw_enable\":0,\"ch_enable\":1,\"ch_setpoint\":70,\"dhw_setpoint\":55}");
     cmd.payload_len = (int)strlen(cmd.payload);
     f.sink.push(cmd);
-
     f.interactor.poll();
+
     REQUIRE(f.spy.dhw_enable_set_);
-    REQUIRE(f.spy.dhw_enable_);
+    REQUIRE_FALSE(f.spy.dhw_enable_);
+    REQUIRE(f.spy.ch_enable_set_);
+    REQUIRE(f.spy.ch_enable_);
+    REQUIRE(f.spy.ch_setpoint_ == Approx(70.0f));
+    REQUIRE(f.spy.dhw_setpoint_ == Approx(55.0f));
 }
 
-TEST_CASE("MqttInteractor: handle_control без dhw_enable ничего не делает", "[mqtt][interactor][control]") {
+TEST_CASE("MqttInteractor: handle_control неизвестные поля игнорируются", "[mqtt][interactor][control]") {
     MqttTestFixture f;
     f.cfg.preset("h", 1883, "", "", "gw", true, false);
     f.interactor.init();
@@ -191,12 +273,19 @@ TEST_CASE("MqttInteractor: handle_control без dhw_enable ничего не д
 
     IMqttMessageSink::Message cmd;
     snprintf(cmd.topic, sizeof(cmd.topic), "gw/cmd/control");
-    snprintf(cmd.payload, sizeof(cmd.payload), "{\"ch_setpoint\":50}");
+    snprintf(cmd.payload, sizeof(cmd.payload),
+        "{\"pid_kp\":5,\"fault_reset\":1,\"unknown_field\":42}");
     cmd.payload_len = (int)strlen(cmd.payload);
     f.sink.push(cmd);
-
     f.interactor.poll();
-    REQUIRE_FALSE(f.spy.dhw_enable_set_);  // dhw_enable не трогали
+
+    // Ни одно известное поле не изменено
+    REQUIRE_FALSE(f.spy.dhw_enable_set_);
+    REQUIRE_FALSE(f.spy.ch_enable_set_);
+    REQUIRE_FALSE(f.spy.ch_setpoint_set_);
+    REQUIRE_FALSE(f.spy.dhw_setpoint_set_);
+    // Не должно крашнуться
+    REQUIRE(f.log.event_count_ >= 0);
 }
 
 TEST_CASE("MqttInteractor: handle_control повреждённый JSON не крашит", "[mqtt][interactor][control]") {
@@ -212,9 +301,158 @@ TEST_CASE("MqttInteractor: handle_control повреждённый JSON не к�
     cmd.payload_len = (int)strlen(cmd.payload);
     f.sink.push(cmd);
 
-    // Не должно упасть
     f.interactor.poll();
     REQUIRE(f.log.event_count_ >= 0);  // просто не крашнулось
+}
+
+TEST_CASE("MqttInteractor: handle_control dhw_enable без подключения не публикует статус", "[mqtt][interactor][control]") {
+    MqttTestFixture f;
+    f.cfg.preset("h", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    // НЕ вызываем inject_connected — состояние != CONNECTED
+    f.interactor.poll();
+
+    IMqttMessageSink::Message cmd;
+    snprintf(cmd.topic, sizeof(cmd.topic), "gw/cmd/control");
+    snprintf(cmd.payload, sizeof(cmd.payload), "{\"dhw_enable\":1}");
+    cmd.payload_len = (int)strlen(cmd.payload);
+    f.sink.push(cmd);
+    f.interactor.poll();
+
+    // Команда обработана...
+    REQUIRE(f.spy.dhw_enable_set_);
+    // ...но статус не опубликован (не CONNECTED)
+    REQUIRE(f.renderer.render_status_called_ == 0);
+}
+
+// ── Тесты HA discovery ──────────────────────────────────────
+
+TEST_CASE("MqttInteractor: HA discovery публикуется при первом CONNECTED", "[mqtt][interactor][ha]") {
+    MqttTestFixture f;
+    f.cfg.preset("gw", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.publishes_.clear();
+
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+
+    // 18 entity + online + подписки могут породить publishes
+    int ha_count = f.mqtt.count_publishes_to("homeassistant");
+    REQUIRE(ha_count > 0);
+}
+
+TEST_CASE("MqttInteractor: HA discovery публикует все 18 entity", "[mqtt][interactor][ha]") {
+    MqttTestFixture f;
+    f.cfg.preset("h", 1883, "", "", "testgw", true, false);
+    f.interactor.init();
+    f.mqtt.publishes_.clear();
+
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+
+    // Проверяем конкретные entity
+    REQUIRE(f.mqtt.last_publish_to("homeassistant/sensor/testgw_ch_temp/config") != nullptr);
+    REQUIRE(f.mqtt.last_publish_to("homeassistant/sensor/testgw_dhw_temp/config") != nullptr);
+    REQUIRE(f.mqtt.last_publish_to("homeassistant/binary_sensor/testgw_flame/config") != nullptr);
+    REQUIRE(f.mqtt.last_publish_to("homeassistant/binary_sensor/testgw_fault/config") != nullptr);
+    REQUIRE(f.mqtt.last_publish_to("homeassistant/switch/testgw_ch_enable/config") != nullptr);
+    REQUIRE(f.mqtt.last_publish_to("homeassistant/switch/testgw_dhw_enable/config") != nullptr);
+    REQUIRE(f.mqtt.last_publish_to("homeassistant/number/testgw_ch_setpoint/config") != nullptr);
+    REQUIRE(f.mqtt.last_publish_to("homeassistant/number/testgw_dhw_setpoint/config") != nullptr);
+}
+
+TEST_CASE("MqttInteractor: HA discovery ON switch cmd_tpl генерирует dhw_enable=1", "[mqtt][interactor][ha]") {
+    MqttTestFixture f;
+    f.cfg.preset("gw", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.publishes_.clear();
+
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+
+    // Проверяем что cmd_tpl содержит правильный шаблон с приоритетом
+    auto* p = f.mqtt.last_publish_to("homeassistant/switch/gw_dhw_enable/config");
+    REQUIRE(p != nullptr);
+    // После C++ и JSON парсинга, cmd_tpl должно быть:
+    // {"dhw_enable":{{ (value == "ON") | int }}}
+    // Проверяем что есть скобки вокруг сравнения
+    REQUIRE(std::string(p->data).find("(value ==") != std::string::npos);
+}
+
+TEST_CASE("MqttInteractor: HA discovery не публикуется повторно без триггера", "[mqtt][interactor][ha]") {
+    MqttTestFixture f;
+    f.cfg.preset("gw", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.publishes_.clear();
+
+    // Первый коннект
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+    int first_count = f.mqtt.count_publishes_to("homeassistant");
+    REQUIRE(first_count > 0);
+
+    // Второй коннект без сброса ha_discovery_published_ — discovery не должен удвоиться
+    f.mqtt.publishes_.clear();
+    f.mqtt.inject_disconnected();
+    f.interactor.poll();
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+    // pending_connected_publish_ взводится заново при каждом CONNECTED,
+    // но ha_discovery_published_ уже true → повторной публикации не будет
+    int second_count = f.mqtt.count_publishes_to("homeassistant");
+    REQUIRE(second_count == 0);
+}
+
+TEST_CASE("MqttInteractor: HA discovery можно принудительно переопубликовать", "[mqtt][interactor][ha]") {
+    MqttTestFixture f;
+    f.cfg.preset("h", 1883, "", "", "gw2", true, false);
+    f.interactor.init();
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+    f.mqtt.publishes_.clear();
+
+    // Продвигаем время за cooldown (10 мин + 1 сек)
+    f.time.advance_sec(601);
+
+    // Отправляем ha_discovery команду
+    IMqttMessageSink::Message cmd;
+    snprintf(cmd.topic, sizeof(cmd.topic), "gw2/cmd/ha_discovery");
+    cmd.payload[0] = '\0';
+    cmd.payload_len = 0;
+    f.sink.push(cmd);
+    f.interactor.poll();
+
+    int ha_count = f.mqtt.count_publishes_to("homeassistant");
+    REQUIRE(ha_count == 18);
+}
+
+TEST_CASE("MqttInteractor: ha_discovery повторный вызов в cooldown игнорируется", "[mqtt][interactor][ha]") {
+    MqttTestFixture f;
+    f.cfg.preset("h", 1883, "", "", "gw3", true, false);
+    f.interactor.init();
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+    f.mqtt.publishes_.clear();
+
+    // Продвигаем время за cooldown
+    f.time.advance_sec(601);
+
+    // Первый ручной триггер (после cooldown) — должен сработать
+    IMqttMessageSink::Message cmd;
+    snprintf(cmd.topic, sizeof(cmd.topic), "gw3/cmd/ha_discovery");
+    cmd.payload[0] = '\0';
+    cmd.payload_len = 0;
+    f.sink.push(cmd);
+    f.interactor.poll();
+    int first = f.mqtt.count_publishes_to("homeassistant");
+    REQUIRE(first == 18);
+
+    // Второй сразу — должен игнорироваться (cooldown 10 min)
+    f.mqtt.publishes_.clear();
+    f.sink.push(cmd);
+    f.interactor.poll();
+    int second = f.mqtt.count_publishes_to("homeassistant");
+    REQUIRE(second == 0);
 }
 
 // ── Тесты публикации ──────────────────────────────────────
@@ -284,7 +522,7 @@ TEST_CASE("MqttInteractor: drain_queue обрабатывает все сооб�
     REQUIRE(f.spy.dhw_enable_set_);
 }
 
-// ── Тесты online / HA (HA удалён) ─────────────────────────
+// ── Тесты online ─────────────────────────────────────────
 
 TEST_CASE("MqttInteractor: online публикуется при CONNECTED", "[mqtt][interactor][online]") {
     MqttTestFixture f;
@@ -298,18 +536,6 @@ TEST_CASE("MqttInteractor: online публикуется при CONNECTED", "[mq
     auto* p = f.mqtt.last_publish_to("online");
     REQUIRE(p != nullptr);
     REQUIRE(p->retain == true);
-}
-
-TEST_CASE("MqttInteractor: homeassistant топики не публикуются (HA удалён)", "[mqtt][interactor][online]") {
-    MqttTestFixture f;
-    f.cfg.preset("testgw", 1883, "", "", "gw", true, false);
-    f.interactor.init();
-    f.mqtt.publishes_.clear();
-    f.mqtt.inject_connected();
-    f.interactor.poll();
-
-    int ha_count = f.mqtt.count_publishes_to("homeassistant");
-    REQUIRE(ha_count == 0);
 }
 
 TEST_CASE("MqttInteractor: online публикуется с retain", "[mqtt][interactor][online]") {

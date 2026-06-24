@@ -512,10 +512,10 @@ void MqttInteractor::publish_all_ha_discovery()
     // Переключатели (2)
     publish_ha_switch("ch_enable",  "Отопление", "mdi:radiator",
         "{{ value_json.ch_enable == 1 }}",
-        "{\\\"ch_enable\\\":{{ value == \\\"ON\\\" | int }}}");
+        "{\\\"ch_enable\\\":{{ (value == \\\"ON\\\") | int }}}");
     publish_ha_switch("dhw_enable", "ГВС",       "mdi:water-boiler",
         "{{ value_json.dhw_enable == 1 }}",
-        "{\\\"dhw_enable\\\":{{ value == \\\"ON\\\" | int }}}");
+        "{\\\"dhw_enable\\\":{{ (value == \\\"ON\\\") | int }}}");
 
     // Числовые параметры (2)
     publish_ha_number("ch_setpoint",  "Уставка СО",  20, 80, 1, "°C",

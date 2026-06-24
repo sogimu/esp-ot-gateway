@@ -2,6 +2,7 @@
 #include <cstring>
 #include <string>
 #include "fakes/fake_mqtt_hardware.h"
+#include "mqtt_client.h"
 
 TEST_CASE("FakeMqttHardware: connect/disconnect", "[mqtt][client][fake]") {
     FakeMqttHardware mqtt;
@@ -38,13 +39,12 @@ TEST_CASE("FakeMqttHardware: инжекция connected вызывает кол�
 
     mqtt.inject_connected();
     REQUIRE(mqtt.is_connected());
-    REQUIRE(event_received == 0);
+    REQUIRE(event_received == MQTT_EVENT_CONNECTED);
 }
 
 TEST_CASE("FakeMqttHardware: инжекция disconnected вызывает колбек", "[mqtt][client][fake]") {
     FakeMqttHardware mqtt;
     int event_received = -1;
-    // Stateless lambda (нет захвата) конвертируется в C-указатель
     mqtt.set_event_callback([](int event_id, void*, void* ctx) {
         *(int*)ctx = event_id;
     }, &event_received);
@@ -52,7 +52,7 @@ TEST_CASE("FakeMqttHardware: инжекция disconnected вызывает ко
     mqtt.inject_connected();
     mqtt.inject_disconnected();
     REQUIRE_FALSE(mqtt.is_connected());
-    REQUIRE(event_received == 1);
+    REQUIRE(event_received == MQTT_EVENT_DISCONNECTED);
 }
 
 TEST_CASE("FakeMqttHardware: инжекция сообщения вызывает колбек с данными", "[mqtt][client][fake]") {
@@ -60,7 +60,7 @@ TEST_CASE("FakeMqttHardware: инжекция сообщения вызывае�
     int events_fired = 0;
 
     mqtt.set_event_callback([](int event_id, void*, void* ctx) {
-        if (event_id == 2) (*(int*)ctx)++;
+        if (event_id == MQTT_EVENT_DATA) (*(int*)ctx)++;
     }, &events_fired);
 
     mqtt.inject_message("cmd/control", "{\"ch_enable\":0}", 15);

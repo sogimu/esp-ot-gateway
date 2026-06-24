@@ -1,6 +1,7 @@
 #pragma once
 
 #include "application/ports/driven/imqtt_hardware.h"
+#include "mqtt_client.h"
 #include <vector>
 #include <cstring>
 #include <cstdio>
@@ -58,13 +59,13 @@ public:
     /// Сымитировать успешное подключение
     void inject_connected() {
         connected_ = true;
-        if (cb_) cb_(0 /* MQTT_EVENT_CONNECTED */, nullptr, ctx_);
+        if (cb_) cb_(MQTT_EVENT_CONNECTED, nullptr, ctx_);
     }
 
     /// Сымитировать разрыв соединения
     void inject_disconnected() {
         connected_ = false;
-        if (cb_) cb_(1 /* MQTT_EVENT_DISCONNECTED */, nullptr, ctx_);
+        if (cb_) cb_(MQTT_EVENT_DISCONNECTED, nullptr, ctx_);
     }
 
     /// Сымитировать входящее MQTT-сообщение
@@ -83,7 +84,7 @@ public:
         memcpy(d.data, data, (size_t)copy_len);
         d.data[copy_len] = '\0';
         d.data_len = copy_len;
-        cb_(2 /* MQTT_EVENT_DATA */, &d, ctx_);
+        cb_(MQTT_EVENT_DATA, &d, ctx_);
     }
 
     // ── Поиск опубликованных сообщений ───────────────────
