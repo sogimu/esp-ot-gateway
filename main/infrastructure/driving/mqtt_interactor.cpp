@@ -96,6 +96,12 @@ void MqttInteractor::poll()
     if (pending_connected_publish_) {
         pending_connected_publish_ = false;
         publish_online();
+        // Авто-публикация HA discovery при первом подключении
+        if (!ha_discovery_published_) {
+            publish_all_ha_discovery();
+            ha_discovery_published_ = true;
+            ha_discovery_last_us_ = now_us;
+        }
     }
 
     poll_counter_++;
@@ -164,9 +170,11 @@ void MqttInteractor::connect_to_broker()
         return;
     }
 
-    // Подписаться на командный топик
+    // Подписаться на командные топики
     char topic[128];
     snprintf(topic, sizeof(topic), "%s/cmd/control", prefix_);
+    mqtt_.subscribe(topic, IMqttHardware::QoS::AT_LEAST_ONCE);
+    snprintf(topic, sizeof(topic), "%s/cmd/ha_discovery", prefix_);
     mqtt_.subscribe(topic, IMqttHardware::QoS::AT_LEAST_ONCE);
 
     log_.event(ILogger::SYSTEM, "MQTT: подключение к %s", host_);
@@ -237,20 +245,53 @@ void MqttInteractor::process_message(const IMqttMessageSink::Message& msg)
 
     if (strcmp(cmd, "control") == 0) {
         handle_control(msg.payload, msg.payload_len);
+    } else if (strcmp(cmd, "ha_discovery") == 0) {
+        handle_ha_discovery_trigger();
     }
 }
 
 // ── handle_control ───────────────────────────────────────────
-// Принимает только dhw_enable — управление БКН (вкл/выкл).
 
 void MqttInteractor::handle_control(const char* body, int /*len*/)
 {
-    int v = json_get_int(body, "\"dhw_enable\"");
+    int v;
+    float f;
+    bool changed = false;
+
+    v = json_get_int(body, "\"dhw_enable\"");
     if (v >= 0) {
         cfg_sys_.set_dhw_enable(v != 0);
-        // Немедленная публикация статуса после команды
-        if (mqtt_state_ == State::CONNECTED) publish_status();
         log_.event(ILogger::USER, "MQTT: БКН %s", v ? "включён" : "выключен");
+        changed = true;
+    }
+
+    v = json_get_int(body, "\"ch_enable\"");
+    if (v >= 0) {
+        cfg_sys_.set_ch_enable(v != 0);
+        log_.event(ILogger::USER, "MQTT: отопление %s", v ? "включено" : "выключено");
+        changed = true;
+    }
+
+    f = json_get_float(body, "\"ch_setpoint\"");
+    if (f > -1e37f) {
+        if (f < 20) f = 20;
+        if (f > 80) f = 80;
+        cfg_sys_.set_ch_setpoint(f);
+        log_.event(ILogger::USER, "MQTT: уставка СО = %.1f°C", (double)f);
+        changed = true;
+    }
+
+    f = json_get_float(body, "\"dhw_setpoint\"");
+    if (f > -1e37f) {
+        if (f < 35) f = 35;
+        if (f > 80) f = 80;
+        cfg_sys_.set_dhw_setpoint(f);
+        log_.event(ILogger::USER, "MQTT: уставка ГВС = %.1f°C", (double)f);
+        changed = true;
+    }
+
+    if (changed && mqtt_state_ == State::CONNECTED) {
+        publish_status();
     }
 }
 
@@ -283,4 +324,202 @@ void MqttInteractor::publish_online()
     char topic[128];
     snprintf(topic, sizeof(topic), "%s/online", prefix_);
     mqtt_.publish(topic, "online", -1, IMqttHardware::QoS::AT_LEAST_ONCE, true);
+}
+
+// ── handle_ha_discovery_trigger ──────────────────────────────
+
+void MqttInteractor::handle_ha_discovery_trigger()
+{
+    uint64_t now_us = time_.monotonic_us();
+    if (ha_discovery_published_
+        && now_us - ha_discovery_last_us_ < HA_REDISCOVERY_COOLDOWN_US) {
+        log_.event(ILogger::USER, "MQTT: HA discovery пропущен (cooldown)");
+        return;
+    }
+    publish_all_ha_discovery();
+    ha_discovery_published_ = true;
+    ha_discovery_last_us_ = now_us;
+    log_.event(ILogger::USER, "MQTT: HA discovery опубликован");
+}
+
+// ── HA Discovery ─────────────────────────────────────────
+
+char* MqttInteractor::build_ha_device_json(char* buf, size_t size)
+{
+    snprintf(buf, size,
+        "{\"identifiers\":[\"esp-ot-gw-%s\"],"
+        "\"name\":\"Контроллер котла\","
+        "\"model\":\"ESP-OT-Gateway\",\"manufacturer\":\"Custom\"}",
+        prefix_);
+    return buf;
+}
+
+void MqttInteractor::publish_ha_config(const char* component, const char* entity,
+                                        const char* json)
+{
+    char topic[192];
+    snprintf(topic, sizeof(topic), "homeassistant/%s/%s_%s/config",
+             component, prefix_, entity);
+    mqtt_.publish(topic, json, -1, IMqttHardware::QoS::AT_LEAST_ONCE, true);
+}
+
+void MqttInteractor::publish_ha_sensor(const char* entity, const char* name,
+                                        const char* unit, const char* dev_class,
+                                        const char* value_tpl)
+{
+    char dev_json[256];
+    build_ha_device_json(dev_json, sizeof(dev_json));
+
+    char buf[BUF_HA];
+    int pos = snprintf(buf, sizeof(buf),
+        "{\"name\":\"%s\",\"uniq_id\":\"esp-ot-gw-%s_%s\","
+        "\"stat_t\":\"%s/status\",\"val_tpl\":\"%s\","
+        "\"dev\":%s,"
+        "\"avty\":{\"t\":\"%s/online\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\"}",
+        name, prefix_, entity,
+        prefix_, value_tpl,
+        dev_json,
+        prefix_);
+
+    if (unit && unit[0] && pos > 0 && pos < (int)sizeof(buf) - 30) {
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,
+                        ",\"unit_of_meas\":\"%s\"", unit);
+    }
+    if (dev_class && dev_class[0] && pos > 0 && pos < (int)sizeof(buf) - 30) {
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,
+                        ",\"dev_cla\":\"%s\"", dev_class);
+    }
+    if (pos > 0 && pos < (int)sizeof(buf) - 10) {
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, ",\"qos\":1}");
+    }
+
+    publish_ha_config("sensor", entity, buf);
+}
+
+void MqttInteractor::publish_ha_binary_sensor(const char* entity, const char* name,
+                                               const char* dev_class, const char* value_tpl)
+{
+    char dev_json[256];
+    build_ha_device_json(dev_json, sizeof(dev_json));
+
+    char buf[BUF_HA];
+    int pos = snprintf(buf, sizeof(buf),
+        "{\"name\":\"%s\",\"uniq_id\":\"esp-ot-gw-%s_%s\","
+        "\"stat_t\":\"%s/status\",\"val_tpl\":\"%s\","
+        "\"dev\":%s,"
+        "\"avty\":{\"t\":\"%s/online\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\"}",
+        name, prefix_, entity,
+        prefix_, value_tpl,
+        dev_json,
+        prefix_);
+
+    if (dev_class && dev_class[0] && pos > 0 && pos < (int)sizeof(buf) - 30) {
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,
+                        ",\"dev_cla\":\"%s\"", dev_class);
+    }
+    if (pos > 0 && pos < (int)sizeof(buf) - 10) {
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, ",\"qos\":1}");
+    }
+
+    publish_ha_config("binary_sensor", entity, buf);
+}
+
+void MqttInteractor::publish_ha_switch(const char* entity, const char* name,
+                                        const char* icon, const char* state_tpl,
+                                        const char* cmd_tpl)
+{
+    char dev_json[256];
+    build_ha_device_json(dev_json, sizeof(dev_json));
+
+    char buf[BUF_HA];
+    int pos = snprintf(buf, sizeof(buf),
+        "{\"name\":\"%s\",\"uniq_id\":\"esp-ot-gw-%s_%s\","
+        "\"stat_t\":\"%s/status\",\"val_tpl\":\"%s\","
+        "\"cmd_t\":\"%s/cmd/control\",\"cmd_tpl\":\"%s\","
+        "\"dev\":%s,"
+        "\"avty\":{\"t\":\"%s/online\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\"}",
+        name, prefix_, entity,
+        prefix_, state_tpl,
+        prefix_, cmd_tpl,
+        dev_json,
+        prefix_);
+
+    if (icon && icon[0] && pos > 0 && pos < (int)sizeof(buf) - 30) {
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,
+                        ",\"ic\":\"%s\"", icon);
+    }
+    if (pos > 0 && pos < (int)sizeof(buf) - 10) {
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, ",\"qos\":1}");
+    }
+
+    publish_ha_config("switch", entity, buf);
+}
+
+void MqttInteractor::publish_ha_number(const char* entity, const char* name,
+                                        float min_v, float max_v, float step,
+                                        const char* unit, const char* state_tpl,
+                                        const char* cmd_tpl)
+{
+    char dev_json[256];
+    build_ha_device_json(dev_json, sizeof(dev_json));
+
+    char buf[BUF_HA];
+    int pos = snprintf(buf, sizeof(buf),
+        "{\"name\":\"%s\",\"uniq_id\":\"esp-ot-gw-%s_%s\","
+        "\"stat_t\":\"%s/status\",\"val_tpl\":\"%s\","
+        "\"cmd_t\":\"%s/cmd/control\",\"cmd_tpl\":\"%s\","
+        "\"min\":%.3f,\"max\":%.3f,\"step\":%.3f,"
+        "\"dev\":%s,"
+        "\"avty\":{\"t\":\"%s/online\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\"}",
+        name, prefix_, entity,
+        prefix_, state_tpl,
+        prefix_, cmd_tpl,
+        (double)min_v, (double)max_v, (double)step,
+        dev_json,
+        prefix_);
+
+    if (unit && unit[0] && pos > 0 && pos < (int)sizeof(buf) - 30) {
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,
+                        ",\"unit_of_meas\":\"%s\"", unit);
+    }
+    if (pos > 0 && pos < (int)sizeof(buf) - 10) {
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, ",\"qos\":1}");
+    }
+
+    publish_ha_config("number", entity, buf);
+}
+
+void MqttInteractor::publish_all_ha_discovery()
+{
+    // Датчики температуры (9)
+    publish_ha_sensor("ch_temp",     "Температура СО",   "°C", "temperature",  "{{ value_json.ch_temp }}");
+    publish_ha_sensor("dhw_temp",    "Температура ГВС",  "°C", "temperature",  "{{ value_json.dhw_temp }}");
+    publish_ha_sensor("return_temp", "Обратка",          "°C", "temperature",  "{{ value_json.return_temp }}");
+    publish_ha_sensor("outside_temp","Улица",            "°C", "temperature",  "{{ value_json.outside_temp }}");
+    publish_ha_sensor("t1_temp",     "Комната T1",       "°C", "temperature",  "{{ value_json.t1_temp }}");
+    publish_ha_sensor("t2_temp",     "Комната T2",       "°C", "temperature",  "{{ value_json.t2_temp }}");
+    publish_ha_sensor("modulation",  "Модуляция",         "%", "power_factor", "{{ value_json.modulation }}");
+    publish_ha_sensor("uptime",      "Аптайм",            "s", "duration",     "{{ value_json.uptime_sec }}");
+    publish_ha_sensor("total_uptime","Общий аптайм",      "s", "duration",     "{{ value_json.total_uptime_sec }}");
+
+    // Бинарные датчики (5)
+    publish_ha_binary_sensor("flame",      "Пламя",         "heat",         "{{ value_json.flame == 1 }}");
+    publish_ha_binary_sensor("fault",      "Ошибка",        "problem",      "{{ value_json.fault == 1 }}");
+    publish_ha_binary_sensor("ch_active",  "СО активна",    "running",      "{{ value_json.ch_active == 1 }}");
+    publish_ha_binary_sensor("dhw_active", "ГВС активно",   "running",      "{{ value_json.dhw_active == 1 }}");
+    publish_ha_binary_sensor("connected",  "Котёл",         "connectivity", "{{ value_json.connected == 1 }}");
+
+    // Переключатели (2)
+    publish_ha_switch("ch_enable",  "Отопление", "mdi:radiator",
+        "{{ value_json.ch_enable == 1 }}",
+        "{\\\"ch_enable\\\":{{ value == \\\"ON\\\" | int }}}");
+    publish_ha_switch("dhw_enable", "ГВС",       "mdi:water-boiler",
+        "{{ value_json.dhw_enable == 1 }}",
+        "{\\\"dhw_enable\\\":{{ value == \\\"ON\\\" | int }}}");
+
+    // Числовые параметры (2)
+    publish_ha_number("ch_setpoint",  "Уставка СО",  20, 80, 1, "°C",
+        "{{ value_json.ch_setpoint }}",  "{\\\"ch_setpoint\\\":{{ value }}}");
+    publish_ha_number("dhw_setpoint", "Уставка ГВС", 35, 80, 1, "°C",
+        "{{ value_json.dhw_setpoint }}", "{\\\"dhw_setpoint\\\":{{ value }}}");
 }

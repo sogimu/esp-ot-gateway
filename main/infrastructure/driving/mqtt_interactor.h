@@ -71,11 +71,30 @@ private:
 
     // ── Обработчики команд ─────────────────────────────
     void handle_control(const char* payload, int len);
+    void handle_ha_discovery_trigger();
 
     // ── Публикация ─────────────────────────────────────
     void publish_status();
     void publish_stats();
     void publish_online();
+
+    // ── Home Assistant Auto-Discovery ──────────────────
+    void publish_all_ha_discovery();
+    void publish_ha_sensor(const char* entity, const char* name,
+                           const char* unit, const char* dev_class,
+                           const char* value_tpl);
+    void publish_ha_binary_sensor(const char* entity, const char* name,
+                                   const char* dev_class, const char* value_tpl);
+    void publish_ha_switch(const char* entity, const char* name,
+                            const char* icon, const char* state_tpl,
+                            const char* cmd_tpl);
+    void publish_ha_number(const char* entity, const char* name,
+                            float min_v, float max_v, float step,
+                            const char* unit, const char* state_tpl,
+                            const char* cmd_tpl);
+    void publish_ha_config(const char* component, const char* entity,
+                           const char* json);
+    char* build_ha_device_json(char* buf, size_t size);
 
     // ── Колбек MQTT-клиента ────────────────────────────
     static void mqtt_callback(int event_id, void* event_data, void* user_ctx);
@@ -112,9 +131,15 @@ private:
     bool     pending_connected_publish_ = false;  // birth-сообщение online
     bool     pending_error_        = false;
 
+    // ── HA discovery ───────────────────────────────────
+    bool     ha_discovery_published_ = false;
+    uint64_t ha_discovery_last_us_ = 0;
+
     // ── Константы ──────────────────────────────────────
     static constexpr int BUF_STATUS = 2048;
     static constexpr int BUF_URI    = 256;
+    static constexpr int BUF_HA     = 1536;
     static constexpr int PUBLISH_INTERVAL = 5;   // публикация статуса каждые N циклов
     static constexpr int STATS_INTERVAL  = 55;   // публикация статистики каждые N циклов
+    static constexpr uint64_t HA_REDISCOVERY_COOLDOWN_US = 600'000'000; // 10 минут
 };
