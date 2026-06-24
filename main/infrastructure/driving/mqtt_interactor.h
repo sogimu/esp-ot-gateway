@@ -139,7 +139,7 @@ private:
     static constexpr int BUF_STATUS = 2048;
     static constexpr int BUF_URI    = 256;
     static constexpr int BUF_HA     = 1536;
-    static constexpr int PUBLISH_INTERVAL = 5;   // публикация статуса каждые N циклов
-    static constexpr int STATS_INTERVAL  = 55;   // публикация статистики каждые N циклов
+    static constexpr int PUBLISH_INTERVAL = 25;   // статус ~27с (25 × 1.1с)
+    static constexpr int STATS_INTERVAL  = 270;  // статистика ~5 мин (270 × 1.1с)
     static constexpr uint64_t HA_REDISCOVERY_COOLDOWN_US = 600'000'000; // 10 минут
 };

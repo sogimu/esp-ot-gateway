@@ -67,6 +67,11 @@ idf_component_register(
         mqtt
 )
 
+# Override lwip PBUF_POOL_SIZE (default 16 → 32) — more pbufs for concurrent
+# HTTP + MQTT traffic, preventing "tcp_write error, errno=No more processes".
+idf_component_get_property(lwip_lib lwip COMPONENT_LIB)
+target_compile_definitions(${lwip_lib} PRIVATE PBUF_POOL_SIZE=32)
+
 # Ensure http_controller_adapter.cpp is recompiled when web_page_gz.inc changes
 # by touching the source file, forcing the build system to detect the change.
 set(WEB_PAGE_GZ_INC "${CMAKE_CURRENT_SOURCE_DIR}/infrastructure/driving/web_page_gz.inc")

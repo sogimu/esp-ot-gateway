@@ -457,7 +457,7 @@ TEST_CASE("MqttInteractor: ha_discovery повторный вызов в cooldow
 
 // ── Тесты публикации ──────────────────────────────────────
 
-TEST_CASE("MqttInteractor: статус публикуется каждые 5 poll()", "[mqtt][interactor][publish]") {
+TEST_CASE("MqttInteractor: статус публикуется каждые 25 poll()", "[mqtt][interactor][publish]") {
     MqttTestFixture f;
     f.cfg.preset("h", 1883, "", "", "gw", true, false);
     f.interactor.init();
@@ -467,11 +467,11 @@ TEST_CASE("MqttInteractor: статус публикуется каждые 5 po
     f.mqtt.publishes_.clear();
     f.renderer.render_status_called_ = 0;
 
-    // poll_counter_ = 0 → после 4 вызовов: 1,2,3,4 → ни один не делится на 5
-    for (int i = 0; i < 4; i++) f.interactor.poll();
+    // poll_counter_ = 0 → после 24 вызовов ни один не делится на 25
+    for (int i = 0; i < 24; i++) f.interactor.poll();
     REQUIRE(f.renderer.render_status_called_ == 0);
 
-    // 5-й вызов: poll_counter_ = 5 → 5%5 == 0 → публикация
+    // 25-й вызов: poll_counter_ = 25 → 25%25 == 0 → публикация
     f.interactor.poll();
     REQUIRE(f.renderer.render_status_called_ >= 1);
     auto* p = f.mqtt.last_publish_to("status");
