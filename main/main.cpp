@@ -244,15 +244,21 @@ extern "C" void app_main(void)
         vTaskDelay(pdMS_TO_TICKS(60000));
         save_tick++;
 
-        int idle0 = (int)ulTaskGetIdleRunTimePercentForCore(0);
-        int idle1 = (int)ulTaskGetIdleRunTimePercentForCore(1);
+        uint32_t idle0 = ulTaskGetIdleRunTimePercentForCore(0);
+        uint32_t idle1 = ulTaskGetIdleRunTimePercentForCore(1);
+        int cpu0 = 100 - (int)(idle0 / 100);
+        int cpu1 = 100 - (int)(idle1 / 100);
         uint32_t free_heap = esp_get_free_heap_size();
 
-        ESP_LOGI(TAG, "Аптайм: %lld с, свободно: %" PRIu32
-                 " | CPU: core0=%d%% core1=%d%% total=%d%%",
+        multi_heap_info_t info;
+        heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
+        uint32_t largest_free = info.largest_free_block;
+
+        ESP_LOGI(TAG, "Аптайм: %lld с, куча: всего %" PRIu32
+                 " (крупн %" PRIu32 ") | CPU: core0=%d%% core1=%d%% total=%d%%",
                  ca_time.monotonic_us() / 1000000,
-                 free_heap,
-                 100 - idle0, 100 - idle1, (200 - idle0 - idle1) / 2);
+                 free_heap, largest_free,
+                 cpu0, cpu1, (cpu0 + cpu1) / 2);
 
         // AP watchdog: restart AP if WiFi died
         wifi.try_recover_ap();

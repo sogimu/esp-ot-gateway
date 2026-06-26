@@ -98,8 +98,14 @@ void SntpTimeAdapter::start()
         }
         // Diagnostic: log status every 5 seconds
         if (i > 0 && i % 100 == 0) {
-            ESP_LOGI(TAG, "SNTP: ожидание %d/%d с, status=%d, RTC=%lld",
-                     i / 20, 30, sntp_get_sync_status(), (long long)now);
+            const char* st = "?";
+            switch (sntp_get_sync_status()) {
+            case SNTP_SYNC_STATUS_RESET:       st = "ожидание"; break;
+            case SNTP_SYNC_STATUS_COMPLETED:   st = "синхр"; break;
+            case SNTP_SYNC_STATUS_IN_PROGRESS: st = "плавная"; break;
+            }
+            ESP_LOGI(TAG, "SNTP: ожидание %d/%d с, статус=%s, RTC=%lld",
+                     i / 20, 30, st, (long long)now);
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
