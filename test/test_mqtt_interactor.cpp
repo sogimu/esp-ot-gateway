@@ -327,7 +327,7 @@ TEST_CASE("MqttInteractor: handle_control dhw_enable без подключени
 
 // ── Тесты HA discovery ──────────────────────────────────────
 
-TEST_CASE("MqttInteractor: HA discovery публикуется при первом CONNECTED", "[mqtt][interactor][ha]") {
+TEST_CASE("MqttInteractor: HA discovery НЕ публикуется автоматически при CONNECTED", "[mqtt][interactor][ha]") {
     MqttTestFixture f;
     f.cfg.preset("gw", 1883, "", "", "gw", true, false);
     f.interactor.init();
@@ -336,60 +336,68 @@ TEST_CASE("MqttInteractor: HA discovery публикуется при перво
     f.mqtt.inject_connected();
     f.interactor.poll();
 
-    // 18 entity + online + подписки могут породить publishes
+    // HA discovery отключён на автопубликацию — burst из 18 QoS1 сообщений
+    // фрагментирует кучу. Публикуется только вручную через cmd/ha_discovery
     int ha_count = f.mqtt.count_publishes_to("homeassistant");
-    REQUIRE(ha_count > 0);
+    REQUIRE(ha_count == 0);
 }
 
-TEST_CASE("MqttInteractor: HA discovery публикует все 18 entity", "[mqtt][interactor][ha]") {
+TEST_CASE("MqttInteractor: HA discovery публикуется только по ручному триггеру", "[mqtt][interactor][ha]") {
     MqttTestFixture f;
     f.cfg.preset("h", 1883, "", "", "testgw", true, false);
     f.interactor.init();
     f.mqtt.publishes_.clear();
 
+    // Коннект без авто-discovery
     f.mqtt.inject_connected();
     f.interactor.poll();
+    REQUIRE(f.mqtt.count_publishes_to("homeassistant") == 0);
 
-    // Проверяем конкретные entity
+    // Ручной триггер
+    f.mqtt.publishes_.clear();
+    f.time.advance_sec(601);  // мимо cooldown
+    IMqttMessageSink::Message cmd;
+    snprintf(cmd.topic, sizeof(cmd.topic), "testgw/cmd/ha_discovery");
+    cmd.payload[0] = '\0';
+    cmd.payload_len = 0;
+    f.sink.push(cmd);
+    f.interactor.poll();
+
     REQUIRE(f.mqtt.last_publish_to("homeassistant/sensor/testgw_ch_temp/config") != nullptr);
-    REQUIRE(f.mqtt.last_publish_to("homeassistant/sensor/testgw_dhw_temp/config") != nullptr);
-    REQUIRE(f.mqtt.last_publish_to("homeassistant/binary_sensor/testgw_flame/config") != nullptr);
-    REQUIRE(f.mqtt.last_publish_to("homeassistant/binary_sensor/testgw_fault/config") != nullptr);
-    REQUIRE(f.mqtt.last_publish_to("homeassistant/switch/testgw_ch_enable/config") != nullptr);
-    REQUIRE(f.mqtt.last_publish_to("homeassistant/switch/testgw_dhw_enable/config") != nullptr);
-    REQUIRE(f.mqtt.last_publish_to("homeassistant/number/testgw_ch_setpoint/config") != nullptr);
-    REQUIRE(f.mqtt.last_publish_to("homeassistant/number/testgw_dhw_setpoint/config") != nullptr);
 }
 
-TEST_CASE("MqttInteractor: HA discovery ON switch cmd_tpl генерирует dhw_enable=1", "[mqtt][interactor][ha]") {
+TEST_CASE("MqttInteractor: HA discovery ON switch cmd_tpl корректен", "[mqtt][interactor][ha]") {
     MqttTestFixture f;
     f.cfg.preset("gw", 1883, "", "", "gw", true, false);
     f.interactor.init();
-    f.mqtt.publishes_.clear();
-
     f.mqtt.inject_connected();
     f.interactor.poll();
+    f.mqtt.publishes_.clear();
 
-    // Проверяем что cmd_tpl содержит правильный шаблон с приоритетом
+    // Ручной триггер discovery
+    f.time.advance_sec(601);
+    IMqttMessageSink::Message cmd;
+    snprintf(cmd.topic, sizeof(cmd.topic), "gw/cmd/ha_discovery");
+    cmd.payload[0] = '\0';
+    cmd.payload_len = 0;
+    f.sink.push(cmd);
+    f.interactor.poll();
+
     auto* p = f.mqtt.last_publish_to("homeassistant/switch/gw_dhw_enable/config");
     REQUIRE(p != nullptr);
-    // После C++ и JSON парсинга, cmd_tpl должно быть:
-    // {"dhw_enable":{{ (value == "ON") | int }}}
-    // Проверяем что есть скобки вокруг сравнения
     REQUIRE(std::string(p->data).find("(value ==") != std::string::npos);
 }
 
-TEST_CASE("MqttInteractor: HA discovery не публикуется повторно без триггера", "[mqtt][interactor][ha]") {
+TEST_CASE("MqttInteractor: HA discovery не публикуется на втором коннекте", "[mqtt][interactor][ha]") {
     MqttTestFixture f;
     f.cfg.preset("gw", 1883, "", "", "gw", true, false);
     f.interactor.init();
     f.mqtt.publishes_.clear();
 
-    // Первый коннект
+    // Первый коннект — без авто-discovery
     f.mqtt.inject_connected();
     f.interactor.poll();
-    int first_count = f.mqtt.count_publishes_to("homeassistant");
-    REQUIRE(first_count > 0);
+    REQUIRE(f.mqtt.count_publishes_to("homeassistant") == 0);
 
     // Второй коннект без сброса ha_discovery_published_ — discovery не должен удвоиться
     f.mqtt.publishes_.clear();
@@ -467,11 +475,11 @@ TEST_CASE("MqttInteractor: статус публикуется каждые 25 p
     f.mqtt.publishes_.clear();
     f.renderer.render_status_called_ = 0;
 
-    // poll_counter_ = 0 → после 24 вызовов ни один не делится на 25
-    for (int i = 0; i < 24; i++) f.interactor.poll();
+    // poll_counter_ = 0 → после 271 вызовов ни один не делится на 272
+    for (int i = 0; i < 271; i++) f.interactor.poll();
     REQUIRE(f.renderer.render_status_called_ == 0);
 
-    // 25-й вызов: poll_counter_ = 25 → 25%25 == 0 → публикация
+    // 272-й вызов: poll_counter_ = 272 → 272%272 == 0 → публикация
     f.interactor.poll();
     REQUIRE(f.renderer.render_status_called_ >= 1);
     auto* p = f.mqtt.last_publish_to("status");

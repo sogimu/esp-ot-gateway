@@ -66,17 +66,8 @@ void MqttInteractor::poll()
 {
     if (mqtt_state_ == State::DISABLED) return;
 
-    uint64_t now_us = time_.monotonic_us();
-
-    // Реконнект с экспоненциальным backoff
-    if (mqtt_state_ == State::DISCONNECTED
-        && last_reconnect_attempt_us_ != 0
-        && now_us >= last_reconnect_attempt_us_) {
-        log_.event(ILogger::SYSTEM, "MQTT: реконнект (задержка %d с)...",
-                   reconnect_delay_s_);
-        connect_to_broker();
-        // connect_to_broker обновит mqtt_state_ и schedule_reconnect при неудаче
-    }
+    // Service socket: read incoming, keepalive, timeouts
+    mqtt_.poll_socket();
 
     // Обработка очереди команд
     drain_queue();
@@ -96,26 +87,17 @@ void MqttInteractor::poll()
     if (pending_connected_publish_) {
         pending_connected_publish_ = false;
         publish_online();
-        // Авто-публикация HA discovery при первом подключении
-        if (!ha_discovery_published_) {
-            publish_all_ha_discovery();
-            ha_discovery_published_ = true;
-            ha_discovery_last_us_ = now_us;
-        }
+        // HA discovery не публикуется автоматически — burst из 18 QoS1
+        // сообщений фрагментирует кучу. Пользователь может запросить
+        // вручную через esp-ot-gateway/cmd/ha_discovery
     }
 
     poll_counter_++;
 
     if (mqtt_state_ == State::CONNECTED) {
-        // Публикация статуса каждые PUBLISH_INTERVAL циклов
-        if (poll_counter_ % PUBLISH_INTERVAL == 0) {
-            publish_status();
-        }
-        // Публикация статистики каждые STATS_INTERVAL циклов
+        if (poll_counter_ % PUBLISH_INTERVAL == 0) publish_status();
         stats_tick_++;
-        if (stats_tick_ % STATS_INTERVAL == 0) {
-            publish_stats();
-        }
+        if (stats_tick_ % STATS_INTERVAL == 0) publish_stats();
     }
 }
 
@@ -165,29 +147,23 @@ void MqttInteractor::connect_to_broker()
 
     if (!mqtt_.connect(uri, u, p, lwt, "offline", true, 60)) {
         mqtt_state_ = State::DISCONNECTED;
-        schedule_reconnect();
         log_.event(ILogger::SYSTEM, "MQTT: ошибка подключения к %s", host_);
         return;
     }
 
-    // Подписаться на командные топики
+    // Store topics in subs_[] for auto-subscribe on MQTT_EVENT_CONNECTED.
+    // subscribe() just saves the topic — actual SUBSCRIBE waits until connected.
     char topic[128];
     snprintf(topic, sizeof(topic), "%s/cmd/control", prefix_);
-    mqtt_.subscribe(topic, IMqttHardware::QoS::AT_LEAST_ONCE);
+    mqtt_.subscribe(topic, IMqttHardware::QoS::AT_MOST_ONCE);
     snprintf(topic, sizeof(topic), "%s/cmd/ha_discovery", prefix_);
-    mqtt_.subscribe(topic, IMqttHardware::QoS::AT_LEAST_ONCE);
+    mqtt_.subscribe(topic, IMqttHardware::QoS::AT_MOST_ONCE);
 
     log_.event(ILogger::SYSTEM, "MQTT: подключение к %s", host_);
 }
 
-void MqttInteractor::schedule_reconnect()
-{
-    last_reconnect_attempt_us_ = time_.monotonic_us()
-        + (uint64_t)reconnect_delay_s_ * 1'000'000ULL;
-    if (reconnect_delay_s_ < 60) {
-        reconnect_delay_s_ = std::min(reconnect_delay_s_ * 2, 60);
-    }
-}
+// ESP-IDF auto-reconnect handles reconnection internally.
+// schedule_reconnect() and manual backoff are removed.
 
 void MqttInteractor::build_uri(char* buf, size_t size)
 {
@@ -207,8 +183,6 @@ void MqttInteractor::mqtt_callback(int event_id, void* /*event_data*/, void* use
     }
     else if (event_id == MQTT_EVENT_CONNECTED) {
         self->mqtt_state_ = State::CONNECTED;
-        self->reconnect_delay_s_ = 1;
-        self->last_reconnect_attempt_us_ = 0;
 
         // ВСЕ публикации — в poll(). Здесь только флаги.
         self->pending_state_update_ = true;
@@ -217,9 +191,8 @@ void MqttInteractor::mqtt_callback(int event_id, void* /*event_data*/, void* use
     }
     else if (event_id == MQTT_EVENT_DISCONNECTED) {
         self->mqtt_state_ = State::DISCONNECTED;
-        self->schedule_reconnect();
-
-        // Отложенное обновление state store — обработается в poll()
+        // ESP-IDF auto-reconnect handles the reconnection internally.
+        // We just update state store — poll() will pick it up.
         self->pending_state_update_ = true;
         self->pending_connected_ = false;
     }
@@ -303,7 +276,7 @@ void MqttInteractor::publish_status()
     renderer_.render_status(buf, sizeof(buf));
     char topic[128];
     snprintf(topic, sizeof(topic), "%s/status", prefix_);
-    mqtt_.publish(topic, buf, -1, IMqttHardware::QoS::AT_LEAST_ONCE, false);
+    mqtt_.publish(topic, buf, -1, IMqttHardware::QoS::AT_MOST_ONCE, false);
 }
 
 // ── publish_stats ────────────────────────────────────────────
@@ -314,7 +287,7 @@ void MqttInteractor::publish_stats()
     renderer_.render_stats(buf, sizeof(buf));
     char topic[128];
     snprintf(topic, sizeof(topic), "%s/stats", prefix_);
-    mqtt_.publish(topic, buf, -1, IMqttHardware::QoS::AT_LEAST_ONCE, false);
+    mqtt_.publish(topic, buf, -1, IMqttHardware::QoS::AT_MOST_ONCE, false);
 }
 
 // ── publish_online ───────────────────────────────────────────

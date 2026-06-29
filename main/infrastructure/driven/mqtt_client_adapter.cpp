@@ -28,11 +28,31 @@ bool MqttClientAdapter::connect(const char* uri, const char* user, const char* p
                                  const char* lwt_topic, const char* lwt_msg,
                                  bool /*clean_session*/, int keepalive_sec)
 {
+    // Save parameters for reconnect()
+    snprintf(saved_uri_, sizeof(saved_uri_), "%s", uri);
+    snprintf(saved_user_, sizeof(saved_user_), "%s", user ? user : "");
+    snprintf(saved_pass_, sizeof(saved_pass_), "%s", pass ? pass : "");
+    snprintf(saved_lwt_topic_, sizeof(saved_lwt_topic_), "%s", lwt_topic ? lwt_topic : "");
+    snprintf(saved_lwt_msg_, sizeof(saved_lwt_msg_), "%s", lwt_msg ? lwt_msg : "");
+    saved_keepalive_ = keepalive_sec;
+    has_saved_params_ = true;
+
+    // If already connected, nothing to do
+    if (client_ && connected_) return true;
+
+    // If handle exists but disconnected, just reconnect — no alloc/free
     if (client_) {
-        disconnect();
-        vTaskDelay(pdMS_TO_TICKS(200));  // дать TCP-стеку время закрыть соединение
+        ESP_LOGI(TAG, "MQTT: переподключение (reuse handle)");
+        esp_err_t err = esp_mqtt_client_reconnect(static_cast<esp_mqtt_client_handle_t>(client_));
+        if (err == ESP_OK) return true;
+        ESP_LOGW(TAG, "MQTT: переподключение не удалось, пересоздаём клиента");
+        // Fall through — destroy and recreate
+        esp_mqtt_client_destroy(static_cast<esp_mqtt_client_handle_t>(client_));
+        client_ = nullptr;
+        connected_ = false;
     }
 
+    // First-time init
     esp_mqtt_client_config_t cfg = {};
     cfg.broker.address.uri = uri;
     cfg.credentials.username = user;
@@ -42,8 +62,15 @@ bool MqttClientAdapter::connect(const char* uri, const char* user, const char* p
     cfg.session.last_will.qos = 1;
     cfg.session.last_will.retain = 1;
     cfg.session.keepalive = keepalive_sec;
-    cfg.network.disable_auto_reconnect = true;   // без авто-реконнекта (бережём сокеты)
-    cfg.task.stack_size = 8192;                   // больше дефолтных 6144
+    cfg.session.disable_clean_session = 0;
+    // Let ESP-IDF auto-reconnect state machine handle reconnection —
+    // cleanly frees old resources before each retry. Manual reconnect
+    // via esp_mqtt_client_reconnect() causes resource overlap and heap leak.
+    cfg.network.disable_auto_reconnect = false;
+    cfg.task.stack_size = 4096;
+    cfg.task.priority   = 7;  // выше main_poller(4), ниже lwip(18)/WiFi(23)
+    cfg.session.message_retransmit_timeout = 2000;  // retransmit interval
+    cfg.outbox.limit = 8192;                        // room for status(~1KB)+stats(~2KB)
 
     client_ = esp_mqtt_client_init(&cfg);
     if (!client_) {
@@ -51,15 +78,15 @@ bool MqttClientAdapter::connect(const char* uri, const char* user, const char* p
         return false;
     }
 
-    esp_mqtt_client_register_event((esp_mqtt_client_handle_t)client_,
+    esp_mqtt_client_register_event(static_cast<esp_mqtt_client_handle_t>(client_),
                                     MQTT_EVENT_ANY,
                                     esp_event_handler,
                                     this);
 
-    esp_err_t err = esp_mqtt_client_start((esp_mqtt_client_handle_t)client_);
+    esp_err_t err = esp_mqtt_client_start(static_cast<esp_mqtt_client_handle_t>(client_));
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "Ошибка запуска MQTT-клиента: %d", err);
-        esp_mqtt_client_destroy((esp_mqtt_client_handle_t)client_);
+        esp_mqtt_client_destroy(static_cast<esp_mqtt_client_handle_t>(client_));
         client_ = nullptr;
         return false;
     }
@@ -71,9 +98,10 @@ bool MqttClientAdapter::connect(const char* uri, const char* user, const char* p
 void MqttClientAdapter::disconnect()
 {
     if (client_) {
-        esp_mqtt_client_stop((esp_mqtt_client_handle_t)client_);
-        esp_mqtt_client_destroy((esp_mqtt_client_handle_t)client_);
-        client_ = nullptr;
+        esp_mqtt_client_stop(static_cast<esp_mqtt_client_handle_t>(client_));
+        // Don't destroy — keep handle for reconnect(). Only destroy if
+        // settings change (caller must expliticly destroy + re-init).
+        // This prevents the outbox leak described in ESP-IDF docs.
     }
     connected_ = false;
     sub_count_ = 0;
@@ -87,8 +115,9 @@ bool MqttClientAdapter::is_connected() const
 
 bool MqttClientAdapter::reconnect()
 {
-    if (!client_) return false;
-    esp_err_t err = esp_mqtt_client_reconnect((esp_mqtt_client_handle_t)client_);
+    if (!client_ || !has_saved_params_) return false;
+
+    esp_err_t err = esp_mqtt_client_reconnect(static_cast<esp_mqtt_client_handle_t>(client_));
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "Ошибка реконнекта MQTT: %d", err);
         return false;
@@ -102,8 +131,8 @@ int MqttClientAdapter::publish(const char* topic, const char* data, int len,
     if (!client_ || !connected_) return -1;
 
     int msg_id = esp_mqtt_client_publish(
-        (esp_mqtt_client_handle_t)client_,
-        topic, data, len, (int)qos, retain ? 1 : 0);
+        static_cast<esp_mqtt_client_handle_t>(client_),
+        topic, data, len, static_cast<int>(qos), retain ? 1 : 0);
 
     return msg_id;
 }
@@ -112,60 +141,37 @@ int MqttClientAdapter::subscribe(const char* topic, QoS qos)
 {
     if (!client_) return -1;
 
-    // Сохраняем топик всегда (даже если ещё не подключены — подпишемся при CONNECTED)
+    // Store for re-subscription on reconnect
     if (sub_count_ < MAX_SUBS) {
         bool duplicate = false;
         for (int i = 0; i < sub_count_; i++) {
             if (strcmp(subs_[i].topic, topic) == 0) { duplicate = true; break; }
         }
         if (!duplicate) {
-            snprintf(subs_[sub_count_].topic, sizeof(subs_[sub_count_].topic),
-                     "%s", topic);
+            snprintf(subs_[sub_count_].topic, sizeof(subs_[sub_count_].topic), "%s", topic);
             subs_[sub_count_].qos = qos;
             sub_count_++;
         }
     }
 
-    // Отправляем SUBSCRIBE только если уже подключены (иначе — при CONNECTED)
     if (!connected_) return 0;
 
+    // QoS 0 for subscribe — SUBACK not needed, doesn't consume outbox
     return esp_mqtt_client_subscribe(
-        (esp_mqtt_client_handle_t)client_, topic, (int)qos);
+        static_cast<esp_mqtt_client_handle_t>(client_), topic, 0);
 }
 
 int MqttClientAdapter::unsubscribe(const char* topic)
 {
     if (!client_) return -1;
     return esp_mqtt_client_unsubscribe(
-        (esp_mqtt_client_handle_t)client_, topic);
+        static_cast<esp_mqtt_client_handle_t>(client_), topic);
 }
 
 void MqttClientAdapter::set_event_callback(EventCallback cb, void* user_ctx)
 {
     user_cb_ = cb;
     user_ctx_ = user_ctx;
-}
-
-// ── Управление реконнектом ──────────────────────────────────
-
-bool MqttClientAdapter::should_reconnect(uint64_t now_us) const
-{
-    return !connected_ && (now_us >= reconnect_after_us_);
-}
-
-void MqttClientAdapter::reset_backoff()
-{
-    reconnect_delay_s_ = 1;
-    reconnect_after_us_ = 0;
-}
-
-void MqttClientAdapter::schedule_reconnect(uint64_t now_us)
-{
-    reconnect_after_us_ = now_us + (uint64_t)reconnect_delay_s_ * 1'000'000ULL;
-    ESP_LOGI(TAG, "Реконнект через %d с", reconnect_delay_s_);
-    if (reconnect_delay_s_ < 60) {
-        reconnect_delay_s_ = std::min(reconnect_delay_s_ * 2, 60);
-    }
 }
 
 // ── Обработчик событий ESP-MQTT ─────────────────────────────
@@ -176,7 +182,7 @@ void MqttClientAdapter::esp_event_handler(void* handler_args,
                                            void* event_data)
 {
     auto* self = static_cast<MqttClientAdapter*>(handler_args);
-    self->on_event((int)event_id, event_data);
+    self->on_event(static_cast<int>(event_id), event_data);
 }
 
 void MqttClientAdapter::on_event(int event_id, void* event_data)
@@ -186,16 +192,16 @@ void MqttClientAdapter::on_event(int event_id, void* event_data)
         ESP_LOGI(TAG, "Подключён к брокеру");
         connected_ = true;
 
-        // Переподписаться на все топики
+        // Переподписаться на все топики (QoS 0 — не забивает outbox)
         for (int i = 0; i < sub_count_; i++) {
             esp_mqtt_client_subscribe(
-                (esp_mqtt_client_handle_t)client_,
-                subs_[i].topic, (int)subs_[i].qos);
+                static_cast<esp_mqtt_client_handle_t>(client_),
+                subs_[i].topic, 0);
         }
         break;
     }
     case MQTT_EVENT_DISCONNECTED: {
-        ESP_LOGW(TAG, "Отключён от брокера");
+        ESP_LOGI(TAG, "Отключён от брокера");
         connected_ = false;
         break;
     }
@@ -211,7 +217,6 @@ void MqttClientAdapter::on_event(int event_id, void* event_data)
             msg.payload[copy_len] = '\0';
             msg.payload_len = copy_len;
 
-            // ТОЛЬКО помещаем в очередь, НЕ обрабатываем
             if (!sink_.push(msg)) {
                 ESP_LOGW(TAG, "Очередь команд MQTT переполнена — сообщение отброшено");
             }
@@ -220,7 +225,6 @@ void MqttClientAdapter::on_event(int event_id, void* event_data)
     }
     case MQTT_EVENT_ERROR: {
         ESP_LOGE(TAG, "Ошибка MQTT");
-        connected_ = false;
         break;
     }
     default:

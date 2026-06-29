@@ -50,9 +50,9 @@ public:
     int unsubscribe(const char*) override { return 1; }
 
     void set_event_callback(EventCallback cb, void* ctx) override {
-        cb_ = cb;
-        ctx_ = ctx;
+        cb_ = cb; ctx_ = ctx;
     }
+    void poll_socket() override {}  // no-op for tests
 
     // ── Инжекция событий (только для тестов) ─────────────
 

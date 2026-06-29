@@ -70,4 +70,8 @@ public:
     /// @param cb       Функция обратного вызова
     /// @param user_ctx Пользовательский контекст (будет передан в cb)
     virtual void set_event_callback(EventCallback cb, void* user_ctx) = 0;
+
+    /// Опрос сокета: чтение входящих, keepalive, таймауты.
+    /// Должен вызываться периодически из основного цикла.
+    virtual void poll_socket() = 0;
 };

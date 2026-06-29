@@ -38,6 +38,7 @@ idf_component_register(
         # MQTT
         "infrastructure/freertos/mqtt_queue.c"
         "infrastructure/driven/mqtt_client_adapter.cpp"
+        "infrastructure/driven/mqtt_socket_adapter.cpp"
         "infrastructure/driven/mqtt_renderer_adapter.cpp"
         "infrastructure/driving/mqtt_interactor.cpp"
     INCLUDE_DIRS

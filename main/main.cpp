@@ -30,7 +30,7 @@
 
 // ── MQTT ─────────────────────────────────────────────────
 #include "infrastructure/freertos/mqtt_queue_adapter.h"
-#include "infrastructure/driven/mqtt_client_adapter.h"
+#include "infrastructure/driven/mqtt_socket_adapter.h"
 #include "infrastructure/driven/mqtt_renderer_adapter.h"
 #include "infrastructure/driving/mqtt_interactor.h"
 
@@ -78,7 +78,7 @@ extern "C" void app_main(void)
     WebPresenterAdapter      ca_web;
 
     FreeRtosMqttQueue        ca_mqtt_queue;
-    MqttClientAdapter        ca_mqtt(ca_mqtt_queue);
+    MqttSocketAdapter        ca_mqtt(ca_mqtt_queue, ca_time);
     MqttRendererAdapter      ca_mqtt_renderer(ca_web);
 
     ca_log.set_time_source(&ca_time);
@@ -155,24 +155,20 @@ extern "C" void app_main(void)
         }
     }
 
-    // Restore modulation histogram from NVS (NvsHistBlob — heap, too large for stack)
+    // Restore modulation histogram from NVS
     {
-        NvsHistBlob* hist_blob = static_cast<NvsHistBlob*>(malloc(sizeof(NvsHistBlob)));
-        if (!hist_blob) { ESP_LOGE("main", "OOM: NvsHistBlob"); }
-        else {
-            memset(hist_blob, 0, sizeof(NvsHistBlob));
+        static NvsHistBlob hist_blob;
+        memset(&hist_blob, 0, sizeof(hist_blob));
         float saved_integ_m3 = 0;
         uint32_t saved_burner_sec_hist = 0;
         if (nvs.load_stats(saved_burner_sec_hist, saved_integ_m3,
-                           hist_blob, nullptr, nullptr, nullptr)) {
-            *mod_stats.samples_ptr() = hist_blob->samples;
+                           &hist_blob, nullptr, nullptr, nullptr)) {
+            *mod_stats.samples_ptr() = hist_blob.samples;
             for (int i = 0; i < HIST_BINS; i++)
-                mod_stats.hist_ptr()[i] = hist_blob->hist[i];
+                mod_stats.hist_ptr()[i] = hist_blob.hist[i];
             gas_flow.set_integral(saved_integ_m3);
             ESP_LOGI("main", "NVS: восстановлена гистограмма (samples=%" PRIu32 ") и integral_m3=%.3f",
-                     hist_blob->samples, (double)saved_integ_m3);
-        }
-        free(hist_blob);
+                     hist_blob.samples, (double)saved_integ_m3);
         }
     }
 
@@ -254,14 +250,19 @@ extern "C" void app_main(void)
         heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
         uint32_t largest_free = info.largest_free_block;
 
-        ESP_LOGI(TAG, "Аптайм: %lld с, куча: всего %" PRIu32
+        ESP_LOGI(TAG, "Аптайм: %lld с, сборка: %s %s, куча: всего %" PRIu32
                  " (крупн %" PRIu32 ") | CPU: core0=%d%% core1=%d%% total=%d%%",
-                 ca_time.monotonic_us() / 1000000,
+                 ca_time.monotonic_us() / 1000000, __DATE__, __TIME__,
                  free_heap, largest_free,
                  cpu0, cpu1, (cpu0 + cpu1) / 2);
 
         // AP watchdog: restart AP if WiFi died
         wifi.try_recover_ap();
+
+        if (largest_free < 8192) {
+            ESP_LOGW(TAG, "Критическая фрагментация! крупн.блок=%" PRIu32 " всего=%" PRIu32,
+                     largest_free, free_heap);
+        }
 
         if (free_heap < 40 * 1024) {
             ca_log.event(ILogger::SYSTEM,
@@ -279,21 +280,15 @@ extern "C" void app_main(void)
                                 burn_cycles.inter_session_cnt(),
                                 burn_cycles.modulation_pause_sec(),
                                 burn_cycles.modulation_cnt());
-            // Save modulation histogram (heap — 4KB, too large for stack)
-            NvsHistBlob* hist_blob = static_cast<NvsHistBlob*>(malloc(sizeof(NvsHistBlob)));
-            if (hist_blob) {
-                hist_blob->samples = mod_stats.samples();
-                for (int i = 0; i < HIST_BINS; i++) {
-                    hist_blob->hist[i] = mod_stats.hist_ptr()[i];  // uint32_t no overflow
-                }
-                nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
-                               hist_blob, nullptr, nullptr, nullptr);
-                free(hist_blob);
+            static NvsHistBlob hist_blob;
+            hist_blob.samples = mod_stats.samples();
+            for (int i = 0; i < HIST_BINS; i++) {
+                hist_blob.hist[i] = mod_stats.hist_ptr()[i];
             }
-            // Save total uptime
+            nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
+                           &hist_blob, nullptr, nullptr, nullptr);
             nvs.save_total_uptime(total_uptime_base_sec +
                                   (uint32_t)(ca_time.monotonic_us() / 1000000));
-            // Save gas meter blob (includes correction log)
             nvs.save_meter(ca_state, &gas_corr.meter_blob());
         }
     }

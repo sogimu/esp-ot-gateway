@@ -62,7 +62,6 @@ private:
 
     // ── Подключение ────────────────────────────────────
     void connect_to_broker();
-    void schedule_reconnect();
     void build_uri(char* buf, size_t size);
 
     // ── Обработка очереди команд ───────────────────────
@@ -122,8 +121,6 @@ private:
     State    mqtt_state_  = State::DISABLED;
     int      poll_counter_= 0;
     int      stats_tick_  = 0;
-    int      reconnect_delay_s_ = 1;
-    uint64_t last_reconnect_attempt_us_ = 0;
 
     // Отложенные действия из MQTT-колбека → poll()
     bool     pending_state_update_ = false;
