@@ -177,8 +177,11 @@ esp_err_t HttpControllerAdapter::handler_log(httpd_req_t* req) {
     if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{\"count\":0,\"events\":[]}"); return ESP_FAIL; }
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
+    self->presenter_->log_lock();
     const char* json = self->presenter_->log_json();
-    return httpd_resp_sendstr(req, json ? json : "{\"count\":0,\"events\":[]}");
+    esp_err_t ret = httpd_resp_sendstr(req, json ? json : "{\"count\":0,\"events\":[]}");
+    self->presenter_->log_unlock();
+    return ret;
 }
 
 esp_err_t HttpControllerAdapter::handler_schedule(httpd_req_t* req) {

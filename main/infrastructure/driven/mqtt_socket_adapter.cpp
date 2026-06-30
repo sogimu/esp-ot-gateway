@@ -388,7 +388,13 @@ void MqttSocketAdapter::process_incoming()
         FD_ZERO(&fds);
         FD_SET(sock_, &fds);
         struct timeval tv = {0, 0};
-        if (select(sock_ + 1, &fds, nullptr, nullptr, &tv) <= 0) break;
+        int sel = select(sock_ + 1, &fds, nullptr, nullptr, &tv);
+        if (sel < 0) {
+            // Socket error — mark disconnected
+            ESP_LOGW(TAG, "select() error: %d — closing", errno);
+            connected_ = false; close(sock_); sock_ = -1; return;
+        }
+        if (sel == 0) break;  // no data
 
         int total = 0, to_read = 2;
         while (total < to_read && total < BUF_SIZE) {
@@ -396,7 +402,12 @@ void MqttSocketAdapter::process_incoming()
             struct timeval t = {0, 50000};  // 50ms per chunk — не блокирует main_poller
             if (select(sock_ + 1, &fds, nullptr, nullptr, &t) <= 0) break;
             int n = recv(sock_, buf + total, BUF_SIZE - total, 0);
-            if (n <= 0) { total = -1; break; }
+            if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
+            if (n <= 0) {
+                // n==0: peer closed, n<0: socket error
+                ESP_LOGW(TAG, "recv()=%d errno=%d — closing", n, n < 0 ? errno : 0);
+                connected_ = false; close(sock_); sock_ = -1; return;
+            }
             total += n;
             if (total >= 2 && to_read == 2) {
                 int rl = 0, m = 1, p = 1;
@@ -405,6 +416,8 @@ void MqttSocketAdapter::process_incoming()
             }
         }
         if (total < 2) break;  // partial or empty — retry next cycle
+
+        last_recv_us_ = time_.monotonic_us();  // watchdog reset on successful read
 
         int type = buf[0];
         int p = 1; while (p < total && (buf[p] & 0x80)) p++; p++;
@@ -415,6 +428,7 @@ void MqttSocketAdapter::process_incoming()
         case 0x20:
             if (plen >= 2 && payload[1] == 0) {
                 connected_ = true; last_ping_us_ = time_.monotonic_us();
+                last_recv_us_ = last_ping_us_;
                 ping_pending_ = false; connect_failures_ = 0;
                 ESP_LOGI(TAG, "CONNACK accepted");
                 if (sub_count_ > 0) send_subscribe_packet();
@@ -490,5 +504,15 @@ void MqttSocketAdapter::poll_socket()
     if (!connected_ && sock_ < 0 && !connect_pending_) {
         ESP_LOGW(TAG, "Соединение потеряно — переподключение");
         connect_pending_ = true;
+    }
+
+    // Watchdog: if no data received for 90s, force reconnect.
+    // Catches silent socket death where TCP RST isn't propagated.
+    if (connected_ && last_recv_us_ > 0
+        && now - last_recv_us_ > 90000000ULL) {
+        ESP_LOGW(TAG, "Нет данных от брокера 90с — переподключение");
+        disconnect();
+        connect_pending_ = true;
+        if (user_cb_) user_cb_(2 /*MQTT_EVENT_DISCONNECTED*/, nullptr, user_ctx_);
     }
 }

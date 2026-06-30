@@ -68,17 +68,15 @@ void EventLogAdapter::event(Category cat, const char* fmt, ...)
     xSemaphoreGive(mutex_);
 }
 
+void EventLogAdapter::lock()   { if (mutex_) xSemaphoreTake(mutex_, portMAX_DELAY); }
+void EventLogAdapter::unlock() { if (mutex_) xSemaphoreGive(mutex_); }
+
 const char* EventLogAdapter::to_json()
 {
     if (!ring_) return "{\"count\":0,\"events\":[]}";
 
-    // Hold mutex for entire formatting — prevents event() from
-    // overwriting entries while we read them (cross-core race).
-    xSemaphoreTake(mutex_, portMAX_DELAY);
     int head_snap = head_;
     int count_snap = count_;
-    // Snapshot is now stable — entries won't be overwritten while we format
-    // because event() waits on the mutex.
 
     static char buf[65536];
     int pos = 0;
@@ -139,6 +137,5 @@ const char* EventLogAdapter::to_json()
     }
 
     pos += snprintf(buf + pos, sizeof(buf) - pos, "]}");
-    xSemaphoreGive(mutex_);
     return buf;
 }

@@ -33,7 +33,11 @@ public:
     /// Render log JSON into buf, returns length.
     int render_log(char* buf, size_t size);
     /// Return pre-rendered log JSON (no copy needed).
+    /// Caller MUST call log_lock() before and log_unlock() after
+    /// httpd_resp_sendstr() — protects static buffer from concurrent access.
     const char* log_json();
+    void log_lock();
+    void log_unlock();
 
     /// Render stats JSON into buf, returns length.
     int render_stats(char* buf, size_t size);

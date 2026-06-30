@@ -76,6 +76,7 @@ private:
     bool     ping_pending_ = false;
     uint64_t last_connect_attempt_us_ = 0;
     int      connect_failures_ = 0;
+    uint64_t last_recv_us_ = 0;     // watchdog: last successful recv
 
     static constexpr int BUF_SIZE = 2048;
 };

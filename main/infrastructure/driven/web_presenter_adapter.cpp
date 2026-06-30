@@ -189,6 +189,15 @@ int WebPresenterAdapter::render_log(char* buf, size_t size)
     return snprintf(buf, size, "{\"count\":0,\"events\":[]}");
 }
 
+void WebPresenterAdapter::log_lock()
+{
+    if (logger_) static_cast<EventLogAdapter*>(logger_)->lock();
+}
+void WebPresenterAdapter::log_unlock()
+{
+    if (logger_) static_cast<EventLogAdapter*>(logger_)->unlock();
+}
+
 const char* WebPresenterAdapter::log_json()
 {
     if (logger_) {

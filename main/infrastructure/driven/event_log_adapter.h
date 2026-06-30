@@ -26,8 +26,11 @@ public:
 
     void set_time_source(class ITimeSource* t) { time_ = t; }
 
-    /// Serialize ring buffer as JSON.
+    /// Serialize ring buffer as JSON. Caller MUST hold lock() before calling
+    /// and unlock() after httpd_resp_sendstr() completes — protects static buffer.
     const char* to_json();
+    void lock();
+    void unlock();
 
     int  get_count() const { return count_; }
     int  get_head()  const { return head_; }
