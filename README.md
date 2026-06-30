@@ -22,6 +22,8 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 - **Gas meter correction journal** — Compare the estimated gas total to the physical meter reading. A correction coefficient (k_calib) is Kalman-smoothed across multiple corrections, preventing wild swings when gas consumption between readings is small. Corrections are rejected when the integral is less than 10% of actual consumption or when no gas has been consumed since the last correction. k_calib survives reboots. Logs up to 10 correction entries with timestamps
 - **Fault monitoring** — ASF flags, OEM diagnostic codes, one-shot fault reset
 - **Event log** — 512-entry ring buffer with 5 categories (System, User, Equipment, Mode, Boot) and real-time filtering in the web UI
+- **MQTT client** — Zero-allocation MQTT 3.1.1 over raw TCP socket. Publishes boiler status (~1KB JSON, QoS 0), statistics (~2KB JSON, QoS 0), and availability (LWT: `online`/`offline`). Subscribes to control commands and HA discovery trigger. Configurable publish intervals (5–3600s) via web UI. Replaces ESP-IDF's built-in MQTT client which had confirmed heap leaks in outbox management
+- **Home Assistant auto-discovery** — Publishes 18 MQTT discovery configs (9 sensors, 5 binary sensors, 2 switches, 2 numbers) on first connect. Entities auto-appear in HA MQTT integration. Manual re-trigger via `cmd/ha_discovery` topic
 - **Crash diagnostics** — Reset reason detection on every boot, core dump saved to flash on panic, backtrace decoded offline via `decode_crash.sh`
 - **Modulation statistics** — 1000-bin histogram (0.1% resolution), percentile analysis (p1–p99), burn cycle tracking (256-entry ring), median/avg burn & pause times, burner runtime hours — on the Statistics tab and `/api/stats`
 - **Relay control** — GPIO 23 relay closes at boot (normal operation) and opens on power loss (fail-safe)
@@ -80,7 +82,7 @@ bash scripts/setup.sh
 
 This installs:
 - System packages (`git`, `cmake`, `python3`, `ninja`, ...)
-- **ESP-IDF v5.2.2** into `~/esp/esp-idf`
+- **ESP-IDF v5.3.2** into `~/esp-idf/esp-idf`
 - Xtensa toolchain (`xtensa-esp32-elf-gcc`)
 
 ### 2. Activate the ESP-IDF environment
@@ -348,6 +350,16 @@ Emergency shutdown button stops all heating.
 - Runtime counters (burner starts, CH pump starts, DHW valve starts, DHW burner starts)
 - Runtime hours (burner, CH pump, DHW valve, DHW burner)
 
+### MQTT tab
+
+- Enable/disable toggle with status indicator (green=connected, red=error, gray=off)
+- Broker host, port, username, password, TLS toggle
+- Topic prefix configuration (default: `esp-ot-gateway`)
+- Configurable publish intervals: status (5–3600s, default 30s), statistics (30–86400s, default 300s)
+- Reconnect strategy: 5s→5s→5s→60s×7→300s (5 min) exponential backoff
+- Tooltips for all fields explaining each setting
+- Save applies without reboot — clean disconnect + reconnect
+
 ### WiFi tab
 
 - **Setup mode:** radio buttons to choose connection method (WiFi router or own AP), network scan with signal strength, manual SSID entry for hidden networks, password fields with validation
@@ -375,6 +387,8 @@ Emergency shutdown button stops all heating.
 | POST | `/api/wifi/forget` | Reset WiFi settings to first-boot mode and reboot |
 | GET | `/prov` | Improv-compatible provisioning status (Home Assistant/ESP Web Tools) |
 | POST | `/prov` | Improv-compatible: send WiFi credentials |
+| GET | `/api/mqtt/status` | MQTT connection status (enabled, connected, host, port, user, prefix, tls) |
+| POST | `/api/mqtt/settings` | Save MQTT configuration and reconnect |
 | GET | `/api/system/time` | Current time (epoch, source: sntp/manual/none, timezone offset) |
 | POST | `/api/system/time` | Set time manually (for AP mode without internet) |
 
@@ -405,7 +419,97 @@ curl -X POST http://192.168.4.1/api/system/time \
 
 # Improv provisioning status
 curl http://192.168.4.1/prov
+
+# MQTT status
+curl http://<device-ip>/api/mqtt/status
+
+# MQTT settings (applies immediately, no reboot)
+curl -X POST http://<device-ip>/api/mqtt/settings \
+  -H "Content-Type: application/json" \
+  -d '{"enabled":1,"host":"192.168.1.100","port":1883,"user":"","pass":"","prefix":"esp-ot-gateway","tls":0,"status_interval":30,"stats_interval":300}'
 ```
+
+---
+
+## MQTT Topics
+
+All topics are prefixed with a configurable prefix (default: `esp-ot-gateway`).
+
+### Published (device → broker)
+
+| Topic | QoS | Retain | Frequency | Description |
+|-------|-----|--------|-----------|-------------|
+| `{prefix}/status` | 0 | no | Configurable (default 30s) | Full boiler state as JSON (~1KB) |
+| `{prefix}/stats` | 0 | no | Configurable (default 300s) | Modulation histogram, burn cycles, gas flow (~2KB) |
+| `{prefix}/online` | 1 | yes | On connect/disconnect | `online` (connected) / `offline` (LWT) |
+
+### Subscribed (broker → device)
+
+| Topic | QoS | Description |
+|-------|-----|-------------|
+| `{prefix}/cmd/control` | 0 | Boiler control commands (JSON, same fields as POST `/api/control`) |
+| `{prefix}/cmd/ha_discovery` | 0 | Re-publish all Home Assistant discovery configs |
+
+### Home Assistant Auto-Discovery Topics
+
+Published on first connect (retained, QoS 0):
+
+```
+homeassistant/sensor/{prefix}_ch_temp/config       ← CH supply temperature
+homeassistant/sensor/{prefix}_dhw_temp/config      ← DHW tank temperature
+homeassistant/sensor/{prefix}_return_temp/config   ← Return temperature
+homeassistant/sensor/{prefix}_outside_temp/config  ← Outside temperature
+homeassistant/sensor/{prefix}_t1_temp/config       ← Room sensor T1
+homeassistant/sensor/{prefix}_t2_temp/config       ← Room sensor T2
+homeassistant/sensor/{prefix}_modulation/config    ← Burner modulation %
+homeassistant/sensor/{prefix}_uptime/config        ← Uptime seconds
+homeassistant/sensor/{prefix}_total_uptime/config  ← Total uptime seconds
+homeassistant/binary_sensor/{prefix}_flame/config  ← Flame on/off
+homeassistant/binary_sensor/{prefix}_fault/config  ← Boiler fault
+homeassistant/binary_sensor/{prefix}_ch_active/config   ← CH active
+homeassistant/binary_sensor/{prefix}_dhw_active/config  ← DHW active
+homeassistant/binary_sensor/{prefix}_connected/config   ← Boiler connected
+homeassistant/switch/{prefix}_ch_enable/config     ← CH enable switch
+homeassistant/switch/{prefix}_dhw_enable/config    ← DHW enable switch
+homeassistant/number/{prefix}_ch_setpoint/config   ← CH setpoint (20–80°C)
+homeassistant/number/{prefix}_dhw_setpoint/config  ← DHW setpoint (35–80°C)
+```
+
+### MQTT Control Examples
+
+```bash
+# Enable heating
+mosquitto_pub -t "esp-ot-gateway/cmd/control" -m '{"ch_enable":1}'
+
+# Set CH setpoint
+mosquitto_pub -t "esp-ot-gateway/cmd/control" -m '{"ch_setpoint":65}'
+
+# Disable DHW
+mosquitto_pub -t "esp-ot-gateway/cmd/control" -m '{"dhw_enable":0}'
+
+# Trigger HA discovery re-publish
+mosquitto_pub -t "esp-ot-gateway/cmd/ha_discovery" -m ""
+```
+
+---
+
+## Home Assistant Integration
+
+### Setup
+
+1. Add MQTT integration in HA: **Settings → Devices & Services → Add Integration → MQTT**
+2. Enter broker address (e.g., `192.168.0.67`), port `1883`, and credentials (if required)
+3. HA automatically discovers all 18 entities from retained discovery messages
+4. Optional: trigger manual re-discovery via `mosquitto_pub -t "esp-ot-gateway/cmd/ha_discovery" -m ""`
+
+### Configurable publish intervals
+
+Set via web UI (MQTT tab) or REST API. Defaults: status every 30s, stats every 300s. Values are persisted in NVS and survive reboots.
+
+### MQTT broker requirements
+
+- Mosquitto 2.x: set `allow_anonymous true` or configure username/password in controller's MQTT tab
+- HA Mosquitto add-on: default requires authentication (use credentials from Supervisor → Mosquitto → Configuration → `logins:`)
 
 ---
 

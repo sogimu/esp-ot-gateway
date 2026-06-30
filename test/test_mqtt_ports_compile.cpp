@@ -14,6 +14,7 @@ TEST_CASE("IMqttHardware: может быть унаследован", "[mqtt][p
         int subscribe(const char*, QoS) override { return 1; }
         int unsubscribe(const char*) override { return 1; }
         void set_event_callback(EventCallback, void*) override {}
+        void poll_socket() override {}
     };
     TestHw hw;
     REQUIRE_FALSE(hw.is_connected());
