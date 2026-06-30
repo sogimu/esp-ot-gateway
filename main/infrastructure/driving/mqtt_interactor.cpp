@@ -81,11 +81,17 @@ void MqttInteractor::poll()
         state_.set_mqtt_connected(pending_connected_);
         if (pending_connected_) {
             log_.event(ILogger::SYSTEM, "MQTT: подключён к %s", host_);
+        } else {
+            if (disconnect_reason_[0])
+                log_.event(ILogger::SYSTEM, "MQTT: отключён — %s", disconnect_reason_);
+            else
+                log_.event(ILogger::SYSTEM, "MQTT: соединение потеряно");
+            disconnect_reason_[0] = '\0';
         }
     }
     if (pending_error_) {
         pending_error_ = false;
-        log_.event(ILogger::SYSTEM, "MQTT: ошибка клиента (event_id=0)");
+        log_.event(ILogger::SYSTEM, "MQTT: ошибка клиента");
     }
     if (pending_connected_publish_) {
         pending_connected_publish_ = false;
@@ -161,6 +167,8 @@ void MqttInteractor::connect_to_broker()
     const char* u = (user_[0] != '\0') ? user_ : nullptr;
     const char* p = (pass_[0] != '\0') ? pass_ : nullptr;
 
+    log_.event(ILogger::SYSTEM, "MQTT: подключение к %s...", host_);
+
     if (!mqtt_.connect(uri, u, p, lwt, "offline", true, 60)) {
         mqtt_state_ = State::DISCONNECTED;
         log_.event(ILogger::SYSTEM, "MQTT: ошибка подключения к %s", host_);
@@ -188,7 +196,7 @@ void MqttInteractor::build_uri(char* buf, size_t size)
 
 // ── mqtt_callback ────────────────────────────────────────────
 
-void MqttInteractor::mqtt_callback(int event_id, void* /*event_data*/, void* user_ctx)
+void MqttInteractor::mqtt_callback(int event_id, void* event_data, void* user_ctx)
 {
     auto* self = static_cast<MqttInteractor*>(user_ctx);
     // Запущен из MQTT-задачи — НЕ трогаем state_, log_, time_.
@@ -207,10 +215,16 @@ void MqttInteractor::mqtt_callback(int event_id, void* /*event_data*/, void* use
     }
     else if (event_id == MQTT_EVENT_DISCONNECTED) {
         self->mqtt_state_ = State::DISCONNECTED;
-        // ESP-IDF auto-reconnect handles the reconnection internally.
-        // We just update state store — poll() will pick it up.
         self->pending_state_update_ = true;
         self->pending_connected_ = false;
+        // Save reason for user-visible log
+        const char* reason = (const char*)event_data;
+        if (reason && reason[0]) {
+            snprintf(self->disconnect_reason_, sizeof(self->disconnect_reason_),
+                     "%s", reason);
+        } else {
+            self->disconnect_reason_[0] = '\0';
+        }
     }
 }
 

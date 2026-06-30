@@ -133,6 +133,7 @@ private:
     bool     pending_connected_    = false;
     bool     pending_connected_publish_ = false;  // birth-сообщение online
     bool     pending_error_        = false;
+    char     disconnect_reason_[48] = {};
 
     // ── HA discovery ───────────────────────────────────
     bool     ha_discovery_published_ = false;

@@ -268,7 +268,20 @@ bool MqttSocketAdapter::send_publish_packet(const char* topic,
     memcpy(buf + pos, data, (size_t)actual_data_len);
     pos += actual_data_len;
 
-    return send(sock_, buf, pos, 0) == pos;
+    // EAGAIN retry (non-blocking socket)
+    int total_sent = 0;
+    while (total_sent < pos) {
+        int sent = send(sock_, buf + total_sent, pos - total_sent, 0);
+        if (sent < 0) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                vTaskDelay(pdMS_TO_TICKS(10));
+                continue;
+            }
+            return false;
+        }
+        total_sent += sent;
+    }
+    return true;
 }
 
 // ── subscribe ────────────────────────────────────────────────
@@ -389,11 +402,7 @@ void MqttSocketAdapter::process_incoming()
         FD_SET(sock_, &fds);
         struct timeval tv = {0, 0};
         int sel = select(sock_ + 1, &fds, nullptr, nullptr, &tv);
-        if (sel < 0) {
-            // Socket error — mark disconnected
-            ESP_LOGW(TAG, "select() error: %d — closing", errno);
-            connected_ = false; close(sock_); sock_ = -1; return;
-        }
+        if (sel < 0) break;  // transient select error, retry next cycle
         if (sel == 0) break;  // no data
 
         int total = 0, to_read = 2;
@@ -403,11 +412,14 @@ void MqttSocketAdapter::process_incoming()
             if (select(sock_ + 1, &fds, nullptr, nullptr, &t) <= 0) break;
             int n = recv(sock_, buf + total, BUF_SIZE - total, 0);
             if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;
-            if (n <= 0) {
-                // n==0: peer closed, n<0: socket error
-                ESP_LOGW(TAG, "recv()=%d errno=%d — closing", n, n < 0 ? errno : 0);
-                connected_ = false; close(sock_); sock_ = -1; return;
+            if (n == 0) {
+                // Peer closed connection
+                ESP_LOGW(TAG, "recv()=0 — брокер закрыл соединение");
+                connected_ = false; close(sock_); sock_ = -1;
+                if (user_cb_) user_cb_(2, (void*)"брокер закрыл", user_ctx_);
+                return;
             }
+            if (n < 0) break;  // transient error, retry next cycle
             total += n;
             if (total >= 2 && to_read == 2) {
                 int rl = 0, m = 1, p = 1;
@@ -483,6 +495,9 @@ void MqttSocketAdapter::poll_socket()
     // Read incoming data (CONNACK, PINGRESP, PUBLISH, SUBACK)
     process_incoming();
 
+    // Refresh timestamp — process_incoming() may have updated last_recv_us_/last_ping_us_
+    now = time_.monotonic_us();
+
     // Keepalive — send PINGREQ, only set pending if actually sent
     if (connected_ && now - last_ping_us_ > (uint64_t)(keepalive_s_ - 5) * 1000000ULL) {
         if (send_pingreq()) {
@@ -497,13 +512,14 @@ void MqttSocketAdapter::poll_socket()
         ESP_LOGW(TAG, "PINGRESP timeout — переподключение");
         disconnect();
         connect_pending_ = true;
-        if (user_cb_) user_cb_(2 /*MQTT_EVENT_DISCONNECTED*/, nullptr, user_ctx_);
+        if (user_cb_) user_cb_(2, (void*)"PING таймаут", user_ctx_);
     }
 
     // Reconnect if socket died but connect not pending
     if (!connected_ && sock_ < 0 && !connect_pending_) {
         ESP_LOGW(TAG, "Соединение потеряно — переподключение");
         connect_pending_ = true;
+        if (user_cb_) user_cb_(2, (void*)"переподключение", user_ctx_);
     }
 
     // Watchdog: if no data received for 90s, force reconnect.
@@ -513,6 +529,6 @@ void MqttSocketAdapter::poll_socket()
         ESP_LOGW(TAG, "Нет данных от брокера 90с — переподключение");
         disconnect();
         connect_pending_ = true;
-        if (user_cb_) user_cb_(2 /*MQTT_EVENT_DISCONNECTED*/, nullptr, user_ctx_);
+        if (user_cb_) user_cb_(2, (void*)"нет данных 90с", user_ctx_);
     }
 }
