@@ -239,8 +239,8 @@ extern "C" void app_main(void)
 
         uint32_t idle0 = ulTaskGetIdleRunTimePercentForCore(0);
         uint32_t idle1 = ulTaskGetIdleRunTimePercentForCore(1);
-        int cpu0 = 100 - (int)(idle0 / 100);
-        int cpu1 = 100 - (int)(idle1 / 100);
+        int cpu0 = 100 - (int)idle0;
+        int cpu1 = 100 - (int)idle1;
         uint32_t free_heap = esp_get_free_heap_size();
 
         multi_heap_info_t info;
@@ -252,6 +252,13 @@ extern "C" void app_main(void)
                  ca_time.monotonic_us() / 1000000, __DATE__, __TIME__,
                  free_heap, largest_free,
                  cpu0, cpu1, (cpu0 + cpu1) / 2);
+
+        // Per-task CPU stats every 5 min (5 ticks)
+        if (save_tick % 5 == 0) {
+            static char stats_buf[2048];
+            vTaskGetRunTimeStats(stats_buf);
+            ESP_LOGI(TAG, "── Статистика задач (CPU) ──\n%s", stats_buf);
+        }
 
         // AP watchdog: restart AP if WiFi died
         wifi.try_recover_ap();

@@ -264,6 +264,7 @@ void OT_Init(void)
     gpio_config(&rx_cfg);
     gpio_install_isr_service(0);
     gpio_isr_handler_add(GPIO_OT_RX, ot_rx_isr, NULL);
+    gpio_intr_disable(GPIO_OT_RX);   /* выключено в idle — включается только на время транзакции */
 
     /* Реле — выход, HIGH = замкнут (NO контакт) */
     gpio_config_t relay_cfg = {
@@ -287,7 +288,7 @@ void OT_Init(void)
         .name      = "opentherm",
     };
     ESP_ERROR_CHECK(esp_timer_create(&timer_args, &ot_timer_handle));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(ot_timer_handle, 500)); /* 500 мкс */
+    /* Таймер НЕ запускается здесь — стартует только на время ot_transaction() */
 
     ESP_LOGI(TAG, "OpenTherm инициализирован (TX=GPIO%d, RX=GPIO%d)", GPIO_OT_TX, GPIO_OT_RX);
     /* SmartTherm: idle = GPIO LOW (0), если котёл включён */
@@ -416,6 +417,10 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
     /* ── TX ── */
     uint64_t tx_frame = build_frame(req);
 
+    /* ── Включить таймер (500 мкс Manchester) и GPIO RX прерывание ── */
+    gpio_intr_enable(GPIO_OT_RX);
+    esp_timer_start_periodic(ot_timer_handle, 500);
+
     /* ── Подготовить фрейм ── */
     ot_tx_frame = tx_frame;
     ot_tx_idx   = 0;
@@ -426,6 +431,8 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
     if (xSemaphoreTake(ot_done_sem, pdMS_TO_TICKS(OT_RESPONSE_TIMEOUT_MS + 200))
             != pdTRUE) {
         ot_state = OT_S_IDLE;
+        esp_timer_stop(ot_timer_handle);
+        gpio_intr_disable(GPIO_OT_RX);
         last_txn_ms = (uint32_t)(esp_timer_get_time() / 1000);
         ESP_LOGW(TAG, "OT %-5s %-10s(%d)  |  TIMEOUT",
                  ot_msg_name(req->msg_type), ot_id_name(req->data_id), req->data_id);
@@ -434,6 +441,8 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
 
     if (ot_state == OT_S_ERROR) {
         ot_state = OT_S_IDLE;
+        esp_timer_stop(ot_timer_handle);
+        gpio_intr_disable(GPIO_OT_RX);
         last_txn_ms = (uint32_t)(esp_timer_get_time() / 1000);
         ESP_LOGW(TAG, "OT %-5s %-10s(%d)  |  NO_RESP",
                  ot_msg_name(req->msg_type), ot_id_name(req->data_id), req->data_id);
@@ -443,6 +452,10 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
     uint64_t raw = ot_rx_frame;
     parse_frame(raw, rsp);
     ot_state = OT_S_IDLE;
+
+    /* ── Выключить таймер и GPIO RX прерывание — транзакция завершена ── */
+    esp_timer_stop(ot_timer_handle);
+    gpio_intr_disable(GPIO_OT_RX);
 
     last_txn_ms = (uint32_t)(esp_timer_get_time() / 1000);
 
