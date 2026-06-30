@@ -22,8 +22,8 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 - **Gas meter correction journal** — Compare the estimated gas total to the physical meter reading. A correction coefficient (k_calib) is Kalman-smoothed across multiple corrections, preventing wild swings when gas consumption between readings is small. Corrections are rejected when the integral is less than 10% of actual consumption or when no gas has been consumed since the last correction. k_calib survives reboots. Logs up to 10 correction entries with timestamps
 - **Fault monitoring** — ASF flags, OEM diagnostic codes, one-shot fault reset
 - **Event log** — 512-entry ring buffer with 5 categories (System, User, Equipment, Mode, Boot) and real-time filtering in the web UI
-- **MQTT client** — Zero-allocation MQTT 3.1.1 over raw TCP socket. Publishes boiler status (~1KB JSON, QoS 0), statistics (~2KB JSON, QoS 0), and availability (LWT: `online`/`offline`). Subscribes to control commands and HA discovery trigger. Configurable publish intervals (5–3600s) via web UI. Replaces ESP-IDF's built-in MQTT client which had confirmed heap leaks in outbox management
-- **Home Assistant auto-discovery** — Publishes 18 MQTT discovery configs (9 sensors, 5 binary sensors, 2 switches, 2 numbers) on first connect. Entities auto-appear in HA MQTT integration. Manual re-trigger via `cmd/ha_discovery` topic
+- **MQTT client** — Zero-allocation MQTT 3.1.1 over raw TCP socket (~300 lines, no malloc). Publishes boiler status (~1KB JSON, QoS 0) every 5–3600s (configurable via web UI), statistics (~2KB JSON, QoS 0) every 30–86400s, and availability (LWT: `online`/`offline`). Subscribes to control commands and HA discovery trigger. Works without SNTP time sync — MQTT initialises immediately regardless of clock state. Sends username/password authentication for broker login. Replaces ESP-IDF's built-in MQTT client which had confirmed heap leaks in outbox management
+- **Home Assistant auto-discovery** — Publishes 27 MQTT discovery configs incrementally (one per poll cycle, non-blocking): 9 temperature sensors, 8 binary sensors (flame, fault, CH/DHW active, connected, DHW prediction, SNTP sync), 2 switches (CH/DHW enable), 2 numbers (CH/DHW setpoint), 6 DHW prediction sensors. Entities auto-appear in HA MQTT integration. Manual re-trigger via `cmd/ha_discovery` topic
 - **Crash diagnostics** — Reset reason detection on every boot, core dump saved to flash on panic, backtrace decoded offline via `decode_crash.sh`
 - **Modulation statistics** — 1000-bin histogram (0.1% resolution), percentile analysis (p1–p99), burn cycle tracking (256-entry ring), median/avg burn & pause times, burner runtime hours — on the Statistics tab and `/api/stats`
 - **Relay control** — GPIO 23 relay closes at boot (normal operation) and opens on power loss (fail-safe)
@@ -464,15 +464,26 @@ homeassistant/sensor/{prefix}_t2_temp/config       ← Room sensor T2
 homeassistant/sensor/{prefix}_modulation/config    ← Burner modulation %
 homeassistant/sensor/{prefix}_uptime/config        ← Uptime seconds
 homeassistant/sensor/{prefix}_total_uptime/config  ← Total uptime seconds
-homeassistant/binary_sensor/{prefix}_flame/config  ← Flame on/off
-homeassistant/binary_sensor/{prefix}_fault/config  ← Boiler fault
-homeassistant/binary_sensor/{prefix}_ch_active/config   ← CH active
-homeassistant/binary_sensor/{prefix}_dhw_active/config  ← DHW active
-homeassistant/binary_sensor/{prefix}_connected/config   ← Boiler connected
-homeassistant/switch/{prefix}_ch_enable/config     ← CH enable switch
-homeassistant/switch/{prefix}_dhw_enable/config    ← DHW enable switch
-homeassistant/number/{prefix}_ch_setpoint/config   ← CH setpoint (20–80°C)
-homeassistant/number/{prefix}_dhw_setpoint/config  ← DHW setpoint (35–80°C)
+homeassistant/binary_sensor/{prefix}_flame/config         ← Flame on/off
+homeassistant/binary_sensor/{prefix}_fault/config         ← Boiler fault
+homeassistant/binary_sensor/{prefix}_ch_active/config     ← CH active
+homeassistant/binary_sensor/{prefix}_dhw_active/config    ← DHW active
+homeassistant/binary_sensor/{prefix}_connected/config     ← Boiler connected
+homeassistant/binary_sensor/{prefix}_dhw_pred_active/config ← DHW prediction active
+homeassistant/binary_sensor/{prefix}_time_synced/config   ← SNTP time synced
+homeassistant/switch/{prefix}_ch_enable/config            ← CH enable switch
+homeassistant/switch/{prefix}_dhw_enable/config           ← DHW enable switch
+homeassistant/number/{prefix}_ch_setpoint/config          ← CH setpoint (20–80°C)
+homeassistant/number/{prefix}_dhw_setpoint/config         ← DHW setpoint (35–80°C)
+
+// DHW prediction sensors (БКН)
+homeassistant/sensor/{prefix}_dhw_pred_rate/config        ← DHW heating rate (°C/s)
+homeassistant/sensor/{prefix}_dhw_pred_elapsed/config     ← DHW elapsed time
+homeassistant/sensor/{prefix}_dhw_pred_remaining/config   ← DHW remaining time
+homeassistant/sensor/{prefix}_dhw_pred_uncertainty/config ← DHW uncertainty
+homeassistant/sensor/{prefix}_dhw_hyst_on/config          ← DHW hysteresis
+homeassistant/sensor/{prefix}_ch_mode/config              ← CH mode (0-3)
+homeassistant/sensor/{prefix}_dhw_last_session/config     ← DHW last session duration
 ```
 
 ### MQTT Control Examples
