@@ -30,11 +30,13 @@ EventLogAdapter::EventLogAdapter()
 {
     ring_ = static_cast<LogEntry*>(malloc(LOG_RING_SIZE * sizeof(LogEntry)));
     if (ring_) std::memset(ring_, 0, LOG_RING_SIZE * sizeof(LogEntry));
+    mutex_ = xSemaphoreCreateMutex();
 }
 
 EventLogAdapter::~EventLogAdapter()
 {
     free(ring_);
+    if (mutex_) vSemaphoreDelete(mutex_);
 }
 
 void EventLogAdapter::event(Category cat, const char* fmt, ...)
@@ -49,9 +51,9 @@ void EventLogAdapter::event(Category cat, const char* fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    // Write entry FIRST, then advance head_ — ensures to_json() never sees torn entry.
-    // Spinlock protects head_/count_ from concurrent event() in other task.
-    portENTER_CRITICAL(&spinlock_);
+    // Mutex protects ring buffer from concurrent to_json() reads.
+    // event() is task-context only (no ISR callers), so blocking is safe.
+    xSemaphoreTake(mutex_, portMAX_DELAY);
     int idx = head_;
     LogEntry& e = ring_[idx];
     e.time_sec = ts;
@@ -63,20 +65,20 @@ void EventLogAdapter::event(Category cat, const char* fmt, ...)
     // Advance AFTER write — readers see stable entries
     head_ = (head_ + 1) % LOG_RING_SIZE;
     if (count_ < LOG_RING_SIZE) count_++;
-    portEXIT_CRITICAL(&spinlock_);
+    xSemaphoreGive(mutex_);
 }
 
 const char* EventLogAdapter::to_json()
 {
     if (!ring_) return "{\"count\":0,\"events\":[]}";
 
-    // Snapshot head/count under spinlock — formatting happens WITHOUT lock
-    // (formatting is slow, must not block OT ISR)
-    int head_snap, count_snap;
-    portENTER_CRITICAL(&spinlock_);
-    head_snap = head_;
-    count_snap = count_;
-    portEXIT_CRITICAL(&spinlock_);
+    // Hold mutex for entire formatting — prevents event() from
+    // overwriting entries while we read them (cross-core race).
+    xSemaphoreTake(mutex_, portMAX_DELAY);
+    int head_snap = head_;
+    int count_snap = count_;
+    // Snapshot is now stable — entries won't be overwritten while we format
+    // because event() waits on the mutex.
 
     static char buf[65536];
     int pos = 0;
@@ -137,5 +139,6 @@ const char* EventLogAdapter::to_json()
     }
 
     pos += snprintf(buf + pos, sizeof(buf) - pos, "]}");
+    xSemaphoreGive(mutex_);
     return buf;
 }
