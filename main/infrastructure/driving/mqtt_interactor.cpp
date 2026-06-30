@@ -10,7 +10,9 @@
 #include "application/ports/driven/imqtt_state_renderer.h"
 #include "infrastructure/driving/json_helpers.h"
 #include "mqtt_client.h"
+#include "esp_log.h"
 #include "esp_system.h"
+static const char* MQTT_TAG = "mqtt_pub";
 
 #include <cstdio>
 #include <cstring>
@@ -89,10 +91,12 @@ void MqttInteractor::poll()
         pending_connected_publish_ = false;
         publish_online();
         if (!ha_discovery_published_) {
-            publish_all_ha_discovery();
-            ha_discovery_published_ = true;
-            ha_discovery_last_us_ = time_.monotonic_us();
+            ha_discovery_index_ = 0;  // start incremental publish
         }
+    }
+    // Publish HA discovery one entity per cycle (non-blocking)
+    if (ha_discovery_index_ >= 0) {
+        publish_ha_next();
     }
 
     poll_counter_++;
@@ -286,7 +290,16 @@ void MqttInteractor::publish_status()
     renderer_.render_status(buf, sizeof(buf));
     char topic[128];
     snprintf(topic, sizeof(topic), "%s/status", prefix_);
-    mqtt_.publish(topic, buf, -1, IMqttHardware::QoS::AT_MOST_ONCE, false);
+    int ret = mqtt_.publish(topic, buf, -1, IMqttHardware::QoS::AT_MOST_ONCE, false);
+    static int ok_count = 0, fail_count = 0;
+    if (ret > 0) {
+        ok_count++;
+        // log every status publish for debugging
+    ESP_LOGI(MQTT_TAG, "status #%d ok len=%d", ok_count, (int)strlen(buf));
+    } else {
+        fail_count++;
+        ESP_LOGI(MQTT_TAG, "status FAIL ret=%d", ret);
+    }
 }
 
 // ── publish_stats ────────────────────────────────────────────
@@ -306,7 +319,8 @@ void MqttInteractor::publish_online()
 {
     char topic[128];
     snprintf(topic, sizeof(topic), "%s/online", prefix_);
-    mqtt_.publish(topic, "online", -1, IMqttHardware::QoS::AT_LEAST_ONCE, true);
+    int ret = mqtt_.publish(topic, "online", -1, IMqttHardware::QoS::AT_LEAST_ONCE, true);
+    ESP_LOGI(MQTT_TAG, "online publish ret=%d", ret);
 }
 
 // ── handle_ha_discovery_trigger ──────────────────────────────
@@ -472,6 +486,46 @@ void MqttInteractor::publish_ha_number(const char* entity, const char* name,
     publish_ha_config("number", entity, buf);
 }
 
+void MqttInteractor::publish_ha_next()
+{
+    // Publish one entity per call — prevents TCP buffer overflow
+    // from bursting 27 × 800 bytes at once.
+    switch (ha_discovery_index_++) {
+    case 0:  publish_ha_sensor("ch_temp",     "Температура СО",   "°C", "temperature",  "{{ value_json.ch_temp }}"); break;
+    case 1:  publish_ha_sensor("dhw_temp",    "Температура ГВС",  "°C", "temperature",  "{{ value_json.dhw_temp }}"); break;
+    case 2:  publish_ha_sensor("return_temp", "Обратка",          "°C", "temperature",  "{{ value_json.return_temp }}"); break;
+    case 3:  publish_ha_sensor("outside_temp","Улица",            "°C", "temperature",  "{{ value_json.outside_temp }}"); break;
+    case 4:  publish_ha_sensor("t1_temp",     "Комната T1",       "°C", "temperature",  "{{ value_json.t1_temp }}"); break;
+    case 5:  publish_ha_sensor("t2_temp",     "Комната T2",       "°C", "temperature",  "{{ value_json.t2_temp }}"); break;
+    case 6:  publish_ha_sensor("modulation",  "Модуляция",         "%", "power_factor", "{{ value_json.modulation }}"); break;
+    case 7:  publish_ha_sensor("uptime",      "Аптайм",            "s", "duration",     "{{ value_json.uptime_sec }}"); break;
+    case 8:  publish_ha_sensor("total_uptime","Общий аптайм",      "s", "duration",     "{{ value_json.total_uptime_sec }}"); break;
+    case 9:  publish_ha_binary_sensor("flame",      "Пламя",         "heat",         "{{ value_json.flame == 1 }}"); break;
+    case 10: publish_ha_binary_sensor("fault",      "Ошибка",        "problem",      "{{ value_json.fault == 1 }}"); break;
+    case 11: publish_ha_binary_sensor("ch_active",  "СО активна",    "running",      "{{ value_json.ch_active == 1 }}"); break;
+    case 12: publish_ha_binary_sensor("dhw_active", "ГВС активно",   "running",      "{{ value_json.dhw_active == 1 }}"); break;
+    case 13: publish_ha_binary_sensor("connected",  "Котёл",         "connectivity", "{{ value_json.connected == 1 }}"); break;
+    case 14: publish_ha_switch("ch_enable",  "Отопление", "mdi:radiator", "{{ value_json.ch_enable == 1 }}", "{\\\"ch_enable\\\":{{ (value == \\\"ON\\\") | int }}}"); break;
+    case 15: publish_ha_switch("dhw_enable", "ГВС",       "mdi:water-boiler", "{{ value_json.dhw_enable == 1 }}", "{\\\"dhw_enable\\\":{{ (value == \\\"ON\\\") | int }}}"); break;
+    case 16: publish_ha_number("ch_setpoint",  "Уставка СО",  20, 80, 1, "°C", "{{ value_json.ch_setpoint }}",  "{\\\"ch_setpoint\\\":{{ value }}}"); break;
+    case 17: publish_ha_number("dhw_setpoint", "Уставка ГВС", 35, 80, 1, "°C", "{{ value_json.dhw_setpoint }}", "{\\\"dhw_setpoint\\\":{{ value }}}"); break;
+    case 18: publish_ha_sensor("dhw_pred_rate",   "Скорость ГВС",    "°C/s", "", "{{ value_json.dhw_pred_rate }}"); break;
+    case 19: publish_ha_sensor("dhw_pred_elapsed","Время ГВС",       "s", "duration", "{{ value_json.dhw_pred_elapsed }}"); break;
+    case 20: publish_ha_sensor("dhw_pred_remaining","Осталось ГВС",  "s", "duration", "{{ value_json.dhw_pred_remaining }}"); break;
+    case 21: publish_ha_sensor("dhw_pred_uncertainty","±ГВС",       "s", "duration", "{{ value_json.dhw_pred_uncertainty }}"); break;
+    case 22: publish_ha_sensor("dhw_hyst_on",     "Гистерезис ГВС",  "°C", "", "{{ value_json.dhw_hyst_on }}"); break;
+    case 23: publish_ha_binary_sensor("dhw_pred_active", "Прогноз ГВС", "running", "{{ value_json.dhw_pred_active == 1 }}"); break;
+    case 24: publish_ha_sensor("ch_mode",         "Режим СО",         "", "", "{{ value_json.ch_mode }}"); break;
+    case 25: publish_ha_sensor("dhw_last_session","Сеанс ГВС",        "s", "duration", "{{ value_json.dhw_last_session_sec }}"); break;
+    case 26: publish_ha_binary_sensor("time_synced","Время SNTP",    "", "{{ value_json.time_synced == 1 }}"); break;
+    default:
+        ha_discovery_published_ = true;
+        ha_discovery_last_us_ = time_.monotonic_us();
+        ha_discovery_index_ = -1;
+        break;
+    }
+}
+
 void MqttInteractor::publish_all_ha_discovery()
 {
     // Датчики температуры (9)
@@ -505,4 +559,17 @@ void MqttInteractor::publish_all_ha_discovery()
         "{{ value_json.ch_setpoint }}",  "{\\\"ch_setpoint\\\":{{ value }}}");
     publish_ha_number("dhw_setpoint", "Уставка ГВС", 35, 80, 1, "°C",
         "{{ value_json.dhw_setpoint }}", "{\\\"dhw_setpoint\\\":{{ value }}}");
+
+    // DHW prediction (БКН) — 6
+    publish_ha_sensor("dhw_pred_rate",   "Скорость ГВС",    "°C/s", "", "{{ value_json.dhw_pred_rate }}");
+    publish_ha_sensor("dhw_pred_elapsed","Время ГВС",       "s", "duration", "{{ value_json.dhw_pred_elapsed }}");
+    publish_ha_sensor("dhw_pred_remaining","Осталось ГВС",  "s", "duration", "{{ value_json.dhw_pred_remaining }}");
+    publish_ha_sensor("dhw_pred_uncertainty","±ГВС",       "s", "duration", "{{ value_json.dhw_pred_uncertainty }}");
+    publish_ha_sensor("dhw_hyst_on",     "Гистерезис ГВС",  "°C", "", "{{ value_json.dhw_hyst_on }}");
+    publish_ha_binary_sensor("dhw_pred_active", "Прогноз ГВС", "running", "{{ value_json.dhw_pred_active == 1 }}");
+
+    // Misc (Прочее) — 3
+    publish_ha_sensor("ch_mode",         "Режим СО",         "", "", "{{ value_json.ch_mode }}");
+    publish_ha_sensor("dhw_last_session","Сеанс ГВС",        "s", "duration", "{{ value_json.dhw_last_session_sec }}");
+    publish_ha_binary_sensor("time_synced","Время SNTP",    "", "{{ value_json.time_synced == 1 }}");
 }

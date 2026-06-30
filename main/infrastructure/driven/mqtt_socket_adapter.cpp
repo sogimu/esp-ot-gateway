@@ -69,6 +69,8 @@ bool MqttSocketAdapter::connect(const char* uri, const char* user,
     snprintf(saved_user_, sizeof(saved_user_), "%s", user ? user : "");
     snprintf(saved_pass_, sizeof(saved_pass_), "%s", pass ? pass : "");
     connect_pending_ = true;
+    last_connect_attempt_us_ = 0;  // immediate reconnect on user action
+    connect_failures_ = 0;
     return true;
 }
 

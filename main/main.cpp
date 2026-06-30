@@ -191,15 +191,12 @@ extern "C" void app_main(void)
                         ca_time,
                         ca_mqtt_renderer);  // IMqttStateRenderer
 
-    // MQTT подключается только после получения достоверного времени
-    // (SNTP или ручная установка через NVS).
-    if (ca_time.has_valid_time()) {
-        ESP_LOGI("main", "SNTP: время достоверно — запуск MQTT");
-        ca_log.event(ILogger::SYSTEM, "SNTP: время достоверно, MQTT запускается");
-        mqtt.init();
-    } else {
-        ESP_LOGW("main", "SNTP: время НЕ достоверно — MQTT отключён");
-        ca_log.event(ILogger::SYSTEM, "SNTP: время недостоверно, MQTT отключён");
+    // MQTT инициализируется всегда (если enabled в NVS).
+    // Время нужно только для таймстемпов в логах, MQTT работает без него.
+    mqtt.init();
+    if (!ca_time.has_valid_time()) {
+        ESP_LOGW("main", "SNTP: время недостоверно, но MQTT запущен");
+        ca_log.event(ILogger::SYSTEM, "SNTP: время недостоверно, MQTT запущен без времени");
     }
 
     // ── Phase 6: Main poller ─────────────────────────────

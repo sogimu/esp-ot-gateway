@@ -81,7 +81,8 @@ private:
     void publish_online();
 
     // ── Home Assistant Auto-Discovery ──────────────────
-    void publish_all_ha_discovery();
+    void publish_ha_next();       // one entity per poll cycle
+    void publish_all_ha_discovery();  // all at once (manual trigger)
     void publish_ha_sensor(const char* entity, const char* name,
                            const char* unit, const char* dev_class,
                            const char* value_tpl);
@@ -136,6 +137,7 @@ private:
     // ── HA discovery ───────────────────────────────────
     bool     ha_discovery_published_ = false;
     uint64_t ha_discovery_last_us_ = 0;
+    int      ha_discovery_index_ = -1;  // -1 = idle, 0..26 = publishing one per cycle
 
     // ── Константы ──────────────────────────────────────
     static constexpr int BUF_STATUS = 2048;

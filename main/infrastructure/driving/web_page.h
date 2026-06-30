@@ -1480,7 +1480,7 @@ static const char WEB_PAGE[] =
 ".then(function(d){"
 "btn.disabled=false;btn.textContent='Сохранить';"
 "if(d.ok){mqttPoll();}else{alert('Ошибка: '+d.err);}});}"
-"// mqttPoll only called on tab switch — no interval"
+"setInterval(function(){if(document.getElementById('tab-mqtt').style.display!='none')mqttPoll();},5000);"
 "</script>"
 "</div>"
 "</body></html>";
