@@ -90,9 +90,10 @@ void MqttInteractor::poll()
     if (pending_connected_publish_) {
         pending_connected_publish_ = false;
         publish_online();
-        if (!ha_discovery_published_) {
-            ha_discovery_index_ = 0;  // start incremental publish
-        }
+        // Always re-publish HA discovery on reconnect —
+        // ensures HA has fresh entity configs after broker/HA restart
+        ha_discovery_published_ = false;
+        ha_discovery_index_ = 0;
     }
     // Publish HA discovery one entity per cycle (non-blocking)
     if (ha_discovery_index_ >= 0) {
