@@ -8,7 +8,7 @@ MainPollerTaskAdapter::MainPollerTaskAdapter(IMainPoller& poller)
 
 void MainPollerTaskAdapter::start()
 {
-    xTaskCreate(task_loop, "main_poll", STACK_SIZE, this, PRIORITY, &task_);
+    xTaskCreatePinnedToCore(task_loop, "main_poll", STACK_SIZE, this, PRIORITY, &task_, 1);
 }
 
 void MainPollerTaskAdapter::stop()

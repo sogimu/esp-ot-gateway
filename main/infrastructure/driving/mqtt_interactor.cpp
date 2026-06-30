@@ -94,6 +94,7 @@ void MqttInteractor::poll()
         // ensures HA has fresh entity configs after broker/HA restart
         ha_discovery_published_ = false;
         ha_discovery_index_ = 0;
+        ESP_LOGI(MQTT_TAG, "HA discovery: starting incremental publish (27 entities)");
     }
     // Publish HA discovery one entity per cycle (non-blocking)
     if (ha_discovery_index_ >= 0) {
@@ -523,6 +524,7 @@ void MqttInteractor::publish_ha_next()
         ha_discovery_published_ = true;
         ha_discovery_last_us_ = time_.monotonic_us();
         ha_discovery_index_ = -1;
+        ESP_LOGI("mqtt_pub", "HA discovery: 27 entities published");
         break;
     }
 }
