@@ -62,6 +62,8 @@ private:
     int  keepalive_s_ = 60;
     char lwt_topic_[128] = {};
     char lwt_msg_[32] = {};
+    char saved_user_[64] = {};
+    char saved_pass_[64] = {};
 
     // Топики подписки
     static constexpr int MAX_SUBS = 4;

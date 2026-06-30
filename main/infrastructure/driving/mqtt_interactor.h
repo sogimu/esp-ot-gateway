@@ -46,10 +46,13 @@ public:
     const char* get_user() const override { return user_; }
     const char* get_prefix() const override { return prefix_; }
     bool get_tls() const override         { return tls_; }
+    uint16_t get_status_interval_s() const override { return status_interval_s_; }
+    uint16_t get_stats_interval_s() const override  { return stats_interval_s_; }
     bool is_connected() const override;
     void save_and_apply(const char* host, uint16_t port,
                         const char* user, const char* pass,
-                        const char* prefix, bool enabled, bool tls) override;
+                        const char* prefix, bool enabled, bool tls,
+                        uint16_t status_interval_s, uint16_t stats_interval_s) override;
 
 private:
     // ── Состояния ──────────────────────────────────────
@@ -116,6 +119,8 @@ private:
     char     prefix_[64]  = {};
     bool     enabled_     = false;
     bool     tls_         = false;
+    uint16_t status_interval_s_ = 30;
+    uint16_t stats_interval_s_  = 300;
 
     // ── Состояние ──────────────────────────────────────
     State    mqtt_state_  = State::DISABLED;
@@ -136,7 +141,7 @@ private:
     static constexpr int BUF_STATUS = 2048;
     static constexpr int BUF_URI    = 256;
     static constexpr int BUF_HA     = 1536;
-    static constexpr int PUBLISH_INTERVAL = 25;   // статус ~27с (25 × 1.1с)
-    static constexpr int STATS_INTERVAL  = 270;  // статистика ~5 мин (270 × 1.1с)
+    // Publish intervals now configurable via NVS/web UI
+    // Defaults: status ~27s (25 cycles), stats ~5min (270 cycles)
     static constexpr uint64_t HA_REDISCOVERY_COOLDOWN_US = 600'000'000; // 10 минут
 };

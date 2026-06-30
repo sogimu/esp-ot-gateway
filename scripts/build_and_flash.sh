@@ -15,6 +15,11 @@ echo "=== 2. Сборка ==="
 cd "$ROOT"
 # Force recompile of main.cpp to update __DATE__/__TIME__ in log
 touch "$ROOT/main/main.cpp"
+# Fullclean if sdkconfig.defaults changed (lwip/other components need recompilation)
+if [ "$ROOT/sdkconfig.defaults" -nt "$ROOT/build/sdkconfig" ]; then
+    echo "sdkconfig.defaults изменён → fullclean"
+    idf.py fullclean
+fi
 idf.py build
 
 echo "=== 3. Освобождение порта ==="

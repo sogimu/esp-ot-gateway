@@ -43,6 +43,7 @@ void MqttInteractor::init()
     enabled_ = false;
     tls_ = false;
 
+    cfg_store_.load_mqtt_intervals(status_interval_s_, stats_interval_s_);
     if (!cfg_store_.load_mqtt_config(host_, sizeof(host_), port_,
                                       user_, sizeof(user_),
                                       pass_, sizeof(pass_),
@@ -87,17 +88,21 @@ void MqttInteractor::poll()
     if (pending_connected_publish_) {
         pending_connected_publish_ = false;
         publish_online();
-        // HA discovery не публикуется автоматически — burst из 18 QoS1
-        // сообщений фрагментирует кучу. Пользователь может запросить
-        // вручную через esp-ot-gateway/cmd/ha_discovery
+        if (!ha_discovery_published_) {
+            publish_all_ha_discovery();
+            ha_discovery_published_ = true;
+            ha_discovery_last_us_ = time_.monotonic_us();
+        }
     }
 
     poll_counter_++;
 
     if (mqtt_state_ == State::CONNECTED) {
-        if (poll_counter_ % PUBLISH_INTERVAL == 0) publish_status();
+        int pub_cycles = (int)(status_interval_s_ / 1.1f); if (pub_cycles < 1) pub_cycles = 1;
+        if (poll_counter_ % pub_cycles == 0) publish_status();
         stats_tick_++;
-        if (stats_tick_ % STATS_INTERVAL == 0) publish_stats();
+        int stats_cycles = (int)(stats_interval_s_ / 1.1f); if (stats_cycles < 1) stats_cycles = 1;
+        if (stats_tick_ % stats_cycles == 0) publish_stats();
     }
 }
 
@@ -105,7 +110,7 @@ void MqttInteractor::poll()
 
 void MqttInteractor::save_and_apply(const char* host, uint16_t port,
                                      const char* user, const char* pass,
-                                     const char* prefix, bool enabled, bool tls)
+                                     const char* prefix, bool enabled, bool tls, uint16_t status_interval_s, uint16_t stats_interval_s)
 {
     snprintf(host_, sizeof(host_), "%s", host ? host : "");
     port_ = port;
@@ -114,13 +119,18 @@ void MqttInteractor::save_and_apply(const char* host, uint16_t port,
     snprintf(prefix_, sizeof(prefix_), "%s", prefix ? prefix : "");
     enabled_ = enabled;
     tls_ = tls;
+    status_interval_s_ = status_interval_s;
+    stats_interval_s_ = stats_interval_s;
 
-    cfg_store_.save_mqtt_config(host_, port_, user_, pass_, prefix_, enabled_, tls_);
+    cfg_store_.save_mqtt_config(host_, port_, user_, pass_, prefix_, enabled_, tls_, status_interval_s_, stats_interval_s_);
 
-    // Пересоздание MQTT-клиента при работающем HTTP-сервере
-    // истощает сокеты. Сохраняем настройки и перезагружаемся.
-    log_.event(ILogger::USER, "MQTT: настройки изменены, перезагрузка...");
-    esp_restart();
+    log_.event(ILogger::USER, "MQTT: настройки изменены — переподключение...");
+    mqtt_.disconnect();
+    if (enabled_) {
+        connect_to_broker();
+    } else {
+        mqtt_state_ = State::DISABLED;
+    }
 }
 
 // ── is_connected ─────────────────────────────────────────────

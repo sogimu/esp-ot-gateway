@@ -57,8 +57,8 @@ MqttSocketAdapter::~MqttSocketAdapter() { disconnect(); }
 
 // ── connect ──────────────────────────────────────────────────
 
-bool MqttSocketAdapter::connect(const char* uri, const char* /*user*/,
-                                 const char* /*pass*/,
+bool MqttSocketAdapter::connect(const char* uri, const char* user,
+                                 const char* pass,
                                  const char* lwt_topic, const char* lwt_msg,
                                  bool /*clean*/, int keepalive_sec)
 {
@@ -66,6 +66,8 @@ bool MqttSocketAdapter::connect(const char* uri, const char* /*user*/,
     keepalive_s_ = keepalive_sec;
     snprintf(lwt_topic_, sizeof(lwt_topic_), "%s", lwt_topic ? lwt_topic : "");
     snprintf(lwt_msg_,   sizeof(lwt_msg_),   "%s", lwt_msg   ? lwt_msg   : "");
+    snprintf(saved_user_, sizeof(saved_user_), "%s", user ? user : "");
+    snprintf(saved_pass_, sizeof(saved_pass_), "%s", pass ? pass : "");
     connect_pending_ = true;
     return true;
 }
@@ -188,6 +190,9 @@ bool MqttSocketAdapter::send_connect_packet()
         pp += write_string(payload + pp, lwt_topic_, -1);
         pp += write_string(payload + pp, lwt_msg_, -1);
     }
+    // Username + password (if present)
+    if (saved_user_[0]) pp += write_string(payload + pp, saved_user_, -1);
+    if (saved_pass_[0]) pp += write_string(payload + pp, saved_pass_, -1);
 
     // Variable header
     uint8_t vh[10];
@@ -198,6 +203,8 @@ bool MqttSocketAdapter::send_connect_packet()
     if (lwt_topic_[0]) flags |= 0x04   // Will flag
                              | 0x08    // Will QoS 1
                              | 0x20;   // Will Retain
+    if (saved_user_[0]) flags |= 0x80; // User Name flag
+    if (saved_pass_[0]) flags |= 0x40; // Password flag
     vh[vh_pos++] = flags;
     vh_pos += write_u16(vh + vh_pos, (uint16_t)keepalive_s_);
 
@@ -233,12 +240,10 @@ bool MqttSocketAdapter::send_connect_packet()
 // ── publish ──────────────────────────────────────────────────
 
 int MqttSocketAdapter::publish(const char* topic, const char* data,
-                                int len, QoS qos, bool retain)
+                                int len, QoS /*qos*/, bool retain)
 {
     if (sock_ < 0) return -1;
-    // Only QoS 0 supported
-    if (qos != QoS::AT_MOST_ONCE) return -1;
-
+    // Always send as QoS 0 — no outbox, no retransmit, no alloc
     return send_publish_packet(topic, data, len, retain) ? 1 : -1;
 }
 

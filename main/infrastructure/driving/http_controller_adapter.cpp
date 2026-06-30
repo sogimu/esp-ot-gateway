@@ -560,14 +560,17 @@ esp_err_t HttpControllerAdapter::handler_mqtt_status(httpd_req_t* req)
     char buf[512];
     snprintf(buf, sizeof(buf),
         "{\"enabled\":%s,\"connected\":%s,\"host\":\"%s\",\"port\":%u,"
-        "\"user\":\"%s\",\"prefix\":\"%s\",\"tls\":%s}",
+        "\"user\":\"%s\",\"prefix\":\"%s\",\"tls\":%s,"
+        "\"status_interval\":%u,\"stats_interval\":%u}",
         self->mqtt_->is_enabled()   ? "true" : "false",
         self->mqtt_->is_connected() ? "true" : "false",
         self->mqtt_->get_host(),
         self->mqtt_->get_port(),
         self->mqtt_->get_user(),
         self->mqtt_->get_prefix(),
-        self->mqtt_->get_tls()      ? "true" : "false");
+        self->mqtt_->get_tls()      ? "true" : "false",
+        self->mqtt_->get_status_interval_s(),
+        self->mqtt_->get_stats_interval_s());
 
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, buf);
@@ -594,6 +597,8 @@ esp_err_t HttpControllerAdapter::handler_mqtt_settings(httpd_req_t* req)
     // Парсинг полей
     int v_enabled = json_get_int(body, "\"enabled\"");
     int v_tls     = json_get_int(body, "\"tls\"");
+    int v_sti     = json_get_int(body, "\"status_interval\"");
+    int v_ssi     = json_get_int(body, "\"stats_interval\"");
     int v_port    = json_get_int(body, "\"port\"");
 
     // Парсим и сразу копируем — своя out_len для каждого поля
@@ -624,7 +629,9 @@ esp_err_t HttpControllerAdapter::handler_mqtt_settings(httpd_req_t* req)
              s_prefix ? std::min(prefix_len, 63) : (int)strlen(self->mqtt_->get_prefix()),
              s_prefix ? s_prefix : self->mqtt_->get_prefix());
 
-    self->mqtt_->save_and_apply(host, port, user, pass, prefix, enabled, tls);
+    uint16_t sti = v_sti > 0 ? (uint16_t)v_sti : self->mqtt_->get_status_interval_s();
+    uint16_t ssi = v_ssi > 0 ? (uint16_t)v_ssi : self->mqtt_->get_stats_interval_s();
+    self->mqtt_->save_and_apply(host, port, user, pass, prefix, enabled, tls, sti, ssi);
 
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, "{\"ok\":true}");

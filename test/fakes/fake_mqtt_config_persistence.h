@@ -10,7 +10,7 @@ class FakeMqttConfigPersistence : public IMqttConfigPersistence {
 public:
     void save_mqtt_config(const char* host, uint16_t port,
                           const char* user, const char* pass,
-                          const char* prefix, bool enabled, bool tls) override
+                          const char* prefix, bool enabled, bool tls, uint16_t, uint16_t) override
     {
         snprintf(host_, sizeof(host_), "%s", host ? host : "");
         port_ = port;
@@ -65,4 +65,13 @@ public:
     char prefix_[64] = {};
     bool enabled_ = false;
     bool tls_ = false;
+    uint16_t status_interval_s_ = 30;
+    uint16_t stats_interval_s_ = 300;
+
+    void save_mqtt_intervals(uint16_t status_s, uint16_t stats_s) override {
+        status_interval_s_ = status_s; stats_interval_s_ = stats_s;
+    }
+    bool load_mqtt_intervals(uint16_t& status_s, uint16_t& stats_s) override {
+        status_s = status_interval_s_; stats_s = stats_interval_s_; return true;
+    }
 };

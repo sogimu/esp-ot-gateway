@@ -80,6 +80,9 @@ public:
     void save_total_uptime(uint32_t total_uptime_sec) override;
     bool load_total_uptime(uint32_t& total_uptime_sec) override;
 
+    void save_mqtt_intervals(uint16_t status_s, uint16_t stats_s) override;
+    bool load_mqtt_intervals(uint16_t& status_s, uint16_t& stats_s) override;
+
     void save_integral(float value) override;
 
     bool save_eff(const IHeatingStateStore& state);
@@ -95,7 +98,7 @@ public:
     // ── MQTT broker config ("config" namespace) ──────────────────
     void save_mqtt_config(const char* host, uint16_t port,
                           const char* user, const char* pass,
-                          const char* prefix, bool enabled, bool tls) override;
+                          const char* prefix, bool enabled, bool tls, uint16_t status_interval_s, uint16_t stats_interval_s) override;
     bool load_mqtt_config(char* host, size_t host_size,
                           uint16_t& port,
                           char* user, size_t user_size,

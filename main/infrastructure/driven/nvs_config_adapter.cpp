@@ -195,7 +195,7 @@ void NvsConfigAdapter::save_config(const IHeatingStateStore& s)
 
 void NvsConfigAdapter::save_mqtt_config(const char* host, uint16_t port,
                                          const char* user, const char* pass,
-                                         const char* prefix, bool enabled, bool tls)
+                                         const char* prefix, bool enabled, bool tls, uint16_t status_interval_s, uint16_t stats_interval_s)
 {
     nvs_handle_t h;
     if (nvs_open("config", NVS_READWRITE, &h) != ESP_OK) return;
@@ -207,6 +207,8 @@ void NvsConfigAdapter::save_mqtt_config(const char* host, uint16_t port,
     nvs_set_blob(h, "mqtt_pref", prefix, strlen(prefix) + 1);
     nvs_set_u8(h, "mqtt_en", enabled ? 1 : 0);
     nvs_set_u8(h, "mqtt_tls", tls ? 1 : 0);
+    nvs_set_u16(h, "mqtt_sti", status_interval_s);
+    nvs_set_u16(h, "mqtt_ssi", stats_interval_s);
 
     nvs_commit(h); nvs_close(h);
 }
@@ -527,5 +529,24 @@ bool NvsConfigAdapter::load_eff(IHeatingStateStore& state)
         ok = true;
     }
     nvs_close(n);
+    return ok;
+}
+
+void NvsConfigAdapter::save_mqtt_intervals(uint16_t status_s, uint16_t stats_s)
+{
+    nvs_handle_t h;
+    if (nvs_open("config", NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_commit(h); nvs_close(h);
+}
+
+bool NvsConfigAdapter::load_mqtt_intervals(uint16_t& status_s, uint16_t& stats_s)
+{
+    nvs_handle_t h;
+    if (nvs_open("config", NVS_READONLY, &h) != ESP_OK) return false;
+    bool ok = false;
+    uint16_t v;
+    if (nvs_get_u16(h, "mqtt_sti", &v) == ESP_OK) { status_s = v; ok = true; }
+    if (nvs_get_u16(h, "mqtt_ssi", &v) == ESP_OK) { stats_s = v; ok = true; }
+    nvs_close(h);
     return ok;
 }

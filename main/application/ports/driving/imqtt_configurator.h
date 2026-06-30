@@ -19,6 +19,8 @@ public:
     virtual const char* get_user() const = 0;
     virtual const char* get_prefix() const = 0;
     virtual bool get_tls() const = 0;
+    virtual uint16_t get_status_interval_s() const = 0;
+    virtual uint16_t get_stats_interval_s() const = 0;
 
     // ── Применить настройки ──────────────────────────────
 
@@ -32,5 +34,6 @@ public:
     /// @param tls      Использовать TLS
     virtual void save_and_apply(const char* host, uint16_t port,
                                 const char* user, const char* pass,
-                                const char* prefix, bool enabled, bool tls) = 0;
+                                const char* prefix, bool enabled, bool tls,
+                                uint16_t status_interval_s, uint16_t stats_interval_s) = 0;
 };
