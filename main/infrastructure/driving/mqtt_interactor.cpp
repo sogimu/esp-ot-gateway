@@ -124,11 +124,11 @@ void MqttInteractor::save_and_apply(const char* host, uint16_t port,
                                      const char* user, const char* pass,
                                      const char* prefix, bool enabled, bool tls, uint16_t status_interval_s, uint16_t stats_interval_s)
 {
-    snprintf(host_, sizeof(host_), "%s", host ? host : "");
+    if (host && host[0]) snprintf(host_, sizeof(host_), "%s", host);
     port_ = port;
-    snprintf(user_, sizeof(user_), "%s", user ? user : "");
-    snprintf(pass_, sizeof(pass_), "%s", pass ? pass : "");
-    snprintf(prefix_, sizeof(prefix_), "%s", prefix ? prefix : "");
+    if (user && user[0]) snprintf(user_, sizeof(user_), "%s", user);
+    if (pass && pass[0]) snprintf(pass_, sizeof(pass_), "%s", pass);
+    if (prefix && prefix[0]) snprintf(prefix_, sizeof(prefix_), "%s", prefix);
     enabled_ = enabled;
     tls_ = tls;
     status_interval_s_ = status_interval_s;
@@ -150,6 +150,22 @@ void MqttInteractor::save_and_apply(const char* host, uint16_t port,
 bool MqttInteractor::is_connected() const
 {
     return mqtt_state_ == State::CONNECTED && mqtt_.is_connected();
+}
+
+bool MqttInteractor::is_connecting() const
+{
+    return mqtt_state_ == State::CONNECTING;
+}
+
+const char* MqttInteractor::get_state() const
+{
+    switch (mqtt_state_) {
+    case State::DISABLED:    return "disabled";
+    case State::DISCONNECTED: return "disconnected";
+    case State::CONNECTING:  return "connecting";
+    case State::CONNECTED:   return "connected";
+    default:                 return "disconnected";
+    }
 }
 
 // ── connect_to_broker ────────────────────────────────────────

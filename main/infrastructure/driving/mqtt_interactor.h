@@ -49,6 +49,8 @@ public:
     uint16_t get_status_interval_s() const override { return status_interval_s_; }
     uint16_t get_stats_interval_s() const override  { return stats_interval_s_; }
     bool is_connected() const override;
+    bool is_connecting() const override;
+    const char* get_state() const override;
     void save_and_apply(const char* host, uint16_t port,
                         const char* user, const char* pass,
                         const char* prefix, bool enabled, bool tls,

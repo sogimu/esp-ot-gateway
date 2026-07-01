@@ -485,6 +485,8 @@ void MqttSocketAdapter::poll_socket()
                 connect_pending_ = false;
                 connect_failures_ = 0;
             } else {
+                if (connect_failures_ == 0 && user_cb_)
+                    user_cb_(2, (void*)"ошибка подключения", user_ctx_);
                 connect_failures_++;
             }
         }

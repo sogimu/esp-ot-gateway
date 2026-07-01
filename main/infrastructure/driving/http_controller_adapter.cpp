@@ -562,10 +562,11 @@ esp_err_t HttpControllerAdapter::handler_mqtt_status(httpd_req_t* req)
 
     char buf[512];
     snprintf(buf, sizeof(buf),
-        "{\"enabled\":%s,\"connected\":%s,\"host\":\"%s\",\"port\":%u,"
+        "{\"enabled\":%s,\"state\":\"%s\",\"connected\":%s,\"host\":\"%s\",\"port\":%u,"
         "\"user\":\"%s\",\"prefix\":\"%s\",\"tls\":%s,"
         "\"status_interval\":%u,\"stats_interval\":%u}",
         self->mqtt_->is_enabled()   ? "true" : "false",
+        self->mqtt_->get_state(),
         self->mqtt_->is_connected() ? "true" : "false",
         self->mqtt_->get_host(),
         self->mqtt_->get_port(),
@@ -625,8 +626,11 @@ esp_err_t HttpControllerAdapter::handler_mqtt_settings(httpd_req_t* req)
              s_user ? std::min(user_len, 63) : (int)strlen(self->mqtt_->get_user()),
              s_user ? s_user : self->mqtt_->get_user());
     char pass[64];
-    snprintf(pass, sizeof(pass), "%.*s",
-             s_pass ? std::min(pass_len, 63) : 0, s_pass ? s_pass : "");
+    // Empty password field → don't overwrite (browsers don't pre-fill password inputs)
+    if (s_pass && pass_len > 0)
+        snprintf(pass, sizeof(pass), "%.*s", std::min(pass_len, 63), s_pass);
+    else
+        pass[0] = '\0';  // will be handled by save_and_apply
     char prefix[64];
     snprintf(prefix, sizeof(prefix), "%.*s",
              s_prefix ? std::min(prefix_len, 63) : (int)strlen(self->mqtt_->get_prefix()),

@@ -14,6 +14,8 @@ public:
 
     virtual bool is_enabled() const = 0;
     virtual bool is_connected() const = 0;
+    virtual bool is_connecting() const = 0;
+    virtual const char* get_state() const = 0;  // "disabled"|"connecting"|"connected"|"disconnected"
     virtual const char* get_host() const = 0;
     virtual uint16_t get_port() const = 0;
     virtual const char* get_user() const = 0;
