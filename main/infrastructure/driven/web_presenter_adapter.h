@@ -5,6 +5,7 @@
 
 class IHeatingStateStore;
 class ILogger;
+class IEventLogReader;
 class ModulationStatsService;
 class BurnCycleService;
 class GasFlowService;
@@ -17,6 +18,7 @@ class FopdtEstimator;
 class WebPresenterAdapter {
 public:
     void set_state(IHeatingStateStore* s)    { state_ = s; }
+    void set_log_reader(IEventLogReader* r)  { log_reader_ = r; }
     void set_logger(ILogger* l)              { logger_ = l; }
     void set_mod_stats(ModulationStatsService* m) { mod_stats_ = m; }
     void set_burn_cycles(BurnCycleService* b)    { burn_cycles_ = b; }
@@ -53,7 +55,8 @@ public:
 
 private:
     IHeatingStateStore*       state_ = nullptr;
-    ILogger*                  logger_ = nullptr;
+    ILogger*                  logger_ = nullptr;     // for event() logging (optional)
+    IEventLogReader*          log_reader_ = nullptr; // for lock/unlock/to_json
     ModulationStatsService*   mod_stats_ = nullptr;
     BurnCycleService*         burn_cycles_ = nullptr;
     GasFlowService*           gas_flow_ = nullptr;

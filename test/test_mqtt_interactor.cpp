@@ -7,7 +7,7 @@
 
 #include "application/ports/driven/imqtt_hardware.h"
 #include "application/ports/driven/imqtt_message_sink.h"
-#include "application/ports/driven/imqtt_config_persistence.h"
+#include "application/ports/driven/imqtt_config_store.h"
 #include "application/ports/driven/imqtt_state_renderer.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/ilogger.h"
@@ -18,7 +18,7 @@
 #include "infrastructure/driving/mqtt_interactor.h"
 #include "fakes/fake_mqtt_hardware.h"
 #include "fakes/fake_mqtt_message_sink.h"
-#include "fakes/fake_mqtt_config_persistence.h"
+#include "fakes/fake_mqtt_config_store.h"
 #include "fakes/fake_mqtt_renderer.h"
 #include "fakes/fake_heating_state_store.h"
 #include "fakes/fake_time_source.h"
@@ -63,7 +63,7 @@ struct MqttTestLogger : public ILogger {
 struct MqttTestFixture {
     FakeMqttHardware mqtt;
     FakeMqttMessageSink sink;
-    FakeMqttConfigPersistence cfg;
+    FakeMqttConfigStore cfg;
     FakeHeatingStateStore state;
     SpySystemConfig spy;
     MqttTestLogger log;

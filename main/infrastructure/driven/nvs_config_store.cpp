@@ -1,4 +1,4 @@
-#include "infrastructure/driven/nvs_config_adapter.h"
+#include "infrastructure/driven/nvs_config_store.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "domain/value_objects/ch_schedule.h"
 #include "nvs.h"
@@ -9,7 +9,7 @@
 
 // ── init ─────────────────────────────────────────────────────
 
-void NvsConfigAdapter::init()
+void NvsConfigStore::init()
 {
     esp_err_t r = nvs_flash_init();
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -20,7 +20,7 @@ void NvsConfigAdapter::init()
 
 // ── "config" namespace ───────────────────────────────────────
 
-void NvsConfigAdapter::load_all(IHeatingStateStore& s)
+void NvsConfigStore::load_all(IHeatingStateStore& s)
 {
     nvs_handle_t h;
     if (nvs_open("config", NVS_READONLY, &h) != ESP_OK) return;
@@ -137,7 +137,7 @@ void NvsConfigAdapter::load_all(IHeatingStateStore& s)
     nvs_close(h);
 }
 
-void NvsConfigAdapter::save_config(const IHeatingStateStore& s)
+void NvsConfigStore::save_config(const IHeatingStateStore& s)
 {
     nvs_handle_t h;
     if (nvs_open("config", NVS_READWRITE, &h) != ESP_OK) return;
@@ -191,77 +191,10 @@ void NvsConfigAdapter::save_config(const IHeatingStateStore& s)
     nvs_commit(h); nvs_close(h);
 }
 
-// ── MQTT broker config ("config" namespace) ────────────────────
-
-void NvsConfigAdapter::save_mqtt_config(const char* host, uint16_t port,
-                                         const char* user, const char* pass,
-                                         const char* prefix, bool enabled, bool tls, uint16_t status_interval_s, uint16_t stats_interval_s)
-{
-    nvs_handle_t h;
-    if (nvs_open("config", NVS_READWRITE, &h) != ESP_OK) return;
-
-    nvs_set_blob(h, "mqtt_host", host, strlen(host) + 1);
-    nvs_set_u16(h, "mqtt_port", port);
-    nvs_set_blob(h, "mqtt_user", user, strlen(user) + 1);
-    nvs_set_blob(h, "mqtt_pass", pass, strlen(pass) + 1);
-    nvs_set_blob(h, "mqtt_pref", prefix, strlen(prefix) + 1);
-    nvs_set_u8(h, "mqtt_en", enabled ? 1 : 0);
-    nvs_set_u8(h, "mqtt_tls", tls ? 1 : 0);
-    nvs_set_u16(h, "mqtt_sti", status_interval_s);
-    nvs_set_u16(h, "mqtt_ssi", stats_interval_s);
-
-    nvs_commit(h); nvs_close(h);
-}
-
-bool NvsConfigAdapter::load_mqtt_config(char* host, size_t host_size,
-                                         uint16_t& port,
-                                         char* user, size_t user_size,
-                                         char* pass, size_t pass_size,
-                                         char* prefix, size_t prefix_size,
-                                         bool& enabled, bool& tls)
-{
-    nvs_handle_t h;
-    if (nvs_open("config", NVS_READONLY, &h) != ESP_OK) return false;
-
-    size_t sz;
-    uint8_t u8;
-
-    sz = host_size;
-    if (nvs_get_blob(h, "mqtt_host", host, &sz) == ESP_OK) {
-        host[sz < host_size ? sz : host_size - 1] = '\0';
-    }
-
-    if (nvs_get_u16(h, "mqtt_port", &port) != ESP_OK) {
-        // оставить значение по умолчанию
-    }
-
-    sz = user_size;
-    if (nvs_get_blob(h, "mqtt_user", user, &sz) == ESP_OK) {
-        user[sz < user_size ? sz : user_size - 1] = '\0';
-    }
-
-    sz = pass_size;
-    if (nvs_get_blob(h, "mqtt_pass", pass, &sz) == ESP_OK) {
-        pass[sz < pass_size ? sz : pass_size - 1] = '\0';
-    }
-
-    sz = prefix_size;
-    if (nvs_get_blob(h, "mqtt_pref", prefix, &sz) == ESP_OK) {
-        prefix[sz < prefix_size ? sz : prefix_size - 1] = '\0';
-    }
-
-    if (nvs_get_u8(h, "mqtt_en", &u8) == ESP_OK)
-        enabled = (u8 != 0);
-    if (nvs_get_u8(h, "mqtt_tls", &u8) == ESP_OK)
-        tls = (u8 != 0);
-
-    nvs_close(h);
-    return true;
-}
 
 // ── "stats" namespace ────────────────────────────────────────
 
-bool NvsConfigAdapter::load_stats(uint32_t& bs, float& im3,
+bool NvsConfigStore::load_stats(uint32_t& bs, float& im3,
                                    void* h, void* c, void* e, void* cal)
 {
     nvs_handle_t n;
@@ -310,7 +243,7 @@ bool NvsConfigAdapter::load_stats(uint32_t& bs, float& im3,
     nvs_close(n); return true;
 }
 
-void NvsConfigAdapter::save_stats(const IHeatingStateStore&,
+void NvsConfigStore::save_stats(const IHeatingStateStore&,
                                    uint32_t bs, float im3,
                                    const void* h, const void* c,
                                    const void* e, const void* cal)
@@ -340,7 +273,7 @@ void NvsConfigAdapter::save_stats(const IHeatingStateStore&,
 
 // ── "meter" namespace ────────────────────────────────────────
 
-bool NvsConfigAdapter::load_meter(IHeatingStateStore& s, void* blob)
+bool NvsConfigStore::load_meter(IHeatingStateStore& s, void* blob)
 {
     nvs_handle_t n;
     if (nvs_open("meter", NVS_READONLY, &n) != ESP_OK) return false;
@@ -388,7 +321,7 @@ bool NvsConfigAdapter::load_meter(IHeatingStateStore& s, void* blob)
     return ok;
 }
 
-void NvsConfigAdapter::save_meter(const IHeatingStateStore& s, const void* blob)
+void NvsConfigStore::save_meter(const IHeatingStateStore& s, const void* blob)
 {
     nvs_handle_t n;
     if (nvs_open("meter", NVS_READWRITE, &n) != ESP_OK) return;
@@ -407,7 +340,7 @@ void NvsConfigAdapter::save_meter(const IHeatingStateStore& s, const void* blob)
 
 // ── "predict" namespace ──────────────────────────────────────
 
-bool NvsConfigAdapter::load_predict(float r[3], int& idx, int& cnt)
+bool NvsConfigStore::load_predict(float r[3], int& idx, int& cnt)
 {
     nvs_handle_t n;
     if (nvs_open("predict", NVS_READONLY, &n) != ESP_OK) return false;
@@ -418,7 +351,7 @@ bool NvsConfigAdapter::load_predict(float r[3], int& idx, int& cnt)
     nvs_close(n); return true;
 }
 
-void NvsConfigAdapter::save_predict(const float r[3], int idx, int cnt)
+void NvsConfigStore::save_predict(const float r[3], int idx, int cnt)
 {
     nvs_handle_t n;
     if (nvs_open("predict", NVS_READWRITE, &n) != ESP_OK) return;
@@ -430,7 +363,7 @@ void NvsConfigAdapter::save_predict(const float r[3], int idx, int cnt)
 
 // ── Burner stats persistence (stats namespace) ──
 
-bool NvsConfigAdapter::load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
+bool NvsConfigStore::load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
                                         uint32_t& inter_pause_sec, uint32_t& inter_cnt,
                                         uint32_t& mod_pause_sec, uint32_t& mod_cnt)
 {
@@ -449,7 +382,7 @@ bool NvsConfigAdapter::load_burn_stats(uint32_t& burner_sec, uint32_t& total_pau
     return ok;
 }
 
-void NvsConfigAdapter::save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
+void NvsConfigStore::save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
                                         uint32_t inter_pause_sec, uint32_t inter_cnt,
                                         uint32_t mod_pause_sec, uint32_t mod_cnt)
 {
@@ -468,7 +401,7 @@ void NvsConfigAdapter::save_burn_stats(uint32_t burner_sec, uint32_t total_pause
 
 // ── Total uptime persistence (stats namespace, "uptime" key) ──
 
-bool NvsConfigAdapter::load_total_uptime(uint32_t& total_uptime_sec)
+bool NvsConfigStore::load_total_uptime(uint32_t& total_uptime_sec)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READONLY, &n) != ESP_OK) return false;
@@ -479,7 +412,7 @@ bool NvsConfigAdapter::load_total_uptime(uint32_t& total_uptime_sec)
     return ok;
 }
 
-void NvsConfigAdapter::save_total_uptime(uint32_t total_uptime_sec)
+void NvsConfigStore::save_total_uptime(uint32_t total_uptime_sec)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
@@ -488,7 +421,7 @@ void NvsConfigAdapter::save_total_uptime(uint32_t total_uptime_sec)
     nvs_close(n);
 }
 
-void NvsConfigAdapter::save_integral(float value)
+void NvsConfigStore::save_integral(float value)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
@@ -499,7 +432,7 @@ void NvsConfigAdapter::save_integral(float value)
 
 // ── Efficiency blob (stats namespace, "eff" key) ──────────────
 
-bool NvsConfigAdapter::save_eff(const IHeatingStateStore& state)
+bool NvsConfigStore::save_eff(const IHeatingStateStore& state)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return false;
@@ -513,7 +446,7 @@ bool NvsConfigAdapter::save_eff(const IHeatingStateStore& state)
     return r == ESP_OK;
 }
 
-bool NvsConfigAdapter::load_eff(IHeatingStateStore& state)
+bool NvsConfigStore::load_eff(IHeatingStateStore& state)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READONLY, &n) != ESP_OK) return false;
@@ -529,24 +462,5 @@ bool NvsConfigAdapter::load_eff(IHeatingStateStore& state)
         ok = true;
     }
     nvs_close(n);
-    return ok;
-}
-
-void NvsConfigAdapter::save_mqtt_intervals(uint16_t status_s, uint16_t stats_s)
-{
-    nvs_handle_t h;
-    if (nvs_open("config", NVS_READWRITE, &h) != ESP_OK) return;
-    nvs_commit(h); nvs_close(h);
-}
-
-bool NvsConfigAdapter::load_mqtt_intervals(uint16_t& status_s, uint16_t& stats_s)
-{
-    nvs_handle_t h;
-    if (nvs_open("config", NVS_READONLY, &h) != ESP_OK) return false;
-    bool ok = false;
-    uint16_t v;
-    if (nvs_get_u16(h, "mqtt_sti", &v) == ESP_OK) { status_s = v; ok = true; }
-    if (nvs_get_u16(h, "mqtt_ssi", &v) == ESP_OK) { stats_s = v; ok = true; }
-    nvs_close(h);
     return ok;
 }

@@ -4,8 +4,10 @@
 
 /// NVS-backed WiFi credential store.
 /// Uses existing "config" namespace. Keys: wifi_mode, wifi_ssid, wifi_pass, ap_pass, sta_fail_cnt.
-class WifiNvsAdapter : public IWifiCredentialStore {
+class WifiNvsStore : public IWifiCredentialStore {
 public:
+    void init();   // nvs_flash_init
+
     bool load(int& mode,
               char* sta_ssid, size_t ssid_sz,
               char* sta_pass, size_t pass_sz,

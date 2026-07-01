@@ -15,7 +15,7 @@
 #include "infrastructure/driven/boiler_opentherm_adapter.h"
 #include "infrastructure/driven/temperature_sensor_adapter.h"
 #include "infrastructure/driven/web_presenter_adapter.h"
-#include "infrastructure/driven/nvs_config_adapter.h"
+#include "infrastructure/driven/nvs_config_store.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
@@ -24,7 +24,7 @@
 #include "infrastructure/driving/http_controller_adapter.h"
 
 // ── WiFi provisioning ────────────────────────────────────
-#include "infrastructure/driven/wifi_nvs_adapter.h"
+#include "infrastructure/driven/wifi_nvs_store.h"
 #include "infrastructure/driven/esp32_wifi_adapter.h"
 #include "infrastructure/driving/wifi_apsta_adapter.h"
 
@@ -32,6 +32,7 @@
 #include "infrastructure/freertos/mqtt_queue_adapter.h"
 #include "infrastructure/driven/mqtt_socket_adapter.h"
 #include "infrastructure/driven/mqtt_renderer_adapter.h"
+#include "infrastructure/driven/mqtt_nvs_store.h"
 #include "infrastructure/driving/mqtt_interactor.h"
 
 // ── Use cases ────────────────────────────────────────────
@@ -57,7 +58,7 @@ extern "C" void app_main(void)
     // ── Phase 1: Foundation ──────────────────────────────
     EventLogAdapter ca_log;
 
-    NvsConfigAdapter nvs;
+    NvsConfigStore nvs;
     nvs.init();
 
     CrashDiagnosticsAdapter crash_diag(ca_log);
@@ -72,6 +73,7 @@ extern "C" void app_main(void)
     // ── Phase 2: Driven adapters ────────────────────────
     HeatingStateAdapter      ca_state;
     SntpTimeAdapter          ca_time;
+    ca_time.init();
     OtHardwareAdapter        ca_ot_hw;
     BoilerOpenThermAdapter   ca_boiler(ca_ot_hw);
     TemperatureSensorAdapter ca_sensors;
@@ -84,14 +86,16 @@ extern "C" void app_main(void)
     ca_log.set_time_source(&ca_time);
 
     ca_web.set_state(&ca_state);
-    ca_web.set_logger(&ca_log);
+    ca_web.set_log_reader(&ca_log);   // IEventLogReader (lock/unlock/to_json)
     ca_web.set_time_source(&ca_time);
 
     nvs.load_all(ca_state);  // restore persisted config into state
     nvs.load_meter(ca_state); // restore gas meter base reading
 
     // ── Phase 3: Network ─────────────────────────────────
-    WifiNvsAdapter     wifi_nvs;
+    WifiNvsStore     wifi_nvs;
+    wifi_nvs.init();
+
     Esp32WifiAdapter   wifi_hw;
     WifiApStaAdapter   wifi(wifi_hw, wifi_nvs);
     auto wifi_mode = wifi.boot();
@@ -183,8 +187,11 @@ extern "C" void app_main(void)
     ca_web.set_gas_correction(&gas_corr);
 
     // ── MQTT interactor ──────────────────────────────────
+    MqttNvsStore       mqtt_nvs;
+    mqtt_nvs.init();
+
     MqttInteractor mqtt(ca_mqtt, ca_mqtt_queue,
-                        nvs,           // IMqttConfigPersistence
+                        mqtt_nvs,      // IMqttConfigStore
                         ca_state,
                         sys_cfg,       // IConfigureSystem
                         ca_log,

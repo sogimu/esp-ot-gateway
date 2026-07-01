@@ -4,10 +4,10 @@
 #include <cstdint>
 
 /// Интерфейс сохранения/загрузки настроек MQTT.
-/// Выделен из NvsConfigAdapter для возможности тестирования MqttInteractor на хосте.
-class IMqttConfigPersistence {
+/// Выделен из NvsConfigStore для возможности тестирования MqttInteractor на хосте.
+class IMqttConfigStore {
 public:
-    virtual ~IMqttConfigPersistence() = default;
+    virtual ~IMqttConfigStore() = default;
 
     /// Сохранить настройки MQTT в энергонезависимую память.
     virtual void save_mqtt_config(const char* host, uint16_t port,

@@ -2,7 +2,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
-#include "nvs_config_adapter.h"
+#include "nvs_config_store.h"
 #include "fakes/fake_heating_state_store.h"
 #include "fakes/fake_configuration_store.h"
 #include "application/use_cases/gas_correction_interactor.h"

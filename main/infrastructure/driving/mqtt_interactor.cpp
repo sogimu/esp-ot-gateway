@@ -2,7 +2,7 @@
 
 #include "application/ports/driven/imqtt_hardware.h"
 #include "application/ports/driven/imqtt_message_sink.h"
-#include "application/ports/driven/imqtt_config_persistence.h"
+#include "application/ports/driven/imqtt_config_store.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
@@ -22,7 +22,7 @@ static const char* MQTT_TAG = "mqtt_pub";
 
 MqttInteractor::MqttInteractor(
     IMqttHardware& mqtt, IMqttMessageSink& sink,
-    IMqttConfigPersistence& cfg_store,
+    IMqttConfigStore& cfg_store,
     IHeatingStateStore& state,
     IConfigureSystem& cfg_sys,
     ILogger& log, ITimeSource& time,
@@ -198,8 +198,6 @@ void MqttInteractor::connect_to_broker()
     mqtt_.subscribe(topic, IMqttHardware::QoS::AT_MOST_ONCE);
     snprintf(topic, sizeof(topic), "%s/cmd/ha_discovery", prefix_);
     mqtt_.subscribe(topic, IMqttHardware::QoS::AT_MOST_ONCE);
-
-    log_.event(ILogger::SYSTEM, "MQTT: подключение к %s", host_);
 }
 
 // ESP-IDF auto-reconnect handles reconnection internally.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "application/ports/driven/ilogger.h"
+#include "application/ports/driven/ievent_log_reader.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include <stdint.h>
@@ -17,7 +18,7 @@ struct LogEntry {
 /// Thread-safe ring-buffer event logger — CA implementation.
 /// Uses FreeRTOS mutex for cross-core safety.
 /// event() is task-context only — no ISR callers, so mutex blocking is safe.
-class EventLogAdapter : public ILogger {
+class EventLogAdapter : public ILogger, public IEventLogReader {
 public:
     EventLogAdapter();
     ~EventLogAdapter();

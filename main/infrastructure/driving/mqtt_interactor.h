@@ -8,7 +8,7 @@
 
 class IMqttHardware;
 class IMqttMessageSink;
-class IMqttConfigPersistence;
+class IMqttConfigStore;
 class IHeatingStateStore;
 class IConfigureSystem;
 class ILogger;
@@ -26,7 +26,7 @@ class IMqttStateRenderer;
 class MqttInteractor : public IPollable, public IMqttConfigurator {
 public:
     MqttInteractor(IMqttHardware& mqtt, IMqttMessageSink& sink,
-                   IMqttConfigPersistence& cfg_store,
+                   IMqttConfigStore& cfg_store,
                    IHeatingStateStore& state,
                    IConfigureSystem& cfg_sys,
                    ILogger& log, ITimeSource& time,
@@ -107,7 +107,7 @@ private:
     // ── Зависимости (все по ссылке — без владения) ─────
     IMqttHardware&            mqtt_;
     IMqttMessageSink&         sink_;
-    IMqttConfigPersistence&   cfg_store_;
+    IMqttConfigStore&   cfg_store_;
     IHeatingStateStore&       state_;
     IConfigureSystem&         cfg_sys_;
     ILogger&                  log_;

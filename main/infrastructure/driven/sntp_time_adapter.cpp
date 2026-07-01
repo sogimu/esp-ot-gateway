@@ -5,6 +5,7 @@
 #include "esp_timer.h"
 #include "esp_sntp.h"
 #include "nvs.h"
+#include "nvs_flash.h"
 #include "driver/gpio.h"
 
 #include <ctime>
@@ -26,6 +27,11 @@ SntpTimeAdapter::SntpTimeAdapter()
 SntpTimeAdapter::~SntpTimeAdapter()
 {
     esp_sntp_stop();
+}
+
+void SntpTimeAdapter::init()
+{
+    nvs_flash_init();
 }
 
 void SntpTimeAdapter::start()

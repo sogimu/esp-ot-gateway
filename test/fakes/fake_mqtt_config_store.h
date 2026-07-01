@@ -1,12 +1,12 @@
 #pragma once
 
-#include "application/ports/driven/imqtt_config_persistence.h"
+#include "application/ports/driven/imqtt_config_store.h"
 #include <cstring>
 #include <cstdio>
 
-/// Fake-реализация IMqttConfigPersistence для хостовых тестов.
+/// Fake-реализация IMqttConfigStore для хостовых тестов.
 /// Хранит настройки MQTT в памяти.
-class FakeMqttConfigPersistence : public IMqttConfigPersistence {
+class FakeMqttConfigStore : public IMqttConfigStore {
 public:
     void save_mqtt_config(const char* host, uint16_t port,
                           const char* user, const char* pass,

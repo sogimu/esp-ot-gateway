@@ -19,6 +19,8 @@ public:
     time_point now() const override;
     uint64_t monotonic_us() const override;
 
+    void init();   // nvs_flash_init
+
     /// Manual time setting (for AP mode without SNTP).
     /// @param epoch_sec  Unix timestamp to set.
     void set_manual_time(time_t epoch_sec);

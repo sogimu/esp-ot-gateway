@@ -43,7 +43,7 @@ TEST_CASE("GasMeter: set_gas_meter_base saves to meter namespace", "[gas][regres
 TEST_CASE("GasMeter: load_meter restores gas_meter_base to state", "[gas][regression]") {
     FakeHeatingStateStore state;
 
-    // Simulate what NvsConfigAdapter::load_meter does:
+    // Simulate what NvsConfigStore::load_meter does:
     // it reads the blob and calls state.set_gas_meter_base()
     state.set_gas_meter_base(500.0f);
     REQUIRE(state.get_gas_meter_base() == Approx(500.0f));

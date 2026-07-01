@@ -1,7 +1,6 @@
 #pragma once
 
 #include "application/ports/driven/iconfiguration_store.h"
-#include "application/ports/driven/imqtt_config_persistence.h"
 #include <cstdint>
 #include <cstddef>
 
@@ -63,7 +62,7 @@ static_assert(sizeof(NvsPredictBlob) == 3 * 4 + 4 + 4, "NvsPredictBlob size mism
 
 // ── CA NVS adapter (standalone, no MVC dependencies) ──────────
 
-class NvsConfigAdapter : public IConfigurationStore, public IMqttConfigPersistence {
+class NvsConfigStore : public IConfigurationStore {
 public:
     void init();   // nvs_flash_init
 
@@ -80,9 +79,6 @@ public:
     void save_total_uptime(uint32_t total_uptime_sec) override;
     bool load_total_uptime(uint32_t& total_uptime_sec) override;
 
-    void save_mqtt_intervals(uint16_t status_s, uint16_t stats_s) override;
-    bool load_mqtt_intervals(uint16_t& status_s, uint16_t& stats_s) override;
-
     void save_integral(float value) override;
 
     bool save_eff(const IHeatingStateStore& state);
@@ -94,15 +90,4 @@ public:
     bool load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
                          uint32_t& inter_pause_sec, uint32_t& inter_cnt,
                          uint32_t& mod_pause_sec, uint32_t& mod_cnt) override;
-
-    // ── MQTT broker config ("config" namespace) ──────────────────
-    void save_mqtt_config(const char* host, uint16_t port,
-                          const char* user, const char* pass,
-                          const char* prefix, bool enabled, bool tls, uint16_t status_interval_s, uint16_t stats_interval_s) override;
-    bool load_mqtt_config(char* host, size_t host_size,
-                          uint16_t& port,
-                          char* user, size_t user_size,
-                          char* pass, size_t pass_size,
-                          char* prefix, size_t prefix_size,
-                          bool& enabled, bool& tls) override;
 };

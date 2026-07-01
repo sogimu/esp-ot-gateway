@@ -131,7 +131,6 @@ set(APP_SRCS
     # MQTT interactor (testable on host — no ESP-IDF deps)
     ${MAIN_DIR}/infrastructure/driving/mqtt_interactor.cpp
     ${MAIN_DIR}/infrastructure/driven/web_presenter_adapter.cpp
-    ${MAIN_DIR}/infrastructure/driven/event_log_adapter.cpp
 )
 
 # ── Test executable ───────────────────────────────────────

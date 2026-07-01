@@ -2,7 +2,7 @@
 
 #include "application/ports/driven/iconfiguration_store.h"
 #include "application/ports/driven/iheating_state_store.h"
-#include "nvs_config_adapter.h"  // NvsMeterBlob
+#include "nvs_config_store.h"  // NvsMeterBlob
 #include <cstring>
 
 /// Fake configuration store — in-memory, for unit testing.

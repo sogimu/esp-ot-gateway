@@ -2,7 +2,7 @@
 #include <cstring>
 #include <string>
 
-/// In-memory MQTT config store (mirrors NvsConfigAdapter MQTT methods).
+/// In-memory MQTT config store (mirrors NvsConfigStore MQTT methods).
 /// Используется для тестирования логики сохранения/загрузки без NVS.
 class InMemoryMqttConfig {
 public:

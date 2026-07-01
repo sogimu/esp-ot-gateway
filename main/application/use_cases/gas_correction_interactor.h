@@ -1,7 +1,7 @@
 #pragma once
 
 #include "application/ports/driving/igas_calibration.h"
-#include "nvs_config_adapter.h"  // NvsMeterBlob, NvsCorrLogEntry, CORRECTION_LOG_SIZE
+#include "nvs_config_store.h"  // NvsMeterBlob, NvsCorrLogEntry, CORRECTION_LOG_SIZE
 #include "domain/services/kalman1d.h"
 
 class IHeatingStateStore;
