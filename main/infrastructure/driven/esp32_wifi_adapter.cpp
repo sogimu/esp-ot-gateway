@@ -24,6 +24,10 @@ Esp32WifiAdapter::Esp32WifiAdapter()
 Esp32WifiAdapter::~Esp32WifiAdapter()
 {
     s_self = nullptr;
+    if (reconnect_timer_) {
+        esp_timer_stop(reconnect_timer_);
+        esp_timer_delete(reconnect_timer_);
+    }
     if (event_group_) {
         vEventGroupDelete(event_group_);
         event_group_ = nullptr;
@@ -45,27 +49,54 @@ void Esp32WifiAdapter::event_handler(void* arg, esp_event_base_t base,
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         if (!self->should_auto_connect()) {
             ESP_LOGI(TAG, "STA_DISCONNECTED during scan — ignoring");
-        } else if (self->sta_retry_ < MAX_RETRY) {
-            esp_wifi_connect();
-            self->sta_retry_++;
-            ESP_LOGI(TAG, "WiFi повтор %d/%d", self->sta_retry_, MAX_RETRY);
         } else {
-            xEventGroupSetBits(self->event_group_, WIFI_FAIL_BIT);
-            ESP_LOGE(TAG, "WiFi ошибка после %d попыток", MAX_RETRY);
             self->sta_connected_ = false;
+            self->schedule_reconnect();
         }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         auto* event = (ip_event_got_ip_t*)data;
         snprintf(self->sta_ip_, sizeof(self->sta_ip_),
                  IPSTR, IP2STR(&event->ip_info.ip));
         ESP_LOGI(TAG, "WiFi подключён. IP: %s", self->sta_ip_);
+        if (self->reconnect_timer_) {
+            esp_timer_stop(self->reconnect_timer_);
+        }
         self->sta_retry_ = 0;
+        self->reconnect_delay_sec_ = RECONNECT_MIN_SEC;
         self->sta_connected_ = true;
         xEventGroupSetBits(self->event_group_, WIFI_CONNECTED_BIT);
         esp_wifi_set_ps(WIFI_PS_NONE);
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_SCAN_DONE) {
         xEventGroupSetBits(self->event_group_, WIFI_SCAN_DONE_BIT);
     }
+}
+
+void Esp32WifiAdapter::reconnect_timer_cb(void* arg)
+{
+    auto* self = static_cast<Esp32WifiAdapter*>(arg);
+    if (!self || !self->should_auto_connect()) return;
+    self->sta_retry_++;
+    ESP_LOGI(TAG, "WiFi reconnect attempt %d (delay=%ds)",
+             self->sta_retry_, self->reconnect_delay_sec_);
+    esp_wifi_connect();
+}
+
+void Esp32WifiAdapter::schedule_reconnect()
+{
+    if (!reconnect_timer_) {
+        esp_timer_create_args_t cfg = {};
+        cfg.callback = reconnect_timer_cb;
+        cfg.arg = this;
+        cfg.name = "wifi_reconn";
+        ESP_ERROR_CHECK(esp_timer_create(&cfg, &reconnect_timer_));
+    }
+    ESP_LOGI(TAG, "WiFi disconnected — reconnect in %ds (attempt %d)",
+             reconnect_delay_sec_, sta_retry_ + 1);
+    esp_timer_start_once(reconnect_timer_, (uint64_t)reconnect_delay_sec_ * 1'000'000);
+    // Exponential backoff: double delay, cap at RECONNECT_MAX_SEC
+    reconnect_delay_sec_ *= 2;
+    if (reconnect_delay_sec_ > RECONNECT_MAX_SEC)
+        reconnect_delay_sec_ = RECONNECT_MAX_SEC;
 }
 
 bool Esp32WifiAdapter::init()
