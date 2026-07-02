@@ -81,6 +81,8 @@ void MqttNvsStore::save_mqtt_intervals(uint16_t status_s, uint16_t stats_s)
 {
     nvs_handle_t h;
     if (nvs_open("config", NVS_READWRITE, &h) != ESP_OK) return;
+    nvs_set_u16(h, "mqtt_sti", status_s);
+    nvs_set_u16(h, "mqtt_ssi", stats_s);
     nvs_commit(h); nvs_close(h);
 }
 
