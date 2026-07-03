@@ -241,7 +241,7 @@ extern "C" void app_main(void)
     static const char* TAG = "main";
     int save_tick = 0;
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(60000));
+        vTaskDelay(pdMS_TO_TICKS(15000));  // 15s for heap leak diagnosis
         save_tick++;
 
         uint32_t idle0 = ulTaskGetIdleRunTimePercentForCore(0);
@@ -273,6 +273,11 @@ extern "C" void app_main(void)
         if (largest_free < 8192) {
             ESP_LOGW(TAG, "Критическая фрагментация! крупн.блок=%" PRIu32 " всего=%" PRIu32,
                      largest_free, free_heap);
+            // Restart HTTP server to free fragmented socket buffers
+            http.stop();
+            vTaskDelay(pdMS_TO_TICKS(1000));  // let lwIP finish closing sockets
+            http.start();
+            ESP_LOGI(TAG, "HTTP перезапущен для очистки кучи");
         }
 
         if (free_heap < 40 * 1024) {

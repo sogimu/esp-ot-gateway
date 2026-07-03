@@ -32,6 +32,8 @@ void HttpControllerAdapter::start()
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers    = 31;
     config.lru_purge_enable    = true;
+    config.max_open_sockets    = 3;       // limit concurrent connections
+    config.keep_alive_enable   = false;   // close after each request — frees socket buffers
     config.stack_size          = 16384;   // +6KB for 90KB page + JSON serialisation
     config.recv_wait_timeout   = 10;      // prevent slow-client worker exhaustion
 
