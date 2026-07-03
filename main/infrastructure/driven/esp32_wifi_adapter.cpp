@@ -41,6 +41,7 @@ void Esp32WifiAdapter::event_handler(void* arg, esp_event_base_t base,
     if (!self) return;
 
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
+        esp_wifi_set_ps(WIFI_PS_NONE);  // disable modem sleep — prevents lwIP buffer pile-up
         if (self->should_auto_connect()) {
             esp_wifi_connect();
         } else {
