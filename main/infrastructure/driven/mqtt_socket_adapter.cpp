@@ -9,6 +9,8 @@
 #include <netinet/tcp.h>
 #include <unistd.h>
 
+static void force_close_socket(int& sock);
+
 static const char* TAG = "mqtt_sock";
 
 // ── MQTT 3.1.1 packet types ─────────────────────────────────
@@ -134,7 +136,7 @@ bool MqttSocketAdapter::try_connect()
         struct addrinfo* res = nullptr;
         if (getaddrinfo(host_only, nullptr, &hints, &res) != 0 || !res) {
             ESP_LOGE(TAG, "DNS resolve failed for %s", host_only);
-            close(sock_); sock_ = -1; return false;
+            force_close_socket(sock_); return false;
         }
         memcpy(&addr, res->ai_addr, sizeof(addr));
         freeaddrinfo(res);
@@ -143,7 +145,7 @@ bool MqttSocketAdapter::try_connect()
     int ret = ::connect(sock_, (struct sockaddr*)&addr, sizeof(addr));
     if (ret < 0 && errno != EINPROGRESS) {
         ESP_LOGE(TAG, "connect() failed: %d", errno);
-        close(sock_); sock_ = -1;
+        force_close_socket(sock_);
         return false;
     }
 
@@ -156,14 +158,14 @@ bool MqttSocketAdapter::try_connect()
         int sel = select(sock_ + 1, nullptr, &wfds, nullptr, &tv);
         if (sel <= 0) {
             ESP_LOGE(TAG, "TCP connect timeout");
-            close(sock_); sock_ = -1;
+            force_close_socket(sock_);
             return false;
         }
     }
 
     if (!send_connect_packet()) {
         ESP_LOGE(TAG, "CONNECT send failed: errno=%d", errno);
-        close(sock_); sock_ = -1;
+        force_close_socket(sock_);
         return false;
     }
     ESP_LOGI(TAG, "CONNECT sent, waiting for CONNACK...");
@@ -337,14 +339,21 @@ bool MqttSocketAdapter::send_pingreq()
 
 // ── disconnect ───────────────────────────────────────────────
 
+static void force_close_socket(int& sock)
+{
+    if (sock < 0) return;
+    // SO_LINGER with timeout=0 forces RST on close — frees lwIP buffers
+    // immediately. Critical when WiFi is down and TCP FIN can't reach peer.
+    struct linger l = {1, 0};
+    setsockopt(sock, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
+    close(sock);
+    sock = -1;
+}
+
 void MqttSocketAdapter::disconnect()
 {
     if (sock_ >= 0) {
-        // RST hack: send dummy byte so lwip sees unacked data,
-        // then SO_LINGER with timeout=0 forces RST instead of FIN
-        send(sock_, "R", 1, 0);
-        close(sock_);
-        sock_ = -1;
+        force_close_socket(sock_);
     }
     connected_ = false;
     subscribed_ = false;
@@ -415,7 +424,7 @@ void MqttSocketAdapter::process_incoming()
             if (n == 0) {
                 // Peer closed connection
                 ESP_LOGW(TAG, "recv()=0 — брокер закрыл соединение");
-                connected_ = false; close(sock_); sock_ = -1;
+                connected_ = false; force_close_socket(sock_);
                 if (user_cb_) user_cb_(2, (void*)"брокер закрыл", user_ctx_);
                 return;
             }
