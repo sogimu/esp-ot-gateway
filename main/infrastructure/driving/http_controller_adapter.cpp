@@ -32,7 +32,7 @@ void HttpControllerAdapter::start()
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers    = 32;
     config.lru_purge_enable    = true;
-    config.max_open_sockets    = 7;       // 2 SSE + page load + spare
+    config.max_open_sockets    = 12;      // SSE + page load + requests + spare
     config.keep_alive_enable   = true;    // needed for SSE long-lived connections
     config.keep_alive_idle     = 2;
     config.keep_alive_interval = 2;
@@ -581,14 +581,11 @@ esp_err_t HttpControllerAdapter::handler_events(httpd_req_t* req)
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(2000));
 
-        // Check if client is still connected
         char dummy;
         if (httpd_req_recv(req, &dummy, 0) < 0) break;
 
-        // Build status JSON
         self->presenter_->render_status(status_buf, sizeof(status_buf));
 
-        // Build MQTT status inline
         bool mqtt_conn = self->mqtt_ ? self->mqtt_->is_connected() : false;
         bool mqtt_en   = self->mqtt_ ? self->mqtt_->is_enabled() : false;
         const char* mqtt_state = self->mqtt_ ? self->mqtt_->get_state() : "unknown";

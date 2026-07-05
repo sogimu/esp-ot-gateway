@@ -272,15 +272,37 @@ extern "C" void app_main(void)
         // AP watchdog: restart AP if WiFi died
         wifi.try_recover_ap();
 
-        if (largest_free < 8192) {
-            ESP_LOGW(TAG, "Критическая фрагментация! крупн.блок=%" PRIu32 " всего=%" PRIu32,
-                     largest_free, free_heap);
+        // ── Recovery ladder: prevent silent death from fragmentation ──
+        static int recovery_level = 0;  // highest level reached
+        if (largest_free < 4096 || free_heap < 8192) {
+            // Level 4: last resort — reboot
+            ESP_LOGE(TAG, "Куча исчерпана (своб=%" PRIu32 " крупн=%" PRIu32 ") — перезагрузка",
+                     free_heap, largest_free);
+            ca_log.event(ILogger::SYSTEM, "Перезагрузка: куча исчерпана (%" PRIu32 "/%" PRIu32 ")",
+                         free_heap, largest_free);
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            esp_restart();
+        } else if (largest_free < 6144 && recovery_level < 3) {
+            recovery_level = 3;
+            ESP_LOGW(TAG, "Recovery L3: перезапуск HTTP (своб=%" PRIu32 " крупн=%" PRIu32 ")",
+                     free_heap, largest_free);
+            ca_log.event(ILogger::SYSTEM, "Recovery L3: перезапуск HTTP");
+            http.stop();
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            http.start();
+        } else if (largest_free < 12288 && recovery_level < 2) {
+            recovery_level = 2;
+            ESP_LOGW(TAG, "Recovery L2: фрагментация (своб=%" PRIu32 " крупн=%" PRIu32 ")",
+                     free_heap, largest_free);
+            ca_log.event(ILogger::SYSTEM, "Recovery L2: фрагментация кучи");
+        } else if (largest_free < 16384 && recovery_level < 1) {
+            recovery_level = 1;
+            ESP_LOGW(TAG, "Recovery L1: предупреждение (своб=%" PRIu32 " крупн=%" PRIu32 ")",
+                     free_heap, largest_free);
+            ca_log.event(ILogger::SYSTEM, "Recovery L1: фрагментация растёт");
         }
-
-        if (free_heap < 40 * 1024) {
-            ca_log.event(ILogger::SYSTEM,
-                "Мало свободной кучи: %" PRIu32 " байт", free_heap);
-        }
+        // Reset ladder when heap recovers
+        if (largest_free >= 32768) recovery_level = 0;
 
         // Save all persistent state to NVS every 10 min (10 ticks)
         if (save_tick >= 10) {
