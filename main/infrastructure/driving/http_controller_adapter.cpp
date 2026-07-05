@@ -30,17 +30,12 @@ HttpControllerAdapter::~HttpControllerAdapter() { stop(); s_self = nullptr; }
 void HttpControllerAdapter::start()
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers    = 32;
+    config.max_uri_handlers    = 31;
     config.lru_purge_enable    = true;
-    config.max_open_sockets    = 12;      // SSE + page load + requests + spare
-    config.keep_alive_enable   = true;    // needed for SSE long-lived connections
-    config.keep_alive_idle     = 2;
-    config.keep_alive_interval = 2;
-    config.keep_alive_count    = 5;
-    config.stack_size          = 16384;
-    config.recv_wait_timeout   = 10;
-    config.enable_so_linger    = true;    // RST on close, no TIME_WAIT
-    config.linger_timeout      = 0;
+    config.max_open_sockets    = 3;       // limit concurrent connections
+    config.keep_alive_enable   = false;   // close after each request — frees socket buffers
+    config.stack_size          = 16384;   // +6KB for 90KB page + JSON serialisation
+    config.recv_wait_timeout   = 10;      // prevent slow-client worker exhaustion
 
     if (httpd_start(&server_, &config) != ESP_OK) {
         ESP_LOGE(TAG, "Ошибка запуска HTTP сервера");
@@ -63,9 +58,6 @@ void HttpControllerAdapter::start()
         { .uri = "/api/wifi/scan",     .method = HTTP_GET,  .handler = handler_wifi_scan,     .user_ctx = NULL },
         { .uri = "/api/wifi/settings", .method = HTTP_POST, .handler = handler_wifi_settings, .user_ctx = NULL },
         { .uri = "/api/wifi/forget",   .method = HTTP_POST, .handler = handler_wifi_forget,   .user_ctx = NULL },
-
-        // SSE events
-        { .uri = "/api/events",        .method = HTTP_GET,  .handler = handler_events,        .user_ctx = NULL },
 
         // MQTT API
         { .uri = "/api/mqtt/status",   .method = HTTP_GET,  .handler = handler_mqtt_status,   .user_ctx = NULL },
@@ -556,49 +548,6 @@ esp_err_t HttpControllerAdapter::handler_captive_redirect(httpd_req_t* req) {
     httpd_resp_set_status(req, "302 Found");
     httpd_resp_set_hdr(req, "Location", "/");
     httpd_resp_send(req, "", 0);
-    return ESP_OK;
-}
-
-// ── SSE events ─────────────────────────────────────────────
-
-esp_err_t HttpControllerAdapter::handler_events(httpd_req_t* req)
-{
-    auto* self = s_self;
-    if (!self || !self->presenter_) {
-        httpd_resp_sendstr(req, "{}");
-        return ESP_FAIL;
-    }
-
-    httpd_resp_set_hdr(req, "Content-Type", "text/event-stream");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
-    httpd_resp_set_hdr(req, "Connection", "keep-alive");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_send_chunk(req, "retry: 2000\n\n", -1);
-
-    static char status_buf[2048];
-    static char sse_buf[2560];
-
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(2000));
-
-        self->presenter_->render_status(status_buf, sizeof(status_buf));
-
-        bool mqtt_conn = self->mqtt_ ? self->mqtt_->is_connected() : false;
-        bool mqtt_en   = self->mqtt_ ? self->mqtt_->is_enabled() : false;
-        const char* mqtt_state = self->mqtt_ ? self->mqtt_->get_state() : "unknown";
-
-        int len = snprintf(sse_buf, sizeof(sse_buf),
-            "data: {\"status\":%s,\"mqtt\":{\"enabled\":%s,\"connected\":%s,\"state\":\"%s\"}}\n\n",
-            status_buf,
-            mqtt_en ? "true" : "false",
-            mqtt_conn ? "true" : "false",
-            mqtt_state);
-
-        if (len > 0 && len < (int)sizeof(sse_buf)) {
-            if (httpd_resp_send_chunk(req, sse_buf, len) != ESP_OK) break;
-        }
-    }
-
     return ESP_OK;
 }
 
