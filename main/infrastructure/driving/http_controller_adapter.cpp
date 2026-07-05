@@ -581,9 +581,6 @@ esp_err_t HttpControllerAdapter::handler_events(httpd_req_t* req)
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(2000));
 
-        char dummy;
-        if (httpd_req_recv(req, &dummy, 0) < 0) break;
-
         self->presenter_->render_status(status_buf, sizeof(status_buf));
 
         bool mqtt_conn = self->mqtt_ ? self->mqtt_->is_connected() : false;
