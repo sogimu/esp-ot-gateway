@@ -254,10 +254,12 @@ extern "C" void app_main(void)
         heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
         uint32_t largest_free = info.largest_free_block;
 
-        ESP_LOGI(TAG, "Аптайм: %lld с, сборка: %s %s, куча: всего %" PRIu32
-                 " (крупн %" PRIu32 ") | CPU: core0=%d%% core1=%d%% total=%d%%",
-                 ca_time.monotonic_us() / 1000000, __DATE__, __TIME__,
+        ESP_LOGI(TAG, "Аптайм: %lld с, куча: своб=%" PRIu32 " крупн=%" PRIu32
+                 " блоков: алл=%" PRIu32 " своб=%" PRIu32
+                 " | CPU: core0=%d%% core1=%d%% total=%d%%",
+                 ca_time.monotonic_us() / 1000000,
                  free_heap, largest_free,
+                 (uint32_t)info.allocated_blocks, (uint32_t)info.free_blocks,
                  cpu0, cpu1, (cpu0 + cpu1) / 2);
 
         // Per-task CPU stats every 5 min (5 ticks)

@@ -485,9 +485,9 @@ void MqttSocketAdapter::poll_socket()
     // each socket()/close() cycle leaks ~1.3KB in lwip)
     if (connect_pending_ && !connected_) {
         int backoff_s;
-        if (connect_failures_ < 3)       backoff_s = 5;
-        else if (connect_failures_ < 10)  backoff_s = 60;
-        else                              backoff_s = 300;  // 5 min
+        if (connect_failures_ < 3)       backoff_s = 10;
+        else if (connect_failures_ < 6)   backoff_s = 60;
+        else                              backoff_s = 600;  // 10 min — don't fragment heap
         if (now - last_connect_attempt_us_ > (uint64_t)backoff_s * 1000000ULL) {
             last_connect_attempt_us_ = now;
             if (try_connect()) {

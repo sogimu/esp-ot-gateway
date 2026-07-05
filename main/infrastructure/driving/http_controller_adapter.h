@@ -58,6 +58,7 @@ private:
     static esp_err_t handler_captive_redirect(httpd_req_t* req);
     static esp_err_t handler_generate_204(httpd_req_t* req);
     static esp_err_t handler_ping(httpd_req_t* req);
+    static esp_err_t handler_events(httpd_req_t* req);
     static esp_err_t handler_mqtt_status(httpd_req_t* req);
     static esp_err_t handler_mqtt_settings(httpd_req_t* req);
 };
