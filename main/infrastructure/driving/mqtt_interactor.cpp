@@ -46,6 +46,8 @@ void MqttInteractor::init()
     tls_ = false;
 
     cfg_store_.load_mqtt_intervals(status_interval_s_, stats_interval_s_);
+    ESP_LOGI(MQTT_TAG, "loaded intervals from NVS: status=%us stats=%us",
+             status_interval_s_, stats_interval_s_);
     if (!cfg_store_.load_mqtt_config(host_, sizeof(host_), port_,
                                       user_, sizeof(user_),
                                       pass_, sizeof(pass_),
@@ -61,6 +63,7 @@ void MqttInteractor::init()
 
     mqtt_.set_event_callback(mqtt_callback, this);
     connect_to_broker();
+    boot_reconnect_ = true;
 }
 
 // ── poll ─────────────────────────────────────────────────────
@@ -105,6 +108,18 @@ void MqttInteractor::poll()
     // Publish HA discovery one entity per cycle (non-blocking)
     if (ha_discovery_index_ >= 0) {
         publish_ha_next();
+    }
+
+    // Boot reconnect: force refresh after cold start (ghost session fix)
+    if (boot_reconnect_ && mqtt_state_ == State::CONNECTED) {
+        if (boot_connected_us_ == 0) {
+            boot_connected_us_ = time_.monotonic_us();
+        } else if (time_.monotonic_us() - boot_connected_us_ > 5'000'000ULL) {
+            ESP_LOGI(MQTT_TAG, "Boot reconnect: refreshing MQTT session");
+            mqtt_.disconnect();
+            connect_to_broker();
+            boot_reconnect_ = false;
+        }
     }
 
     poll_counter_++;
