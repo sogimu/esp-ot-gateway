@@ -381,6 +381,7 @@ void MqttInteractor::handle_ha_discovery_trigger()
     publish_all_ha_discovery();
     ha_discovery_published_ = true;
     ha_discovery_last_us_ = now_us;
+    ha_discovery_index_ = -1;  // stop incremental publish
     log_.event(ILogger::USER, "MQTT: HA discovery опубликован");
 }
 

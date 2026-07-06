@@ -1457,6 +1457,7 @@ static const char WEB_PAGE[] =
 "checkFirstBoot();"
 "switchTab('status');"
 /* ── MQTT ── */
+"function mqttToggleLabel(){document.getElementById('mqtt_en_lbl').textContent=document.getElementById('mqtt_en').checked?'Вкл':'Выкл';document.getElementById('mqtt_tls_lbl').textContent=document.getElementById('mqtt_tls').checked?'Вкл':'Выкл';}"
 "function mqttPoll(){fetchTimeout('/api/mqtt/status',15000).then(function(r){return r.json()}).then(function(d){"
 "var st=document.getElementById('mqtt_dot');var st2=document.getElementById('mqtt_status');"
 "if(!d.enabled){dot('mqtt_dot','s','MQTT выключен');st2.textContent='';}"

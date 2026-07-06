@@ -11,22 +11,27 @@ echo "=== 1. Активация ESP-IDF v5.3.2 ==="
 source "$IDF_EXPORT" > /dev/null 2>&1
 echo "IDF: $(idf.py --version 2>/dev/null || echo 'v5.3.2')"
 
-echo "=== 2. Сборка ==="
+echo "=== 2. Host-тесты ==="
 cd "$ROOT"
-# Force recompile of main.cpp to update __DATE__/__TIME__ in log
+rm -rf build_tests
+mkdir build_tests && cd build_tests
+cmake ../test -DCMAKE_BUILD_TYPE=Debug > /dev/null 2>&1
+cmake --build . -j"$(nproc)" 2>&1 | tail -3
+echo "Запуск тестов..."
+./run_tests 2>&1 | tail -5
+cd "$ROOT"
+
+echo "=== 3. Сборка прошивки ==="
 touch "$ROOT/main/main.cpp"
-# Fullclean if sdkconfig or sdkconfig.defaults changed
-if [ "$ROOT/sdkconfig.defaults" -nt "$ROOT/build/sdkconfig" ] || [ "$ROOT/sdkconfig" -nt "$ROOT/build/sdkconfig" ]; then
-    echo "sdkconfig изменён → fullclean"
-    idf.py fullclean
-fi
+# Always fullclean to avoid stale LWIP/sdkconfig cache
+idf.py fullclean > /dev/null 2>&1
 idf.py build
 
-echo "=== 3. Освобождение порта ==="
+echo "=== 4. Освобождение порта ==="
 fuser -k "$PORT" 2>/dev/null || true
 sleep 1
 
-echo "=== 4. Прошивка ==="
+echo "=== 5. Прошивка ==="
 python3 -m esptool \
     --chip esp32 \
     -p "$PORT" \
@@ -41,7 +46,7 @@ python3 -m esptool \
     0x8000  build/partition_table/partition-table.bin \
     0x10000 build/esp-ot-gateway.bin
 
-echo "=== 5. Проверка ==="
+echo "=== 6. Проверка ==="
 sleep 3
 python3 -c "
 import serial, time

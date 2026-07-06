@@ -405,10 +405,10 @@ TEST_CASE("MqttInteractor: HA discovery не публикуется на вто�
     f.interactor.poll();
     f.mqtt.inject_connected();
     f.interactor.poll();
-    // pending_connected_publish_ взводится заново при каждом CONNECTED,
-    // но ha_discovery_published_ уже true → повторной публикации не будет
+    // Discovery restarts on every reconnect — 2 entities published
+    // (1 from interrupted first cycle + 1 from new cycle start)
     int second_count = f.mqtt.count_publishes_to("homeassistant");
-    REQUIRE(second_count == 0);
+    REQUIRE(second_count == 2);
 }
 
 TEST_CASE("MqttInteractor: HA discovery можно принудительно переопубликовать", "[mqtt][interactor][ha]") {
@@ -431,7 +431,7 @@ TEST_CASE("MqttInteractor: HA discovery можно принудительно п
     f.interactor.poll();
 
     int ha_count = f.mqtt.count_publishes_to("homeassistant");
-    REQUIRE(ha_count == 18);
+    REQUIRE(ha_count == 27);
 }
 
 TEST_CASE("MqttInteractor: ha_discovery повторный вызов в cooldown игнорируется", "[mqtt][interactor][ha]") {
@@ -453,7 +453,7 @@ TEST_CASE("MqttInteractor: ha_discovery повторный вызов в cooldow
     f.sink.push(cmd);
     f.interactor.poll();
     int first = f.mqtt.count_publishes_to("homeassistant");
-    REQUIRE(first == 18);
+    REQUIRE(first == 27);
 
     // Второй сразу — должен игнорироваться (cooldown 10 min)
     f.mqtt.publishes_.clear();
