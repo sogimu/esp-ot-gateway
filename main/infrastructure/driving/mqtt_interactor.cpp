@@ -114,8 +114,10 @@ void MqttInteractor::poll()
     if (boot_reconnect_ && mqtt_state_ == State::CONNECTED) {
         if (boot_connected_us_ == 0) {
             boot_connected_us_ = time_.monotonic_us();
-        } else if (time_.monotonic_us() - boot_connected_us_ > 5'000'000ULL) {
-            ESP_LOGI(MQTT_TAG, "Boot reconnect: refreshing MQTT session");
+        } else if (time_.monotonic_us() - boot_connected_us_ > 10'000'000ULL) {
+            // Full reconnect identical to manual Save — disconnect + reconnect
+            log_.event(ILogger::USER, "MQTT: boot reconnect (ghost session fix)");
+            ESP_LOGI(MQTT_TAG, "Boot reconnect: disconnect+connect");
             mqtt_.disconnect();
             connect_to_broker();
             boot_reconnect_ = false;
