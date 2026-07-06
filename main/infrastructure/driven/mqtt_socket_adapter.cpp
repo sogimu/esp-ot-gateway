@@ -477,7 +477,7 @@ void MqttSocketAdapter::process_incoming()
                 if (user_cb_) user_cb_(1, nullptr, user_ctx_);
             }
             break;
-        case 0xD0: ping_pending_ = false; break;
+        case 0xD0: ping_pending_ = false; last_recv_us_ = time_.monotonic_us(); break;
         case 0x30:
             if (plen >= 2) {
                 int tl = (payload[0] << 8) | payload[1];
