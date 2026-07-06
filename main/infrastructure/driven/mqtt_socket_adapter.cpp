@@ -353,10 +353,11 @@ static void force_close_socket(int& sock)
 void MqttSocketAdapter::disconnect()
 {
     if (sock_ >= 0) {
-        // Send MQTT DISCONNECT packet (0xE0 0x00) before closing
-        // Tells broker we're leaving cleanly — prevents ghost sessions
+        // Send MQTT DISCONNECT packet (0xE0 0x00) — wait for it to flush
         uint8_t disc[2] = {0xE0, 0x00};
         send(sock_, disc, 2, 0);
+        // Brief delay to let lwIP flush the DISCONNECT before RST close
+        usleep(500000);  // 500ms
         force_close_socket(sock_);
     }
     connected_ = false;

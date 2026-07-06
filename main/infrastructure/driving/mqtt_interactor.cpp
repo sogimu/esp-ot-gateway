@@ -17,6 +17,7 @@ static const char* MQTT_TAG = "mqtt_pub";
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
+#include <unistd.h>
 
 // ── Конструктор ──────────────────────────────────────────────
 
@@ -114,11 +115,12 @@ void MqttInteractor::poll()
     if (boot_reconnect_ && mqtt_state_ == State::CONNECTED) {
         if (boot_connected_us_ == 0) {
             boot_connected_us_ = time_.monotonic_us();
-        } else if (time_.monotonic_us() - boot_connected_us_ > 10'000'000ULL) {
+        } else if (time_.monotonic_us() - boot_connected_us_ > 30'000'000ULL) {
             // Full reconnect identical to manual Save — disconnect + reconnect
             log_.event(ILogger::USER, "MQTT: boot reconnect (ghost session fix)");
-            ESP_LOGI(MQTT_TAG, "Boot reconnect: disconnect+connect");
+            ESP_LOGI(MQTT_TAG, "Boot reconnect: disconnect+connect (30s delay)");
             mqtt_.disconnect();
+            usleep(3000000);  // 3s — let broker process DISCONNECT
             connect_to_broker();
             boot_reconnect_ = false;
         }
