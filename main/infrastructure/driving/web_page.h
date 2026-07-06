@@ -1200,7 +1200,7 @@ static const char WEB_PAGE[] =
 "for(var i=0;i<btns.length;i++){"
 "btns[i].className=btns[i].getAttribute('data-tab')==name?'active':'';}"
 "if(name=='log'){pollLog();logTimer=setInterval(pollLog,5000);}"
-"else if(name=='stats'){pollStats();statsTimer=setInterval(pollStats,10000);}"
+"else if(name=='stats'||name=='gas-meter'){pollStats();statsTimer=setInterval(pollStats,10000);}"
 "else if(name=='control'){schedTimer=setInterval(schedPoll,5000);pidSchedTimer=setInterval(pidSchedPoll,5000);}"
 "}"
 "function logFilter(cat,btn){"
