@@ -22,7 +22,7 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 - **Gas meter correction journal** — Compare the estimated gas total to the physical meter reading. A correction coefficient (k_calib) is Kalman-smoothed across multiple corrections, preventing wild swings when gas consumption between readings is small. Corrections are rejected when the integral is less than 10% of actual consumption or when no gas has been consumed since the last correction. k_calib survives reboots. Logs up to 10 correction entries with timestamps
 - **Fault monitoring** — ASF flags, OEM diagnostic codes, one-shot fault reset
 - **Event log** — 256-entry ring buffer with 5 categories (System, User, Equipment, Mode, Boot) and real-time filtering in the web UI
-- **MQTT client** — Zero-allocation MQTT 3.1.1 over raw TCP socket (~300 lines, no malloc). Publishes boiler status (~1KB JSON, QoS 0) every 5–3600s (configurable via web UI), statistics (~2KB JSON, QoS 0) every 30–86400s, and availability (LWT: `online`/`offline`). Subscribes to control commands and HA discovery trigger. Works without SNTP time sync — MQTT initialises immediately regardless of clock state. Sends username/password authentication for broker login. Replaces ESP-IDF's built-in MQTT client which had confirmed heap leaks in outbox management
+- **MQTT client** — Zero-allocation MQTT 3.1.1 over raw TCP socket (~300 lines, no malloc). MAC-based fixed client ID ensures session takeover on reboot (no ghost sessions). Graceful disconnect with DISCONNECT packet + drain before close. Publishes boiler status (~1KB JSON, QoS 0) every 5–3600s (configurable via web UI), statistics (~2KB JSON, QoS 0) every 30–86400s, and availability (LWT/birth: `online`/`offline`, retained). PINGREQ every 20s keeps connection alive even during startup load spike (HA discovery of 27 entities). Subscribes to control commands and HA discovery trigger. Replaces ESP-IDF's built-in MQTT client which had confirmed heap leaks in outbox management
 - **Home Assistant auto-discovery** — Publishes 27 MQTT discovery configs incrementally (one per poll cycle, non-blocking): 9 temperature sensors, 8 binary sensors (flame, fault, CH/DHW active, connected, DHW prediction, SNTP sync), 2 switches (CH/DHW enable), 2 numbers (CH/DHW setpoint), 6 DHW prediction sensors. Entities auto-appear in HA MQTT integration. Manual re-trigger via `cmd/ha_discovery` topic. Re-publishes on every MQTT reconnect to keep HA in sync after broker restart
 - **Crash diagnostics** — Reset reason detection on every boot, core dump saved to flash on panic, backtrace decoded offline via `decode_crash.sh`
 - **Modulation statistics** — 1000-bin histogram (0.1% resolution), percentile analysis (p1–p99), burn cycle tracking (256-entry ring), median/avg burn & pause times, burner runtime hours — on the Statistics tab and `/api/stats`
@@ -35,8 +35,9 @@ WiFi-connected OpenTherm boiler controller for ESP32. Implements a full OpenTher
 - **Recovery ladder** — 4-level self-healing: L1/L2 warn, L3 restarts HTTP server, L4 reboots device. Prevents silent death from heap fragmentation
 - **WiFi infinite reconnect** — exponential backoff (5s→10s→20s→40s→60s cap), never gives up. No more 10-retry limit
 - **WiFi power save disabled** — `WIFI_PS_NONE` enforced on every STA start to prevent lwIP buffer accumulation
-- **MQTT socket cleanup** — SO_LINGER with RST on close eliminates lwIP TCP buffer leaks during WiFi outages
-- **MQTT boot reconnect** — forced session refresh 5s after cold start to resolve ghost sessions on Mosquitto/HA broker restart
+- **MQTT ghost sessions fixed** — MAC-based permanent client ID prevents duplicate sessions on broker restart; graceful disconnect (DISCONNECT → shutdown → drain → close) tells broker we're leaving cleanly
+- **MQTT keep-alive** — PINGREQ every 20s (not keepalive-5=55s) survives startup load spikes from HA discovery
+- **MQTT socket cleanup** — SO_LINGER with RST on close eliminates lwIP TCP buffer leaks during WiFi outages (dead sockets only, not intentional disconnects)
 - **MQTT intervals** — save_mqtt_intervals now correctly persists `mqtt_sti`/`mqtt_ssi` to NVS
 - **Web UI** — tab polling only on active tab reduces HTTP load; fetch timeout 15s for fast disconnect detection; red status indicators on backend failure; unified "Save" button labels
 - **Build** — `scripts/build_and_flash.sh` always fullclean + mandatory host tests to prevent stale LWIP/sdkconfig cache
@@ -369,7 +370,7 @@ Emergency shutdown button stops all heating.
 - Broker host, port, username, password, TLS toggle
 - Topic prefix configuration (default: `esp-ot-gateway`)
 - Configurable publish intervals: status (5–3600s, default 30s), statistics (30–86400s, default 300s)
-- **MQTT reconnect**: 10s→10s→10s→60s×3→600s (10 min) exponential backoff with boot-time forced reconnect to resolve ghost sessions on Mosquitto
+- **MQTT reconnect**: 10s→10s→10s→60s×3→600s (10 min) exponential backoff. MAC-based fixed client ID ensures session takeover on reconnect — no ghost sessions
 - Tooltips for all fields explaining each setting
 - Save applies without reboot — clean disconnect + reconnect
 
