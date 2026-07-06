@@ -230,7 +230,7 @@ This depends on your phone's operating system and version. The automatic popup d
 
 #### The controller won't connect to my WiFi router
 
-- **Wrong password:** the controller will try to connect 10 times (~30 seconds), then reboot and try again. After 3 failed boot attempts, it automatically returns to setup mode (open AP) so you can reconfigure.
+- **Wrong password:** the controller retries indefinitely with exponential backoff (5s→10s→20s→40s→60s cap). After 3 failed boot attempts with wrong credentials, it automatically returns to setup mode (open AP) so you can reconfigure.
 - **Router too far:** the ESP32 has a small antenna. Move the controller closer to the router during initial setup.
 - **5 GHz networks:** the ESP32 only supports **2.4 GHz WiFi**. If your router uses the same name for both bands, the controller should connect to the 2.4 GHz one automatically. If your router only broadcasts 5 GHz, the controller cannot connect.
 - **Hidden SSID:** if your router doesn't broadcast its network name, it won't appear in the scan results. Type the network name manually in the input field.
