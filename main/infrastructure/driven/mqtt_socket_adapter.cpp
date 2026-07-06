@@ -2,6 +2,7 @@
 
 #include "lwip/sockets.h"
 #include "esp_log.h"
+#include "esp_mac.h"
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
@@ -70,15 +71,17 @@ bool MqttSocketAdapter::connect(const char* uri, const char* user,
     snprintf(lwt_msg_,   sizeof(lwt_msg_),   "%s", lwt_msg   ? lwt_msg   : "");
     snprintf(saved_user_, sizeof(saved_user_), "%s", user ? user : "");
     snprintf(saved_pass_, sizeof(saved_pass_), "%s", pass ? pass : "");
-    // Generate fixed client ID once per boot — prevents ghost sessions
-    // from LWT overwrite when broker has two sessions with different IDs
+    // Generate MAC-based client ID once — survives reboots → session takeover
     if (client_id_[0] == '\0') {
+        uint8_t mac[6];
 #ifdef ESP_PLATFORM
-        uint32_t r = esp_random();
+        esp_efuse_mac_get_default(mac);
 #else
-        uint32_t r = (uint32_t)rand();
+        // Host test: fake MAC
+        mac[3]=0x00; mac[4]=0x00; mac[5]=0x01;
 #endif
-        snprintf(client_id_, sizeof(client_id_), "ESP32_%08lX", (unsigned long)r);
+        snprintf(client_id_, sizeof(client_id_), "ESP32_%02X%02X%02X",
+                 mac[3], mac[4], mac[5]);
     }
     connect_pending_ = true;
     last_connect_attempt_us_ = 0;  // immediate reconnect on user action
