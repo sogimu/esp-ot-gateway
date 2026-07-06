@@ -64,6 +64,7 @@ private:
     char lwt_msg_[32] = {};
     char saved_user_[64] = {};
     char saved_pass_[64] = {};
+    char client_id_[24] = {};  // MAC-based, fixed per boot — prevents ghost sessions
 
     // Топики подписки
     static constexpr int MAX_SUBS = 4;

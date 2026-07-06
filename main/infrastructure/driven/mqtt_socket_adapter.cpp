@@ -70,6 +70,16 @@ bool MqttSocketAdapter::connect(const char* uri, const char* user,
     snprintf(lwt_msg_,   sizeof(lwt_msg_),   "%s", lwt_msg   ? lwt_msg   : "");
     snprintf(saved_user_, sizeof(saved_user_), "%s", user ? user : "");
     snprintf(saved_pass_, sizeof(saved_pass_), "%s", pass ? pass : "");
+    // Generate fixed client ID once per boot — prevents ghost sessions
+    // from LWT overwrite when broker has two sessions with different IDs
+    if (client_id_[0] == '\0') {
+#ifdef ESP_PLATFORM
+        uint32_t r = esp_random();
+#else
+        uint32_t r = (uint32_t)rand();
+#endif
+        snprintf(client_id_, sizeof(client_id_), "ESP32_%08lX", (unsigned long)r);
+    }
     connect_pending_ = true;
     last_connect_attempt_us_ = 0;  // immediate reconnect on user action
     connect_failures_ = 0;
@@ -183,11 +193,8 @@ bool MqttSocketAdapter::send_connect_packet()
     uint8_t payload[BUF_SIZE];
     int pp = 0;
 
-    // Client ID
-    char client_id[32];
-    snprintf(client_id, sizeof(client_id), "ESP32_%06X",
-             (unsigned)(esp_random() & 0xFFFFFF));
-    pp += write_string(payload + pp, client_id, -1);
+    // Client ID — fixed per boot (MAC-based), prevents ghost session LWT overwrite
+    pp += write_string(payload + pp, client_id_, -1);
 
     // Will topic + message (if present)
     if (lwt_topic_[0]) {
@@ -353,12 +360,18 @@ static void force_close_socket(int& sock)
 void MqttSocketAdapter::disconnect()
 {
     if (sock_ >= 0) {
-        // Send MQTT DISCONNECT packet (0xE0 0x00) — wait for it to flush
+        // Graceful close: DISCONNECT → shutdown(SHUT_WR) → drain → close
+        // Broker sees clean disconnect, no LWT triggered for THIS session
         uint8_t disc[2] = {0xE0, 0x00};
         send(sock_, disc, 2, 0);
-        // Brief delay to let lwIP flush the DISCONNECT before RST close
-        usleep(500000);  // 500ms
-        force_close_socket(sock_);
+        shutdown(sock_, SHUT_WR);  // tell lwIP: no more writes, flush pending
+        // Drain until peer closes or timeout
+        char buf[64];
+        for (int i = 0; i < 10; i++) {
+            if (recv(sock_, buf, sizeof(buf), 0) <= 0) break;
+        }
+        close(sock_);
+        sock_ = -1;
     }
     connected_ = false;
     subscribed_ = false;
@@ -514,8 +527,9 @@ void MqttSocketAdapter::poll_socket()
     // Refresh timestamp — process_incoming() may have updated last_recv_us_/last_ping_us_
     now = time_.monotonic_us();
 
-    // Keepalive — send PINGREQ, only set pending if actually sent
-    if (connected_ && now - last_ping_us_ > (uint64_t)(keepalive_s_ - 5) * 1000000ULL) {
+    // Keepalive — send PINGREQ every 20s (not keepalive_s_-5=55s)
+    // Shorter interval prevents broker timeout during peak load (HA discovery, etc.)
+    if (connected_ && now - last_ping_us_ > 20000000ULL) {
         if (send_pingreq()) {
             ping_sent_us_ = now;
             ping_pending_ = true;

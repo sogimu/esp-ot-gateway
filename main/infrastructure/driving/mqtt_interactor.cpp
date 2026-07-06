@@ -64,7 +64,6 @@ void MqttInteractor::init()
 
     mqtt_.set_event_callback(mqtt_callback, this);
     connect_to_broker();
-    boot_reconnect_ = true;
 }
 
 // ── poll ─────────────────────────────────────────────────────
@@ -109,21 +108,6 @@ void MqttInteractor::poll()
     // Publish HA discovery one entity per cycle (non-blocking)
     if (ha_discovery_index_ >= 0) {
         publish_ha_next();
-    }
-
-    // Boot reconnect: force refresh after cold start (ghost session fix)
-    if (boot_reconnect_ && mqtt_state_ == State::CONNECTED) {
-        if (boot_connected_us_ == 0) {
-            boot_connected_us_ = time_.monotonic_us();
-        } else if (time_.monotonic_us() - boot_connected_us_ > 30'000'000ULL) {
-            // Full reconnect identical to manual Save — disconnect + reconnect
-            log_.event(ILogger::USER, "MQTT: boot reconnect (ghost session fix)");
-            ESP_LOGI(MQTT_TAG, "Boot reconnect: disconnect+connect (30s delay)");
-            mqtt_.disconnect();
-            usleep(3000000);  // 3s — let broker process DISCONNECT
-            connect_to_broker();
-            boot_reconnect_ = false;
-        }
     }
 
     poll_counter_++;

@@ -137,10 +137,6 @@ private:
     bool     pending_error_        = false;
     char     disconnect_reason_[48] = {};
 
-    // ── Boot reconnect (ghost session fix) ──────────────
-    bool     boot_reconnect_ = false;
-    uint64_t boot_connected_us_ = 0;
-
     // ── HA discovery ───────────────────────────────────
     bool     ha_discovery_published_ = false;
     uint64_t ha_discovery_last_us_ = 0;
