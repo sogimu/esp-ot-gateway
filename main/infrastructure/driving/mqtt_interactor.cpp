@@ -534,13 +534,13 @@ void MqttInteractor::publish_ha_next()
     case 6:  publish_ha_sensor("modulation",  "Модуляция",         "%", "power_factor", "{{ value_json.modulation }}"); break;
     case 7:  publish_ha_sensor("uptime",      "Аптайм",            "s", "duration",     "{{ value_json.uptime_sec }}"); break;
     case 8:  publish_ha_sensor("total_uptime","Общий аптайм",      "s", "duration",     "{{ value_json.total_uptime_sec }}"); break;
-    case 9:  publish_ha_binary_sensor("flame",      "Пламя",         "heat",         "{{ value_json.flame == 1 }}"); break;
-    case 10: publish_ha_binary_sensor("fault",      "Ошибка",        "problem",      "{{ value_json.fault == 1 }}"); break;
-    case 11: publish_ha_binary_sensor("ch_active",  "СО активна",    "running",      "{{ value_json.ch_active == 1 }}"); break;
-    case 12: publish_ha_binary_sensor("dhw_active", "ГВС активно",   "running",      "{{ value_json.dhw_active == 1 }}"); break;
-    case 13: publish_ha_binary_sensor("connected",  "Котёл",         "connectivity", "{{ value_json.connected == 1 }}"); break;
-    case 14: publish_ha_switch("ch_enable",  "Отопление", "mdi:radiator", "{{ value_json.ch_enable == 1 }}", "{\\\"ch_enable\\\":{{ (value == \\\"ON\\\") | int }}}"); break;
-    case 15: publish_ha_switch("dhw_enable", "ГВС",       "mdi:water-boiler", "{{ value_json.dhw_enable == 1 }}", "{\\\"dhw_enable\\\":{{ (value == \\\"ON\\\") | int }}}"); break;
+    case 9:  publish_ha_binary_sensor("flame",      "Пламя",         "heat",         "{{ 'ON' if value_json.flame else 'OFF' }}"); break;
+    case 10: publish_ha_binary_sensor("fault",      "Ошибка",        "problem",      "{{ 'ON' if value_json.fault else 'OFF' }}"); break;
+    case 11: publish_ha_binary_sensor("ch_active",  "СО активна",    "running",      "{{ 'ON' if value_json.ch_active else 'OFF' }}"); break;
+    case 12: publish_ha_binary_sensor("dhw_active", "ГВС активно",   "running",      "{{ 'ON' if value_json.dhw_active else 'OFF' }}"); break;
+    case 13: publish_ha_binary_sensor("connected",  "Котёл",         "connectivity", "{{ 'ON' if value_json.connected else 'OFF' }}"); break;
+    case 14: publish_ha_switch("ch_enable",  "Отопление", "mdi:radiator", "{{ 'ON' if value_json.ch_enable else 'OFF' }}", "{\\\"ch_enable\\\":{{ (value == \\\"ON\\\") | int }}}"); break;
+    case 15: publish_ha_switch("dhw_enable", "ГВС",       "mdi:water-boiler", "{{ 'ON' if value_json.dhw_enable else 'OFF' }}", "{\\\"dhw_enable\\\":{{ (value == \\\"ON\\\") | int }}}"); break;
     case 16: publish_ha_number("ch_setpoint",  "Уставка СО",  20, 80, 1, "°C", "{{ value_json.ch_setpoint }}",  "{\\\"ch_setpoint\\\":{{ value }}}"); break;
     case 17: publish_ha_number("dhw_setpoint", "Уставка ГВС", 35, 80, 1, "°C", "{{ value_json.dhw_setpoint }}", "{\\\"dhw_setpoint\\\":{{ value }}}"); break;
     case 18: publish_ha_sensor("dhw_pred_rate",   "Скорость ГВС",    "°C/s", "", "{{ value_json.dhw_pred_rate }}"); break;
@@ -548,10 +548,10 @@ void MqttInteractor::publish_ha_next()
     case 20: publish_ha_sensor("dhw_pred_remaining","Осталось ГВС",  "s", "duration", "{{ value_json.dhw_pred_remaining }}"); break;
     case 21: publish_ha_sensor("dhw_pred_uncertainty","±ГВС",       "s", "duration", "{{ value_json.dhw_pred_uncertainty }}"); break;
     case 22: publish_ha_sensor("dhw_hyst_on",     "Гистерезис ГВС",  "°C", "", "{{ value_json.dhw_hyst_on }}"); break;
-    case 23: publish_ha_binary_sensor("dhw_pred_active", "Прогноз ГВС", "running", "{{ value_json.dhw_pred_active == 1 }}"); break;
+    case 23: publish_ha_binary_sensor("dhw_pred_active", "Прогноз ГВС", "running", "{{ 'ON' if value_json.dhw_pred_active else 'OFF' }}"); break;
     case 24: publish_ha_sensor("ch_mode",         "Режим СО",         "", "", "{{ value_json.ch_mode }}"); break;
     case 25: publish_ha_sensor("dhw_last_session","Сеанс ГВС",        "s", "duration", "{{ value_json.dhw_last_session_sec }}"); break;
-    case 26: publish_ha_binary_sensor("time_synced","Время SNTP",    "", "{{ value_json.time_synced == 1 }}"); break;
+    case 26: publish_ha_binary_sensor("time_synced","Время SNTP",    "", "{{ 'ON' if value_json.time_synced else 'OFF' }}"); break;
     default:
         ha_discovery_published_ = true;
         ha_discovery_last_us_ = time_.monotonic_us();
@@ -575,18 +575,18 @@ void MqttInteractor::publish_all_ha_discovery()
     publish_ha_sensor("total_uptime","Общий аптайм",      "s", "duration",     "{{ value_json.total_uptime_sec }}");
 
     // Бинарные датчики (5)
-    publish_ha_binary_sensor("flame",      "Пламя",         "heat",         "{{ value_json.flame == 1 }}");
-    publish_ha_binary_sensor("fault",      "Ошибка",        "problem",      "{{ value_json.fault == 1 }}");
-    publish_ha_binary_sensor("ch_active",  "СО активна",    "running",      "{{ value_json.ch_active == 1 }}");
-    publish_ha_binary_sensor("dhw_active", "ГВС активно",   "running",      "{{ value_json.dhw_active == 1 }}");
-    publish_ha_binary_sensor("connected",  "Котёл",         "connectivity", "{{ value_json.connected == 1 }}");
+    publish_ha_binary_sensor("flame",      "Пламя",         "heat",         "{{ 'ON' if value_json.flame else 'OFF' }}");
+    publish_ha_binary_sensor("fault",      "Ошибка",        "problem",      "{{ 'ON' if value_json.fault else 'OFF' }}");
+    publish_ha_binary_sensor("ch_active",  "СО активна",    "running",      "{{ 'ON' if value_json.ch_active else 'OFF' }}");
+    publish_ha_binary_sensor("dhw_active", "ГВС активно",   "running",      "{{ 'ON' if value_json.dhw_active else 'OFF' }}");
+    publish_ha_binary_sensor("connected",  "Котёл",         "connectivity", "{{ 'ON' if value_json.connected else 'OFF' }}");
 
     // Переключатели (2)
     publish_ha_switch("ch_enable",  "Отопление", "mdi:radiator",
-        "{{ value_json.ch_enable == 1 }}",
+        "{{ 'ON' if value_json.ch_enable else 'OFF' }}",
         "{\\\"ch_enable\\\":{{ (value == \\\"ON\\\") | int }}}");
     publish_ha_switch("dhw_enable", "ГВС",       "mdi:water-boiler",
-        "{{ value_json.dhw_enable == 1 }}",
+        "{{ 'ON' if value_json.dhw_enable else 'OFF' }}",
         "{\\\"dhw_enable\\\":{{ (value == \\\"ON\\\") | int }}}");
 
     // Числовые параметры (2)
@@ -601,10 +601,10 @@ void MqttInteractor::publish_all_ha_discovery()
     publish_ha_sensor("dhw_pred_remaining","Осталось ГВС",  "s", "duration", "{{ value_json.dhw_pred_remaining }}");
     publish_ha_sensor("dhw_pred_uncertainty","±ГВС",       "s", "duration", "{{ value_json.dhw_pred_uncertainty }}");
     publish_ha_sensor("dhw_hyst_on",     "Гистерезис ГВС",  "°C", "", "{{ value_json.dhw_hyst_on }}");
-    publish_ha_binary_sensor("dhw_pred_active", "Прогноз ГВС", "running", "{{ value_json.dhw_pred_active == 1 }}");
+    publish_ha_binary_sensor("dhw_pred_active", "Прогноз ГВС", "running", "{{ 'ON' if value_json.dhw_pred_active else 'OFF' }}");
 
     // Misc (Прочее) — 3
     publish_ha_sensor("ch_mode",         "Режим СО",         "", "", "{{ value_json.ch_mode }}");
     publish_ha_sensor("dhw_last_session","Сеанс ГВС",        "s", "duration", "{{ value_json.dhw_last_session_sec }}");
-    publish_ha_binary_sensor("time_synced","Время SNTP",    "", "{{ value_json.time_synced == 1 }}");
+    publish_ha_binary_sensor("time_synced","Время SNTP",    "", "{{ 'ON' if value_json.time_synced else 'OFF' }}");
 }
