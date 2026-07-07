@@ -27,18 +27,18 @@ Most gas boilers spend their lives being switched on and off by a dumb relay the
 
 | Live boiler diagram | Control: modes & setpoints |
 |---|---|
-| ![Status tab](docs/images/status.png) | ![Control tab](docs/images/control.png) |
+| ![Status tab](docs/images/status.webp) | ![Control tab](docs/images/control.webp) |
 
 | Virtual gas meter with reconciliation | MQTT settings |
 |---|---|
-| ![Gas meter tab](docs/images/gas-meter.png) | ![MQTT tab](docs/images/mqtt.png) |
+| ![Gas meter tab](docs/images/gas-meter.webp) | ![MQTT tab](docs/images/mqtt.webp) |
 
 <details>
 <summary>More screenshots: event journal, Info, WiFi</summary>
 
-![Journal tab](docs/images/journal.png)
-![Info tab](docs/images/info.png)
-![WiFi tab](docs/images/wifi.png)
+![Journal tab](docs/images/journal.webp)
+![Info tab](docs/images/info.webp)
+![WiFi tab](docs/images/wifi.webp)
 
 </details>
 

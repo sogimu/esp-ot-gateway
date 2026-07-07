@@ -27,18 +27,18 @@
 
 | Живая схема котла | Управление: режимы и уставки |
 |---|---|
-| ![Вкладка «Статус»](docs/images/status.png) | ![Вкладка «Управление»](docs/images/control.png) |
+| ![Вкладка «Статус»](docs/images/status.webp) | ![Вкладка «Управление»](docs/images/control.webp) |
 
 | Виртуальный счётчик газа со сверкой | Настройки MQTT |
 |---|---|
-| ![Вкладка счётчика газа](docs/images/gas-meter.png) | ![Вкладка MQTT](docs/images/mqtt.png) |
+| ![Вкладка счётчика газа](docs/images/gas-meter.webp) | ![Вкладка MQTT](docs/images/mqtt.webp) |
 
 <details>
 <summary>Ещё скриншоты: журнал событий, Инфо, WiFi</summary>
 
-![Вкладка «Журнал»](docs/images/journal.png)
-![Вкладка «Инфо»](docs/images/info.png)
-![Вкладка WiFi](docs/images/wifi.png)
+![Вкладка «Журнал»](docs/images/journal.webp)
+![Вкладка «Инфо»](docs/images/info.webp)
+![Вкладка WiFi](docs/images/wifi.webp)
 
 </details>
 
