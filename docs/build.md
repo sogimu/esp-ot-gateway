@@ -80,7 +80,7 @@ idf.py fullclean              # снести каталог сборки, есл
 domain/           логика отопления, PID, прогноз ГВС, оценка газа — чистый C++, без ESP-IDF
 application/      сценарии использования, связывающие domain-объекты через порты (интерфейсы)
 infrastructure/   адаптеры: GPIO-драйвер OpenTherm, WiFi, HTTP-сервер, MqttSocketAdapter, NVS, SNTP
-tests/            хостовые юнит-тесты domain + application
+test/            хостовые юнит-тесты domain + application
 scripts/          скрипты установки, сборки, прошивки, тестов и разбора крэшей
 ```
 
@@ -93,38 +93,37 @@ scripts/          скрипты установки, сборки, прошив�
 Требования к хосту: `gcc`/`g++` ≥ 11 (или clang ≥ 14), `cmake` ≥ 3.16, `ninja-build` — всё уже установлено, если вы прошли шаг 1 варианта Б.
 
 ```bash
-bash scripts/run_tests.sh                 # TODO(verify): имя скрипта
+bash scripts/build_and_flash.sh          # сборка прошивки + тесты
 ```
 
-Ручной эквивалент `TODO(verify: пути/имена целей)`:
+Ручной эквивалент:
 
 ```bash
-cmake -S tests -B build-host -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build-host
-ctest --test-dir build-host --output-on-failure
+cmake -S test -B build_tests -DCMAKE_BUILD_TYPE=Debug
+cmake --build build_tests
+./build_tests/run_tests
 ```
 
 Выборочный запуск:
 
 ```bash
-ctest --test-dir build-host -R Pid            # тесты по имени
-ctest --test-dir build-host --rerun-failed
+./build_tests/run_tests -r Pid            # тесты по имени
 ```
 
 **Санитайзеры** (CI гоняет их на каждый push — запускайте локально перед PR):
 
 ```bash
-cmake -S tests -B build-asan -G Ninja \
+cmake -S test -B build_asan \
   -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
-cmake --build build-asan && ctest --test-dir build-asan --output-on-failure
+cmake --build build_asan && ./build_asan/run_tests
 ```
 
 **Покрытие** (CI публикует отчёт на GitHub Pages):
 
 ```bash
-cmake -S tests -B build-cov -G Ninja -DCMAKE_CXX_FLAGS="--coverage"
-cmake --build build-cov && ctest --test-dir build-cov
-gcovr -r . build-cov --html-details -o coverage.html
+cmake -S test -B build_cov -DCMAKE_CXX_FLAGS="--coverage"
+cmake --build build_cov && ./build_cov/run_tests
+gcovr -r . build_cov --html-details -o coverage.html
 ```
 
 Добавляя фичу: кладите логику в `domain/`, пишите тест первым, держите инфраструктурный адаптер тонким. В PR с непокрытой тестами domain-логикой попросят добавить тесты.

@@ -80,7 +80,7 @@ Project-specific `menuconfig` options (GPIO pins for OT TX/RX, relay, DS18B20; f
 domain/           heating logic, PID, DHW prediction, gas estimation — pure C++, no ESP-IDF
 application/      use cases wiring domain objects behind ports (interfaces)
 infrastructure/   adapters: OpenTherm GPIO driver, WiFi, HTTP server, MqttSocketAdapter, NVS, SNTP
-tests/            host-side unit tests for domain + application
+test/            host-side unit tests for domain + application
 scripts/          setup, build, flash, test and crash-decoding helpers
 ```
 
@@ -93,38 +93,37 @@ The suite is 400+ tests / 1000+ assertions and runs on the host, not on the chip
 Host prerequisites: `gcc`/`g++` ≥ 11 (or clang ≥ 14), `cmake` ≥ 3.16, `ninja-build` — all already installed if you did Option B step 1.
 
 ```bash
-bash scripts/run_tests.sh                 # TODO(verify): script name
+bash scripts/build_and_flash.sh          # builds firmware + runs tests
 ```
 
-Manual equivalent `TODO(verify: paths/target names)`:
+Manual equivalent:
 
 ```bash
-cmake -S tests -B build-host -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build build-host
-ctest --test-dir build-host --output-on-failure
+cmake -S test -B build_tests -DCMAKE_BUILD_TYPE=Debug
+cmake --build build_tests
+./build_tests/run_tests
 ```
 
 Useful selections:
 
 ```bash
-ctest --test-dir build-host -R Pid            # run tests matching a name
-ctest --test-dir build-host --rerun-failed
+./build_tests/run_tests -r Pid               # run tests matching a name
 ```
 
 **Sanitizers** (CI runs these on every push — run them locally before a PR):
 
 ```bash
-cmake -S tests -B build-asan -G Ninja \
+cmake -S test -B build_asan \
   -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
-cmake --build build-asan && ctest --test-dir build-asan --output-on-failure
+cmake --build build_asan && ./build_asan/run_tests
 ```
 
 **Coverage** (the CI publishes the report to GitHub Pages):
 
 ```bash
-cmake -S tests -B build-cov -G Ninja -DCMAKE_CXX_FLAGS="--coverage"
-cmake --build build-cov && ctest --test-dir build-cov
-gcovr -r . build-cov --html-details -o coverage.html
+cmake -S test -B build_cov -DCMAKE_CXX_FLAGS="--coverage"
+cmake --build build_cov && ./build_cov/run_tests
+gcovr -r . build_cov --html-details -o coverage.html
 ```
 
 When adding a feature: put the logic in `domain/`, write the test first, keep the infrastructure adapter thin. PRs that add untested domain logic will be asked to add tests.
