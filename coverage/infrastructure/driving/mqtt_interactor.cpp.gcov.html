@@ -1,0 +1,686 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - esp-ot-gateway test coverage - infrastructure/driving/mqtt_interactor.cpp</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html">top level</a> - <a href="index.html">infrastructure/driving</a> - mqtt_interactor.cpp<span style="font-size: 80%;"> (source / <a href="mqtt_interactor.cpp.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">esp-ot-gateway test coverage</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">90.7&nbsp;%</td>
+            <td class="headerCovTableEntry">313</td>
+            <td class="headerCovTableEntry">284</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-07-08 17:22:27</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryMed">88.0&nbsp;%</td>
+            <td class="headerCovTableEntry">25</td>
+            <td class="headerCovTableEntry">22</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : #include &quot;infrastructure/driving/mqtt_interactor.h&quot;</span>
+<span id="L2"><span class="lineNum">       2</span>              : </span>
+<span id="L3"><span class="lineNum">       3</span>              : #include &quot;application/ports/driven/imqtt_hardware.h&quot;</span>
+<span id="L4"><span class="lineNum">       4</span>              : #include &quot;application/ports/driven/imqtt_message_sink.h&quot;</span>
+<span id="L5"><span class="lineNum">       5</span>              : #include &quot;application/ports/driven/imqtt_config_store.h&quot;</span>
+<span id="L6"><span class="lineNum">       6</span>              : #include &quot;application/ports/driven/iheating_state_store.h&quot;</span>
+<span id="L7"><span class="lineNum">       7</span>              : #include &quot;application/ports/driven/ilogger.h&quot;</span>
+<span id="L8"><span class="lineNum">       8</span>              : #include &quot;application/ports/driven/itime_source.h&quot;</span>
+<span id="L9"><span class="lineNum">       9</span>              : #include &quot;application/ports/driving/iconfigure_system.h&quot;</span>
+<span id="L10"><span class="lineNum">      10</span>              : #include &quot;application/ports/driven/imqtt_state_renderer.h&quot;</span>
+<span id="L11"><span class="lineNum">      11</span>              : #include &quot;infrastructure/driving/json_helpers.h&quot;</span>
+<span id="L12"><span class="lineNum">      12</span>              : #include &quot;mqtt_client.h&quot;</span>
+<span id="L13"><span class="lineNum">      13</span>              : #include &quot;esp_log.h&quot;</span>
+<span id="L14"><span class="lineNum">      14</span>              : #include &quot;esp_system.h&quot;</span>
+<span id="L15"><span class="lineNum">      15</span>              : static const char* MQTT_TAG = &quot;mqtt_pub&quot;;</span>
+<span id="L16"><span class="lineNum">      16</span>              : </span>
+<span id="L17"><span class="lineNum">      17</span>              : #include &lt;cstdio&gt;</span>
+<span id="L18"><span class="lineNum">      18</span>              : #include &lt;cstring&gt;</span>
+<span id="L19"><span class="lineNum">      19</span>              : #include &lt;algorithm&gt;</span>
+<span id="L20"><span class="lineNum">      20</span>              : #include &lt;unistd.h&gt;</span>
+<span id="L21"><span class="lineNum">      21</span>              : </span>
+<span id="L22"><span class="lineNum">      22</span>              : // ── Конструктор ──────────────────────────────────────────────</span>
+<span id="L23"><span class="lineNum">      23</span>              : </span>
+<span id="L24"><span class="lineNum">      24</span> <span class="tlaGNC tlaBgGNC">          29 : MqttInteractor::MqttInteractor(</span></span>
+<span id="L25"><span class="lineNum">      25</span>              :     IMqttHardware&amp; mqtt, IMqttMessageSink&amp; sink,</span>
+<span id="L26"><span class="lineNum">      26</span>              :     IMqttConfigStore&amp; cfg_store,</span>
+<span id="L27"><span class="lineNum">      27</span>              :     IHeatingStateStore&amp; state,</span>
+<span id="L28"><span class="lineNum">      28</span>              :     IConfigureSystem&amp; cfg_sys,</span>
+<span id="L29"><span class="lineNum">      29</span>              :     ILogger&amp; log, ITimeSource&amp; time,</span>
+<span id="L30"><span class="lineNum">      30</span> <span class="tlaGNC">          29 :     IMqttStateRenderer&amp; renderer)</span></span>
+<span id="L31"><span class="lineNum">      31</span> <span class="tlaGNC">          29 :     : mqtt_(mqtt), sink_(sink), cfg_store_(cfg_store),</span></span>
+<span id="L32"><span class="lineNum">      32</span> <span class="tlaGNC">          29 :       state_(state), cfg_sys_(cfg_sys),</span></span>
+<span id="L33"><span class="lineNum">      33</span> <span class="tlaGNC">          29 :       log_(log), time_(time), renderer_(renderer)</span></span>
+<span id="L34"><span class="lineNum">      34</span> <span class="tlaGNC">          29 : {}</span></span>
+<span id="L35"><span class="lineNum">      35</span>              : </span>
+<span id="L36"><span class="lineNum">      36</span>              : // ── init ─────────────────────────────────────────────────────</span>
+<span id="L37"><span class="lineNum">      37</span>              : </span>
+<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC">          28 : void MqttInteractor::init()</span></span>
+<span id="L39"><span class="lineNum">      39</span>              : {</span>
+<span id="L40"><span class="lineNum">      40</span>              :     // Значения по умолчанию</span>
+<span id="L41"><span class="lineNum">      41</span> <span class="tlaGNC">          28 :     snprintf(host_, sizeof(host_), &quot;%s&quot;, &quot;&quot;);</span></span>
+<span id="L42"><span class="lineNum">      42</span> <span class="tlaGNC">          28 :     port_ = 1883;</span></span>
+<span id="L43"><span class="lineNum">      43</span> <span class="tlaGNC">          28 :     snprintf(user_, sizeof(user_), &quot;%s&quot;, &quot;&quot;);</span></span>
+<span id="L44"><span class="lineNum">      44</span> <span class="tlaGNC">          28 :     snprintf(pass_, sizeof(pass_), &quot;%s&quot;, &quot;&quot;);</span></span>
+<span id="L45"><span class="lineNum">      45</span> <span class="tlaGNC">          28 :     snprintf(prefix_, sizeof(prefix_), &quot;%s&quot;, &quot;esp-ot-gateway&quot;);</span></span>
+<span id="L46"><span class="lineNum">      46</span> <span class="tlaGNC">          28 :     enabled_ = false;</span></span>
+<span id="L47"><span class="lineNum">      47</span> <span class="tlaGNC">          28 :     tls_ = false;</span></span>
+<span id="L48"><span class="lineNum">      48</span>              : </span>
+<span id="L49"><span class="lineNum">      49</span> <span class="tlaGNC">          28 :     cfg_store_.load_mqtt_intervals(status_interval_s_, stats_interval_s_);</span></span>
+<span id="L50"><span class="lineNum">      50</span>              :     ESP_LOGI(MQTT_TAG, &quot;loaded intervals from NVS: status=%us stats=%us&quot;,</span>
+<span id="L51"><span class="lineNum">      51</span>              :              status_interval_s_, stats_interval_s_);</span>
+<span id="L52"><span class="lineNum">      52</span> <span class="tlaGNC">          28 :     if (!cfg_store_.load_mqtt_config(host_, sizeof(host_), port_,</span></span>
+<span id="L53"><span class="lineNum">      53</span> <span class="tlaGNC">          28 :                                       user_, sizeof(user_),</span></span>
+<span id="L54"><span class="lineNum">      54</span> <span class="tlaGNC">          28 :                                       pass_, sizeof(pass_),</span></span>
+<span id="L55"><span class="lineNum">      55</span> <span class="tlaGNC">          28 :                                       prefix_, sizeof(prefix_),</span></span>
+<span id="L56"><span class="lineNum">      56</span> <span class="tlaGNC">          28 :                                       enabled_, tls_)) {</span></span>
+<span id="L57"><span class="lineNum">      57</span>              :         // NVS не настроен — оставляем значения по умолчанию</span>
+<span id="L58"><span class="lineNum">      58</span>              :     }</span>
+<span id="L59"><span class="lineNum">      59</span>              : </span>
+<span id="L60"><span class="lineNum">      60</span> <span class="tlaGNC">          28 :     if (!enabled_) {</span></span>
+<span id="L61"><span class="lineNum">      61</span> <span class="tlaGNC">           1 :         mqtt_state_ = State::DISABLED;</span></span>
+<span id="L62"><span class="lineNum">      62</span> <span class="tlaGNC">           1 :         return;</span></span>
+<span id="L63"><span class="lineNum">      63</span>              :     }</span>
+<span id="L64"><span class="lineNum">      64</span>              : </span>
+<span id="L65"><span class="lineNum">      65</span> <span class="tlaGNC">          27 :     mqtt_.set_event_callback(mqtt_callback, this);</span></span>
+<span id="L66"><span class="lineNum">      66</span> <span class="tlaGNC">          27 :     connect_to_broker();</span></span>
+<span id="L67"><span class="lineNum">      67</span>              : }</span>
+<span id="L68"><span class="lineNum">      68</span>              : </span>
+<span id="L69"><span class="lineNum">      69</span>              : // ── poll ─────────────────────────────────────────────────────</span>
+<span id="L70"><span class="lineNum">      70</span>              : </span>
+<span id="L71"><span class="lineNum">      71</span> <span class="tlaGNC">          72 : void MqttInteractor::poll()</span></span>
+<span id="L72"><span class="lineNum">      72</span>              : {</span>
+<span id="L73"><span class="lineNum">      73</span> <span class="tlaGNC">          72 :     if (mqtt_state_ == State::DISABLED) return;</span></span>
+<span id="L74"><span class="lineNum">      74</span>              : </span>
+<span id="L75"><span class="lineNum">      75</span>              :     // Service socket: read incoming, keepalive, timeouts</span>
+<span id="L76"><span class="lineNum">      76</span> <span class="tlaGNC">          71 :     mqtt_.poll_socket();</span></span>
+<span id="L77"><span class="lineNum">      77</span>              : </span>
+<span id="L78"><span class="lineNum">      78</span>              :     // Обработка очереди команд</span>
+<span id="L79"><span class="lineNum">      79</span> <span class="tlaGNC">          71 :     drain_queue();</span></span>
+<span id="L80"><span class="lineNum">      80</span>              : </span>
+<span id="L81"><span class="lineNum">      81</span>              :     // Применить отложенные действия из MQTT-колбека</span>
+<span id="L82"><span class="lineNum">      82</span> <span class="tlaGNC">          71 :     if (pending_state_update_) {</span></span>
+<span id="L83"><span class="lineNum">      83</span> <span class="tlaGNC">          26 :         pending_state_update_ = false;</span></span>
+<span id="L84"><span class="lineNum">      84</span> <span class="tlaGNC">          26 :         state_.set_mqtt_connected(pending_connected_);</span></span>
+<span id="L85"><span class="lineNum">      85</span> <span class="tlaGNC">          26 :         if (pending_connected_) {</span></span>
+<span id="L86"><span class="lineNum">      86</span> <span class="tlaGNC">          23 :             log_.event(ILogger::SYSTEM, &quot;MQTT: подключён к %s&quot;, host_);</span></span>
+<span id="L87"><span class="lineNum">      87</span>              :         } else {</span>
+<span id="L88"><span class="lineNum">      88</span> <span class="tlaGNC">           3 :             if (disconnect_reason_[0])</span></span>
+<span id="L89"><span class="lineNum">      89</span> <span class="tlaUNC tlaBgUNC">           0 :                 log_.event(ILogger::SYSTEM, &quot;MQTT: отключён — %s&quot;, disconnect_reason_);</span></span>
+<span id="L90"><span class="lineNum">      90</span>              :             else</span>
+<span id="L91"><span class="lineNum">      91</span> <span class="tlaGNC tlaBgGNC">           3 :                 log_.event(ILogger::SYSTEM, &quot;MQTT: соединение потеряно&quot;);</span></span>
+<span id="L92"><span class="lineNum">      92</span> <span class="tlaGNC">           3 :             disconnect_reason_[0] = '\0';</span></span>
+<span id="L93"><span class="lineNum">      93</span>              :         }</span>
+<span id="L94"><span class="lineNum">      94</span>              :     }</span>
+<span id="L95"><span class="lineNum">      95</span> <span class="tlaGNC">          71 :     if (pending_error_) {</span></span>
+<span id="L96"><span class="lineNum">      96</span> <span class="tlaUNC tlaBgUNC">           0 :         pending_error_ = false;</span></span>
+<span id="L97"><span class="lineNum">      97</span> <span class="tlaUNC">           0 :         log_.event(ILogger::SYSTEM, &quot;MQTT: ошибка клиента&quot;);</span></span>
+<span id="L98"><span class="lineNum">      98</span>              :     }</span>
+<span id="L99"><span class="lineNum">      99</span> <span class="tlaGNC tlaBgGNC">          71 :     if (pending_connected_publish_) {</span></span>
+<span id="L100"><span class="lineNum">     100</span> <span class="tlaGNC">          23 :         pending_connected_publish_ = false;</span></span>
+<span id="L101"><span class="lineNum">     101</span> <span class="tlaGNC">          23 :         publish_online();</span></span>
+<span id="L102"><span class="lineNum">     102</span>              :         // Always re-publish HA discovery on reconnect —</span>
+<span id="L103"><span class="lineNum">     103</span>              :         // ensures HA has fresh entity configs after broker/HA restart</span>
+<span id="L104"><span class="lineNum">     104</span> <span class="tlaGNC">          23 :         ha_discovery_published_ = false;</span></span>
+<span id="L105"><span class="lineNum">     105</span> <span class="tlaGNC">          23 :         ha_discovery_index_ = 0;</span></span>
+<span id="L106"><span class="lineNum">     106</span>              :         ESP_LOGI(MQTT_TAG, &quot;HA discovery: starting incremental publish (27 entities)&quot;);</span>
+<span id="L107"><span class="lineNum">     107</span>              :     }</span>
+<span id="L108"><span class="lineNum">     108</span>              :     // Publish HA discovery one entity per cycle (non-blocking)</span>
+<span id="L109"><span class="lineNum">     109</span> <span class="tlaGNC">          71 :     if (ha_discovery_index_ &gt;= 0) {</span></span>
+<span id="L110"><span class="lineNum">     110</span> <span class="tlaGNC">          64 :         publish_ha_next();</span></span>
+<span id="L111"><span class="lineNum">     111</span>              :     }</span>
+<span id="L112"><span class="lineNum">     112</span>              : </span>
+<span id="L113"><span class="lineNum">     113</span> <span class="tlaGNC">          71 :     poll_counter_++;</span></span>
+<span id="L114"><span class="lineNum">     114</span>              : </span>
+<span id="L115"><span class="lineNum">     115</span> <span class="tlaGNC">          71 :     if (mqtt_state_ == State::CONNECTED) {</span></span>
+<span id="L116"><span class="lineNum">     116</span> <span class="tlaGNC">          66 :         int pub_cycles = (int)(status_interval_s_ / 1.1f); if (pub_cycles &lt; 1) pub_cycles = 1;</span></span>
+<span id="L117"><span class="lineNum">     117</span> <span class="tlaGNC">          66 :         if (poll_counter_ % pub_cycles == 0) publish_status();</span></span>
+<span id="L118"><span class="lineNum">     118</span> <span class="tlaGNC">          66 :         stats_tick_++;</span></span>
+<span id="L119"><span class="lineNum">     119</span> <span class="tlaGNC">          66 :         int stats_cycles = (int)(stats_interval_s_ / 1.1f); if (stats_cycles &lt; 1) stats_cycles = 1;</span></span>
+<span id="L120"><span class="lineNum">     120</span> <span class="tlaGNC">          66 :         if (stats_tick_ % stats_cycles == 0) publish_stats();</span></span>
+<span id="L121"><span class="lineNum">     121</span>              :     }</span>
+<span id="L122"><span class="lineNum">     122</span>              : }</span>
+<span id="L123"><span class="lineNum">     123</span>              : </span>
+<span id="L124"><span class="lineNum">     124</span>              : // ── save_and_apply (IMqttConfigurator) ───────────────────────</span>
+<span id="L125"><span class="lineNum">     125</span>              : </span>
+<span id="L126"><span class="lineNum">     126</span> <span class="tlaGNC">           2 : void MqttInteractor::save_and_apply(const char* host, uint16_t port,</span></span>
+<span id="L127"><span class="lineNum">     127</span>              :                                      const char* user, const char* pass,</span>
+<span id="L128"><span class="lineNum">     128</span>              :                                      const char* prefix, bool enabled, bool tls, uint16_t status_interval_s, uint16_t stats_interval_s)</span>
+<span id="L129"><span class="lineNum">     129</span>              : {</span>
+<span id="L130"><span class="lineNum">     130</span> <span class="tlaGNC">           2 :     if (host &amp;&amp; host[0]) snprintf(host_, sizeof(host_), &quot;%s&quot;, host);</span></span>
+<span id="L131"><span class="lineNum">     131</span> <span class="tlaGNC">           2 :     port_ = port;</span></span>
+<span id="L132"><span class="lineNum">     132</span> <span class="tlaGNC">           2 :     if (user &amp;&amp; user[0]) snprintf(user_, sizeof(user_), &quot;%s&quot;, user);</span></span>
+<span id="L133"><span class="lineNum">     133</span> <span class="tlaGNC">           2 :     if (pass &amp;&amp; pass[0]) snprintf(pass_, sizeof(pass_), &quot;%s&quot;, pass);</span></span>
+<span id="L134"><span class="lineNum">     134</span> <span class="tlaGNC">           2 :     if (prefix &amp;&amp; prefix[0]) snprintf(prefix_, sizeof(prefix_), &quot;%s&quot;, prefix);</span></span>
+<span id="L135"><span class="lineNum">     135</span> <span class="tlaGNC">           2 :     enabled_ = enabled;</span></span>
+<span id="L136"><span class="lineNum">     136</span> <span class="tlaGNC">           2 :     tls_ = tls;</span></span>
+<span id="L137"><span class="lineNum">     137</span> <span class="tlaGNC">           2 :     status_interval_s_ = status_interval_s;</span></span>
+<span id="L138"><span class="lineNum">     138</span> <span class="tlaGNC">           2 :     stats_interval_s_ = stats_interval_s;</span></span>
+<span id="L139"><span class="lineNum">     139</span>              : </span>
+<span id="L140"><span class="lineNum">     140</span> <span class="tlaGNC">           2 :     cfg_store_.save_mqtt_config(host_, port_, user_, pass_, prefix_, enabled_, tls_, status_interval_s_, stats_interval_s_);</span></span>
+<span id="L141"><span class="lineNum">     141</span>              : </span>
+<span id="L142"><span class="lineNum">     142</span> <span class="tlaGNC">           2 :     log_.event(ILogger::USER, &quot;MQTT: настройки изменены — переподключение...&quot;);</span></span>
+<span id="L143"><span class="lineNum">     143</span> <span class="tlaGNC">           2 :     mqtt_.disconnect();</span></span>
+<span id="L144"><span class="lineNum">     144</span> <span class="tlaGNC">           2 :     if (enabled_) {</span></span>
+<span id="L145"><span class="lineNum">     145</span> <span class="tlaGNC">           2 :         connect_to_broker();</span></span>
+<span id="L146"><span class="lineNum">     146</span>              :     } else {</span>
+<span id="L147"><span class="lineNum">     147</span> <span class="tlaUNC tlaBgUNC">           0 :         mqtt_state_ = State::DISABLED;</span></span>
+<span id="L148"><span class="lineNum">     148</span>              :     }</span>
+<span id="L149"><span class="lineNum">     149</span> <span class="tlaGNC tlaBgGNC">           2 : }</span></span>
+<span id="L150"><span class="lineNum">     150</span>              : </span>
+<span id="L151"><span class="lineNum">     151</span>              : // ── is_connected ─────────────────────────────────────────────</span>
+<span id="L152"><span class="lineNum">     152</span>              : </span>
+<span id="L153"><span class="lineNum">     153</span> <span class="tlaGNC">           3 : bool MqttInteractor::is_connected() const</span></span>
+<span id="L154"><span class="lineNum">     154</span>              : {</span>
+<span id="L155"><span class="lineNum">     155</span> <span class="tlaGNC">           3 :     return mqtt_state_ == State::CONNECTED &amp;&amp; mqtt_.is_connected();</span></span>
+<span id="L156"><span class="lineNum">     156</span>              : }</span>
+<span id="L157"><span class="lineNum">     157</span>              : </span>
+<span id="L158"><span class="lineNum">     158</span> <span class="tlaUNC tlaBgUNC">           0 : bool MqttInteractor::is_connecting() const</span></span>
+<span id="L159"><span class="lineNum">     159</span>              : {</span>
+<span id="L160"><span class="lineNum">     160</span> <span class="tlaUNC">           0 :     return mqtt_state_ == State::CONNECTING;</span></span>
+<span id="L161"><span class="lineNum">     161</span>              : }</span>
+<span id="L162"><span class="lineNum">     162</span>              : </span>
+<span id="L163"><span class="lineNum">     163</span> <span class="tlaUNC">           0 : const char* MqttInteractor::get_state() const</span></span>
+<span id="L164"><span class="lineNum">     164</span>              : {</span>
+<span id="L165"><span class="lineNum">     165</span> <span class="tlaUNC">           0 :     switch (mqtt_state_) {</span></span>
+<span id="L166"><span class="lineNum">     166</span> <span class="tlaUNC">           0 :     case State::DISABLED:    return &quot;disabled&quot;;</span></span>
+<span id="L167"><span class="lineNum">     167</span> <span class="tlaUNC">           0 :     case State::DISCONNECTED: return &quot;disconnected&quot;;</span></span>
+<span id="L168"><span class="lineNum">     168</span> <span class="tlaUNC">           0 :     case State::CONNECTING:  return &quot;connecting&quot;;</span></span>
+<span id="L169"><span class="lineNum">     169</span> <span class="tlaUNC">           0 :     case State::CONNECTED:   return &quot;connected&quot;;</span></span>
+<span id="L170"><span class="lineNum">     170</span> <span class="tlaUNC">           0 :     default:                 return &quot;disconnected&quot;;</span></span>
+<span id="L171"><span class="lineNum">     171</span>              :     }</span>
+<span id="L172"><span class="lineNum">     172</span>              : }</span>
+<span id="L173"><span class="lineNum">     173</span>              : </span>
+<span id="L174"><span class="lineNum">     174</span>              : // ── connect_to_broker ────────────────────────────────────────</span>
+<span id="L175"><span class="lineNum">     175</span>              : </span>
+<span id="L176"><span class="lineNum">     176</span> <span class="tlaGNC tlaBgGNC">          29 : void MqttInteractor::connect_to_broker()</span></span>
+<span id="L177"><span class="lineNum">     177</span>              : {</span>
+<span id="L178"><span class="lineNum">     178</span> <span class="tlaGNC">          29 :     mqtt_state_ = State::CONNECTING;</span></span>
+<span id="L179"><span class="lineNum">     179</span>              : </span>
+<span id="L180"><span class="lineNum">     180</span>              :     char uri[BUF_URI];</span>
+<span id="L181"><span class="lineNum">     181</span> <span class="tlaGNC">          29 :     build_uri(uri, sizeof(uri));</span></span>
+<span id="L182"><span class="lineNum">     182</span>              : </span>
+<span id="L183"><span class="lineNum">     183</span>              :     char lwt[128];</span>
+<span id="L184"><span class="lineNum">     184</span> <span class="tlaGNC">          29 :     snprintf(lwt, sizeof(lwt), &quot;%s/online&quot;, prefix_);</span></span>
+<span id="L185"><span class="lineNum">     185</span>              : </span>
+<span id="L186"><span class="lineNum">     186</span> <span class="tlaGNC">          29 :     const char* u = (user_[0] != '\0') ? user_ : nullptr;</span></span>
+<span id="L187"><span class="lineNum">     187</span> <span class="tlaGNC">          29 :     const char* p = (pass_[0] != '\0') ? pass_ : nullptr;</span></span>
+<span id="L188"><span class="lineNum">     188</span>              : </span>
+<span id="L189"><span class="lineNum">     189</span> <span class="tlaGNC">          29 :     log_.event(ILogger::SYSTEM, &quot;MQTT: подключение к %s...&quot;, host_);</span></span>
+<span id="L190"><span class="lineNum">     190</span>              : </span>
+<span id="L191"><span class="lineNum">     191</span> <span class="tlaGNC">          29 :     if (!mqtt_.connect(uri, u, p, lwt, &quot;offline&quot;, true, 60)) {</span></span>
+<span id="L192"><span class="lineNum">     192</span> <span class="tlaUNC tlaBgUNC">           0 :         mqtt_state_ = State::DISCONNECTED;</span></span>
+<span id="L193"><span class="lineNum">     193</span> <span class="tlaUNC">           0 :         log_.event(ILogger::SYSTEM, &quot;MQTT: ошибка подключения к %s&quot;, host_);</span></span>
+<span id="L194"><span class="lineNum">     194</span> <span class="tlaUNC">           0 :         return;</span></span>
+<span id="L195"><span class="lineNum">     195</span>              :     }</span>
+<span id="L196"><span class="lineNum">     196</span>              : </span>
+<span id="L197"><span class="lineNum">     197</span>              :     // Store topics in subs_[] for auto-subscribe on MQTT_EVENT_CONNECTED.</span>
+<span id="L198"><span class="lineNum">     198</span>              :     // subscribe() just saves the topic — actual SUBSCRIBE waits until connected.</span>
+<span id="L199"><span class="lineNum">     199</span>              :     char topic[128];</span>
+<span id="L200"><span class="lineNum">     200</span> <span class="tlaGNC tlaBgGNC">          29 :     snprintf(topic, sizeof(topic), &quot;%s/cmd/control&quot;, prefix_);</span></span>
+<span id="L201"><span class="lineNum">     201</span> <span class="tlaGNC">          29 :     mqtt_.subscribe(topic, IMqttHardware::QoS::AT_MOST_ONCE);</span></span>
+<span id="L202"><span class="lineNum">     202</span> <span class="tlaGNC">          29 :     snprintf(topic, sizeof(topic), &quot;%s/cmd/ha_discovery&quot;, prefix_);</span></span>
+<span id="L203"><span class="lineNum">     203</span> <span class="tlaGNC">          29 :     mqtt_.subscribe(topic, IMqttHardware::QoS::AT_MOST_ONCE);</span></span>
+<span id="L204"><span class="lineNum">     204</span>              : }</span>
+<span id="L205"><span class="lineNum">     205</span>              : </span>
+<span id="L206"><span class="lineNum">     206</span>              : // ESP-IDF auto-reconnect handles reconnection internally.</span>
+<span id="L207"><span class="lineNum">     207</span>              : // schedule_reconnect() and manual backoff are removed.</span>
+<span id="L208"><span class="lineNum">     208</span>              : </span>
+<span id="L209"><span class="lineNum">     209</span> <span class="tlaGNC">          29 : void MqttInteractor::build_uri(char* buf, size_t size)</span></span>
+<span id="L210"><span class="lineNum">     210</span>              : {</span>
+<span id="L211"><span class="lineNum">     211</span> <span class="tlaGNC">          29 :     snprintf(buf, size, &quot;%s://%s:%u&quot;, tls_ ? &quot;mqtts&quot; : &quot;mqtt&quot;, host_, port_);</span></span>
+<span id="L212"><span class="lineNum">     212</span> <span class="tlaGNC">          29 : }</span></span>
+<span id="L213"><span class="lineNum">     213</span>              : </span>
+<span id="L214"><span class="lineNum">     214</span>              : // ── mqtt_callback ────────────────────────────────────────────</span>
+<span id="L215"><span class="lineNum">     215</span>              : </span>
+<span id="L216"><span class="lineNum">     216</span> <span class="tlaGNC">          26 : void MqttInteractor::mqtt_callback(int event_id, void* event_data, void* user_ctx)</span></span>
+<span id="L217"><span class="lineNum">     217</span>              : {</span>
+<span id="L218"><span class="lineNum">     218</span> <span class="tlaGNC">          26 :     auto* self = static_cast&lt;MqttInteractor*&gt;(user_ctx);</span></span>
+<span id="L219"><span class="lineNum">     219</span>              :     // Запущен из MQTT-задачи — НЕ трогаем state_, log_, time_.</span>
+<span id="L220"><span class="lineNum">     220</span>              :     // Только обновляем внутренние флаги; обработка в poll().</span>
+<span id="L221"><span class="lineNum">     221</span>              : </span>
+<span id="L222"><span class="lineNum">     222</span> <span class="tlaGNC">          26 :     if (event_id == MQTT_EVENT_ERROR) {</span></span>
+<span id="L223"><span class="lineNum">     223</span> <span class="tlaUNC tlaBgUNC">           0 :         self-&gt;pending_error_ = true;</span></span>
+<span id="L224"><span class="lineNum">     224</span>              :     }</span>
+<span id="L225"><span class="lineNum">     225</span> <span class="tlaGNC tlaBgGNC">          26 :     else if (event_id == MQTT_EVENT_CONNECTED) {</span></span>
+<span id="L226"><span class="lineNum">     226</span> <span class="tlaGNC">          23 :         self-&gt;mqtt_state_ = State::CONNECTED;</span></span>
+<span id="L227"><span class="lineNum">     227</span>              : </span>
+<span id="L228"><span class="lineNum">     228</span>              :         // ВСЕ публикации — в poll(). Здесь только флаги.</span>
+<span id="L229"><span class="lineNum">     229</span> <span class="tlaGNC">          23 :         self-&gt;pending_state_update_ = true;</span></span>
+<span id="L230"><span class="lineNum">     230</span> <span class="tlaGNC">          23 :         self-&gt;pending_connected_ = true;</span></span>
+<span id="L231"><span class="lineNum">     231</span> <span class="tlaGNC">          23 :         self-&gt;pending_connected_publish_ = true;</span></span>
+<span id="L232"><span class="lineNum">     232</span>              :     }</span>
+<span id="L233"><span class="lineNum">     233</span> <span class="tlaGNC">           3 :     else if (event_id == MQTT_EVENT_DISCONNECTED) {</span></span>
+<span id="L234"><span class="lineNum">     234</span> <span class="tlaGNC">           3 :         self-&gt;mqtt_state_ = State::DISCONNECTED;</span></span>
+<span id="L235"><span class="lineNum">     235</span> <span class="tlaGNC">           3 :         self-&gt;pending_state_update_ = true;</span></span>
+<span id="L236"><span class="lineNum">     236</span> <span class="tlaGNC">           3 :         self-&gt;pending_connected_ = false;</span></span>
+<span id="L237"><span class="lineNum">     237</span>              :         // Save reason for user-visible log</span>
+<span id="L238"><span class="lineNum">     238</span> <span class="tlaGNC">           3 :         const char* reason = (const char*)event_data;</span></span>
+<span id="L239"><span class="lineNum">     239</span> <span class="tlaGNC">           3 :         if (reason &amp;&amp; reason[0]) {</span></span>
+<span id="L240"><span class="lineNum">     240</span> <span class="tlaUNC tlaBgUNC">           0 :             snprintf(self-&gt;disconnect_reason_, sizeof(self-&gt;disconnect_reason_),</span></span>
+<span id="L241"><span class="lineNum">     241</span>              :                      &quot;%s&quot;, reason);</span>
+<span id="L242"><span class="lineNum">     242</span>              :         } else {</span>
+<span id="L243"><span class="lineNum">     243</span> <span class="tlaGNC tlaBgGNC">           3 :             self-&gt;disconnect_reason_[0] = '\0';</span></span>
+<span id="L244"><span class="lineNum">     244</span>              :         }</span>
+<span id="L245"><span class="lineNum">     245</span>              :     }</span>
+<span id="L246"><span class="lineNum">     246</span> <span class="tlaGNC">          26 : }</span></span>
+<span id="L247"><span class="lineNum">     247</span>              : </span>
+<span id="L248"><span class="lineNum">     248</span>              : // ── drain_queue ──────────────────────────────────────────────</span>
+<span id="L249"><span class="lineNum">     249</span>              : </span>
+<span id="L250"><span class="lineNum">     250</span> <span class="tlaGNC">          71 : void MqttInteractor::drain_queue()</span></span>
+<span id="L251"><span class="lineNum">     251</span>              : {</span>
+<span id="L252"><span class="lineNum">     252</span>              :     IMqttMessageSink::Message msg;</span>
+<span id="L253"><span class="lineNum">     253</span> <span class="tlaGNC">          91 :     while (sink_.pop(msg)) {</span></span>
+<span id="L254"><span class="lineNum">     254</span> <span class="tlaGNC">          20 :         process_message(msg);</span></span>
+<span id="L255"><span class="lineNum">     255</span>              :     }</span>
+<span id="L256"><span class="lineNum">     256</span> <span class="tlaGNC">          71 : }</span></span>
+<span id="L257"><span class="lineNum">     257</span>              : </span>
+<span id="L258"><span class="lineNum">     258</span> <span class="tlaGNC">          20 : void MqttInteractor::process_message(const IMqttMessageSink::Message&amp; msg)</span></span>
+<span id="L259"><span class="lineNum">     259</span>              : {</span>
+<span id="L260"><span class="lineNum">     260</span>              :     // Найти суффикс топика (после prefix_)</span>
+<span id="L261"><span class="lineNum">     261</span> <span class="tlaGNC">          20 :     const char* cmd = strstr(msg.topic, &quot;/cmd/&quot;);</span></span>
+<span id="L262"><span class="lineNum">     262</span> <span class="tlaGNC">          20 :     if (!cmd) return;</span></span>
+<span id="L263"><span class="lineNum">     263</span>              : </span>
+<span id="L264"><span class="lineNum">     264</span> <span class="tlaGNC">          20 :     cmd += 5;  // пропустить &quot;/cmd/&quot;</span></span>
+<span id="L265"><span class="lineNum">     265</span>              : </span>
+<span id="L266"><span class="lineNum">     266</span> <span class="tlaGNC">          20 :     if (strcmp(cmd, &quot;control&quot;) == 0) {</span></span>
+<span id="L267"><span class="lineNum">     267</span> <span class="tlaGNC">          15 :         handle_control(msg.payload, msg.payload_len);</span></span>
+<span id="L268"><span class="lineNum">     268</span> <span class="tlaGNC">           5 :     } else if (strcmp(cmd, &quot;ha_discovery&quot;) == 0) {</span></span>
+<span id="L269"><span class="lineNum">     269</span> <span class="tlaGNC">           5 :         handle_ha_discovery_trigger();</span></span>
+<span id="L270"><span class="lineNum">     270</span>              :     }</span>
+<span id="L271"><span class="lineNum">     271</span>              : }</span>
+<span id="L272"><span class="lineNum">     272</span>              : </span>
+<span id="L273"><span class="lineNum">     273</span>              : // ── handle_control ───────────────────────────────────────────</span>
+<span id="L274"><span class="lineNum">     274</span>              : </span>
+<span id="L275"><span class="lineNum">     275</span> <span class="tlaGNC">          15 : void MqttInteractor::handle_control(const char* body, int /*len*/)</span></span>
+<span id="L276"><span class="lineNum">     276</span>              : {</span>
+<span id="L277"><span class="lineNum">     277</span>              :     int v;</span>
+<span id="L278"><span class="lineNum">     278</span>              :     float f;</span>
+<span id="L279"><span class="lineNum">     279</span> <span class="tlaGNC">          15 :     bool changed = false;</span></span>
+<span id="L280"><span class="lineNum">     280</span>              : </span>
+<span id="L281"><span class="lineNum">     281</span> <span class="tlaGNC">          15 :     v = json_get_int(body, &quot;\&quot;dhw_enable\&quot;&quot;);</span></span>
+<span id="L282"><span class="lineNum">     282</span> <span class="tlaGNC">          15 :     if (v &gt;= 0) {</span></span>
+<span id="L283"><span class="lineNum">     283</span> <span class="tlaGNC">           7 :         cfg_sys_.set_dhw_enable(v != 0);</span></span>
+<span id="L284"><span class="lineNum">     284</span> <span class="tlaGNC">           7 :         log_.event(ILogger::USER, &quot;MQTT: БКН %s&quot;, v ? &quot;включён&quot; : &quot;выключен&quot;);</span></span>
+<span id="L285"><span class="lineNum">     285</span> <span class="tlaGNC">           7 :         changed = true;</span></span>
+<span id="L286"><span class="lineNum">     286</span>              :     }</span>
+<span id="L287"><span class="lineNum">     287</span>              : </span>
+<span id="L288"><span class="lineNum">     288</span> <span class="tlaGNC">          15 :     v = json_get_int(body, &quot;\&quot;ch_enable\&quot;&quot;);</span></span>
+<span id="L289"><span class="lineNum">     289</span> <span class="tlaGNC">          15 :     if (v &gt;= 0) {</span></span>
+<span id="L290"><span class="lineNum">     290</span> <span class="tlaGNC">           2 :         cfg_sys_.set_ch_enable(v != 0);</span></span>
+<span id="L291"><span class="lineNum">     291</span> <span class="tlaGNC">           2 :         log_.event(ILogger::USER, &quot;MQTT: отопление %s&quot;, v ? &quot;включено&quot; : &quot;выключено&quot;);</span></span>
+<span id="L292"><span class="lineNum">     292</span> <span class="tlaGNC">           2 :         changed = true;</span></span>
+<span id="L293"><span class="lineNum">     293</span>              :     }</span>
+<span id="L294"><span class="lineNum">     294</span>              : </span>
+<span id="L295"><span class="lineNum">     295</span> <span class="tlaGNC">          15 :     f = json_get_float(body, &quot;\&quot;ch_setpoint\&quot;&quot;);</span></span>
+<span id="L296"><span class="lineNum">     296</span> <span class="tlaGNC">          15 :     if (f &gt; -1e37f) {</span></span>
+<span id="L297"><span class="lineNum">     297</span> <span class="tlaGNC">           4 :         if (f &lt; 20) f = 20;</span></span>
+<span id="L298"><span class="lineNum">     298</span> <span class="tlaGNC">           4 :         if (f &gt; 80) f = 80;</span></span>
+<span id="L299"><span class="lineNum">     299</span> <span class="tlaGNC">           4 :         cfg_sys_.set_ch_setpoint(f);</span></span>
+<span id="L300"><span class="lineNum">     300</span> <span class="tlaGNC">           4 :         log_.event(ILogger::USER, &quot;MQTT: уставка СО = %.1f°C&quot;, (double)f);</span></span>
+<span id="L301"><span class="lineNum">     301</span> <span class="tlaGNC">           4 :         changed = true;</span></span>
+<span id="L302"><span class="lineNum">     302</span>              :     }</span>
+<span id="L303"><span class="lineNum">     303</span>              : </span>
+<span id="L304"><span class="lineNum">     304</span> <span class="tlaGNC">          15 :     f = json_get_float(body, &quot;\&quot;dhw_setpoint\&quot;&quot;);</span></span>
+<span id="L305"><span class="lineNum">     305</span> <span class="tlaGNC">          15 :     if (f &gt; -1e37f) {</span></span>
+<span id="L306"><span class="lineNum">     306</span> <span class="tlaGNC">           4 :         if (f &lt; 35) f = 35;</span></span>
+<span id="L307"><span class="lineNum">     307</span> <span class="tlaGNC">           4 :         if (f &gt; 80) f = 80;</span></span>
+<span id="L308"><span class="lineNum">     308</span> <span class="tlaGNC">           4 :         cfg_sys_.set_dhw_setpoint(f);</span></span>
+<span id="L309"><span class="lineNum">     309</span> <span class="tlaGNC">           4 :         log_.event(ILogger::USER, &quot;MQTT: уставка ГВС = %.1f°C&quot;, (double)f);</span></span>
+<span id="L310"><span class="lineNum">     310</span> <span class="tlaGNC">           4 :         changed = true;</span></span>
+<span id="L311"><span class="lineNum">     311</span>              :     }</span>
+<span id="L312"><span class="lineNum">     312</span>              : </span>
+<span id="L313"><span class="lineNum">     313</span> <span class="tlaGNC">          15 :     if (changed &amp;&amp; mqtt_state_ == State::CONNECTED) {</span></span>
+<span id="L314"><span class="lineNum">     314</span> <span class="tlaGNC">          12 :         publish_status();</span></span>
+<span id="L315"><span class="lineNum">     315</span>              :     }</span>
+<span id="L316"><span class="lineNum">     316</span> <span class="tlaGNC">          15 : }</span></span>
+<span id="L317"><span class="lineNum">     317</span>              : </span>
+<span id="L318"><span class="lineNum">     318</span>              : // ── publish_status ───────────────────────────────────────────</span>
+<span id="L319"><span class="lineNum">     319</span>              : </span>
+<span id="L320"><span class="lineNum">     320</span> <span class="tlaGNC">          13 : void MqttInteractor::publish_status()</span></span>
+<span id="L321"><span class="lineNum">     321</span>              : {</span>
+<span id="L322"><span class="lineNum">     322</span>              :     static char buf[BUF_STATUS];</span>
+<span id="L323"><span class="lineNum">     323</span> <span class="tlaGNC">          13 :     renderer_.render_status(buf, sizeof(buf));</span></span>
+<span id="L324"><span class="lineNum">     324</span>              :     char topic[128];</span>
+<span id="L325"><span class="lineNum">     325</span> <span class="tlaGNC">          13 :     snprintf(topic, sizeof(topic), &quot;%s/status&quot;, prefix_);</span></span>
+<span id="L326"><span class="lineNum">     326</span> <span class="tlaGNC">          13 :     int ret = mqtt_.publish(topic, buf, -1, IMqttHardware::QoS::AT_MOST_ONCE, false);</span></span>
+<span id="L327"><span class="lineNum">     327</span>              :     static int ok_count = 0, fail_count = 0;</span>
+<span id="L328"><span class="lineNum">     328</span> <span class="tlaGNC">          13 :     if (ret &gt; 0) {</span></span>
+<span id="L329"><span class="lineNum">     329</span> <span class="tlaGNC">          13 :         ok_count++;</span></span>
+<span id="L330"><span class="lineNum">     330</span>              :         // log every status publish for debugging</span>
+<span id="L331"><span class="lineNum">     331</span>              :     ESP_LOGI(MQTT_TAG, &quot;status #%d ok len=%d&quot;, ok_count, (int)strlen(buf));</span>
+<span id="L332"><span class="lineNum">     332</span>              :     } else {</span>
+<span id="L333"><span class="lineNum">     333</span> <span class="tlaUNC tlaBgUNC">           0 :         fail_count++;</span></span>
+<span id="L334"><span class="lineNum">     334</span>              :         ESP_LOGI(MQTT_TAG, &quot;status FAIL ret=%d&quot;, ret);</span>
+<span id="L335"><span class="lineNum">     335</span>              :     }</span>
+<span id="L336"><span class="lineNum">     336</span> <span class="tlaGNC tlaBgGNC">          13 : }</span></span>
+<span id="L337"><span class="lineNum">     337</span>              : </span>
+<span id="L338"><span class="lineNum">     338</span>              : // ── publish_stats ────────────────────────────────────────────</span>
+<span id="L339"><span class="lineNum">     339</span>              : </span>
+<span id="L340"><span class="lineNum">     340</span> <span class="tlaUNC tlaBgUNC">           0 : void MqttInteractor::publish_stats()</span></span>
+<span id="L341"><span class="lineNum">     341</span>              : {</span>
+<span id="L342"><span class="lineNum">     342</span>              :     static char buf[BUF_STATUS];</span>
+<span id="L343"><span class="lineNum">     343</span> <span class="tlaUNC">           0 :     renderer_.render_stats(buf, sizeof(buf));</span></span>
+<span id="L344"><span class="lineNum">     344</span>              :     char topic[128];</span>
+<span id="L345"><span class="lineNum">     345</span> <span class="tlaUNC">           0 :     snprintf(topic, sizeof(topic), &quot;%s/stats&quot;, prefix_);</span></span>
+<span id="L346"><span class="lineNum">     346</span> <span class="tlaUNC">           0 :     mqtt_.publish(topic, buf, -1, IMqttHardware::QoS::AT_MOST_ONCE, false);</span></span>
+<span id="L347"><span class="lineNum">     347</span> <span class="tlaUNC">           0 : }</span></span>
+<span id="L348"><span class="lineNum">     348</span>              : </span>
+<span id="L349"><span class="lineNum">     349</span>              : // ── publish_online ───────────────────────────────────────────</span>
+<span id="L350"><span class="lineNum">     350</span>              : </span>
+<span id="L351"><span class="lineNum">     351</span> <span class="tlaGNC tlaBgGNC">          23 : void MqttInteractor::publish_online()</span></span>
+<span id="L352"><span class="lineNum">     352</span>              : {</span>
+<span id="L353"><span class="lineNum">     353</span>              :     char topic[128];</span>
+<span id="L354"><span class="lineNum">     354</span> <span class="tlaGNC">          23 :     snprintf(topic, sizeof(topic), &quot;%s/online&quot;, prefix_);</span></span>
+<span id="L355"><span class="lineNum">     355</span> <span class="tlaGNC">          23 :     int ret = mqtt_.publish(topic, &quot;online&quot;, -1, IMqttHardware::QoS::AT_LEAST_ONCE, true);</span></span>
+<span id="L356"><span class="lineNum">     356</span>              :     ESP_LOGI(MQTT_TAG, &quot;online publish ret=%d&quot;, ret);</span>
+<span id="L357"><span class="lineNum">     357</span> <span class="tlaGNC">          23 : }</span></span>
+<span id="L358"><span class="lineNum">     358</span>              : </span>
+<span id="L359"><span class="lineNum">     359</span>              : // ── handle_ha_discovery_trigger ──────────────────────────────</span>
+<span id="L360"><span class="lineNum">     360</span>              : </span>
+<span id="L361"><span class="lineNum">     361</span> <span class="tlaGNC">           5 : void MqttInteractor::handle_ha_discovery_trigger()</span></span>
+<span id="L362"><span class="lineNum">     362</span>              : {</span>
+<span id="L363"><span class="lineNum">     363</span> <span class="tlaGNC">           5 :     uint64_t now_us = time_.monotonic_us();</span></span>
+<span id="L364"><span class="lineNum">     364</span> <span class="tlaGNC">           5 :     if (ha_discovery_published_</span></span>
+<span id="L365"><span class="lineNum">     365</span> <span class="tlaGNC">           1 :         &amp;&amp; now_us - ha_discovery_last_us_ &lt; HA_REDISCOVERY_COOLDOWN_US) {</span></span>
+<span id="L366"><span class="lineNum">     366</span> <span class="tlaGNC">           1 :         log_.event(ILogger::USER, &quot;MQTT: HA discovery пропущен (cooldown)&quot;);</span></span>
+<span id="L367"><span class="lineNum">     367</span> <span class="tlaGNC">           1 :         return;</span></span>
+<span id="L368"><span class="lineNum">     368</span>              :     }</span>
+<span id="L369"><span class="lineNum">     369</span> <span class="tlaGNC">           4 :     publish_all_ha_discovery();</span></span>
+<span id="L370"><span class="lineNum">     370</span> <span class="tlaGNC">           4 :     ha_discovery_published_ = true;</span></span>
+<span id="L371"><span class="lineNum">     371</span> <span class="tlaGNC">           4 :     ha_discovery_last_us_ = now_us;</span></span>
+<span id="L372"><span class="lineNum">     372</span> <span class="tlaGNC">           4 :     ha_discovery_index_ = -1;  // stop incremental publish</span></span>
+<span id="L373"><span class="lineNum">     373</span> <span class="tlaGNC">           4 :     log_.event(ILogger::USER, &quot;MQTT: HA discovery опубликован&quot;);</span></span>
+<span id="L374"><span class="lineNum">     374</span>              : }</span>
+<span id="L375"><span class="lineNum">     375</span>              : </span>
+<span id="L376"><span class="lineNum">     376</span>              : // ── HA Discovery ─────────────────────────────────────────</span>
+<span id="L377"><span class="lineNum">     377</span>              : </span>
+<span id="L378"><span class="lineNum">     378</span> <span class="tlaGNC">         172 : char* MqttInteractor::build_ha_device_json(char* buf, size_t size)</span></span>
+<span id="L379"><span class="lineNum">     379</span>              : {</span>
+<span id="L380"><span class="lineNum">     380</span> <span class="tlaGNC">         172 :     snprintf(buf, size,</span></span>
+<span id="L381"><span class="lineNum">     381</span>              :         &quot;{\&quot;identifiers\&quot;:[\&quot;esp-ot-gw-%s\&quot;],&quot;</span>
+<span id="L382"><span class="lineNum">     382</span>              :         &quot;\&quot;name\&quot;:\&quot;Контроллер котла\&quot;,&quot;</span>
+<span id="L383"><span class="lineNum">     383</span>              :         &quot;\&quot;model\&quot;:\&quot;ESP-OT-Gateway\&quot;,\&quot;manufacturer\&quot;:\&quot;Custom\&quot;}&quot;,</span>
+<span id="L384"><span class="lineNum">     384</span> <span class="tlaGNC">         172 :         prefix_);</span></span>
+<span id="L385"><span class="lineNum">     385</span> <span class="tlaGNC">         172 :     return buf;</span></span>
+<span id="L386"><span class="lineNum">     386</span>              : }</span>
+<span id="L387"><span class="lineNum">     387</span>              : </span>
+<span id="L388"><span class="lineNum">     388</span> <span class="tlaGNC">         172 : void MqttInteractor::publish_ha_config(const char* component, const char* entity,</span></span>
+<span id="L389"><span class="lineNum">     389</span>              :                                         const char* json)</span>
+<span id="L390"><span class="lineNum">     390</span>              : {</span>
+<span id="L391"><span class="lineNum">     391</span>              :     char topic[192];</span>
+<span id="L392"><span class="lineNum">     392</span> <span class="tlaGNC">         172 :     snprintf(topic, sizeof(topic), &quot;homeassistant/%s/%s_%s/config&quot;,</span></span>
+<span id="L393"><span class="lineNum">     393</span> <span class="tlaGNC">         172 :              component, prefix_, entity);</span></span>
+<span id="L394"><span class="lineNum">     394</span> <span class="tlaGNC">         172 :     mqtt_.publish(topic, json, -1, IMqttHardware::QoS::AT_LEAST_ONCE, true);</span></span>
+<span id="L395"><span class="lineNum">     395</span> <span class="tlaGNC">         172 : }</span></span>
+<span id="L396"><span class="lineNum">     396</span>              : </span>
+<span id="L397"><span class="lineNum">     397</span> <span class="tlaGNC">         117 : void MqttInteractor::publish_ha_sensor(const char* entity, const char* name,</span></span>
+<span id="L398"><span class="lineNum">     398</span>              :                                         const char* unit, const char* dev_class,</span>
+<span id="L399"><span class="lineNum">     399</span>              :                                         const char* value_tpl)</span>
+<span id="L400"><span class="lineNum">     400</span>              : {</span>
+<span id="L401"><span class="lineNum">     401</span>              :     char dev_json[256];</span>
+<span id="L402"><span class="lineNum">     402</span> <span class="tlaGNC">         117 :     build_ha_device_json(dev_json, sizeof(dev_json));</span></span>
+<span id="L403"><span class="lineNum">     403</span>              : </span>
+<span id="L404"><span class="lineNum">     404</span>              :     char buf[BUF_HA];</span>
+<span id="L405"><span class="lineNum">     405</span> <span class="tlaGNC">         117 :     int pos = snprintf(buf, sizeof(buf),</span></span>
+<span id="L406"><span class="lineNum">     406</span>              :         &quot;{\&quot;name\&quot;:\&quot;%s\&quot;,\&quot;uniq_id\&quot;:\&quot;esp-ot-gw-%s_%s\&quot;,&quot;</span>
+<span id="L407"><span class="lineNum">     407</span>              :         &quot;\&quot;stat_t\&quot;:\&quot;%s/status\&quot;,\&quot;val_tpl\&quot;:\&quot;%s\&quot;,&quot;</span>
+<span id="L408"><span class="lineNum">     408</span>              :         &quot;\&quot;dev\&quot;:%s,&quot;</span>
+<span id="L409"><span class="lineNum">     409</span>              :         &quot;\&quot;avty\&quot;:{\&quot;t\&quot;:\&quot;%s/online\&quot;,\&quot;pl_avail\&quot;:\&quot;online\&quot;,\&quot;pl_not_avail\&quot;:\&quot;offline\&quot;}&quot;,</span>
+<span id="L410"><span class="lineNum">     410</span> <span class="tlaGNC">         117 :         name, prefix_, entity,</span></span>
+<span id="L411"><span class="lineNum">     411</span> <span class="tlaGNC">         117 :         prefix_, value_tpl,</span></span>
+<span id="L412"><span class="lineNum">     412</span>              :         dev_json,</span>
+<span id="L413"><span class="lineNum">     413</span> <span class="tlaGNC">         117 :         prefix_);</span></span>
+<span id="L414"><span class="lineNum">     414</span>              : </span>
+<span id="L415"><span class="lineNum">     415</span> <span class="tlaGNC">         117 :     if (unit &amp;&amp; unit[0] &amp;&amp; pos &gt; 0 &amp;&amp; pos &lt; (int)sizeof(buf) - 30) {</span></span>
+<span id="L416"><span class="lineNum">     416</span> <span class="tlaGNC">         112 :         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,</span></span>
+<span id="L417"><span class="lineNum">     417</span>              :                         &quot;,\&quot;unit_of_meas\&quot;:\&quot;%s\&quot;&quot;, unit);</span>
+<span id="L418"><span class="lineNum">     418</span>              :     }</span>
+<span id="L419"><span class="lineNum">     419</span> <span class="tlaGNC">         117 :     if (dev_class &amp;&amp; dev_class[0] &amp;&amp; pos &gt; 0 &amp;&amp; pos &lt; (int)sizeof(buf) - 30) {</span></span>
+<span id="L420"><span class="lineNum">     420</span> <span class="tlaGNC">         102 :         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,</span></span>
+<span id="L421"><span class="lineNum">     421</span>              :                         &quot;,\&quot;dev_cla\&quot;:\&quot;%s\&quot;&quot;, dev_class);</span>
+<span id="L422"><span class="lineNum">     422</span>              :     }</span>
+<span id="L423"><span class="lineNum">     423</span> <span class="tlaGNC">         117 :     if (pos &gt; 0 &amp;&amp; pos &lt; (int)sizeof(buf) - 10) {</span></span>
+<span id="L424"><span class="lineNum">     424</span> <span class="tlaGNC">         117 :         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, &quot;,\&quot;qos\&quot;:1}&quot;);</span></span>
+<span id="L425"><span class="lineNum">     425</span>              :     }</span>
+<span id="L426"><span class="lineNum">     426</span>              : </span>
+<span id="L427"><span class="lineNum">     427</span> <span class="tlaGNC">         117 :     publish_ha_config(&quot;sensor&quot;, entity, buf);</span></span>
+<span id="L428"><span class="lineNum">     428</span> <span class="tlaGNC">         117 : }</span></span>
+<span id="L429"><span class="lineNum">     429</span>              : </span>
+<span id="L430"><span class="lineNum">     430</span> <span class="tlaGNC">          35 : void MqttInteractor::publish_ha_binary_sensor(const char* entity, const char* name,</span></span>
+<span id="L431"><span class="lineNum">     431</span>              :                                                const char* dev_class, const char* value_tpl)</span>
+<span id="L432"><span class="lineNum">     432</span>              : {</span>
+<span id="L433"><span class="lineNum">     433</span>              :     char dev_json[256];</span>
+<span id="L434"><span class="lineNum">     434</span> <span class="tlaGNC">          35 :     build_ha_device_json(dev_json, sizeof(dev_json));</span></span>
+<span id="L435"><span class="lineNum">     435</span>              : </span>
+<span id="L436"><span class="lineNum">     436</span>              :     char buf[BUF_HA];</span>
+<span id="L437"><span class="lineNum">     437</span> <span class="tlaGNC">          35 :     int pos = snprintf(buf, sizeof(buf),</span></span>
+<span id="L438"><span class="lineNum">     438</span>              :         &quot;{\&quot;name\&quot;:\&quot;%s\&quot;,\&quot;uniq_id\&quot;:\&quot;esp-ot-gw-%s_%s\&quot;,&quot;</span>
+<span id="L439"><span class="lineNum">     439</span>              :         &quot;\&quot;stat_t\&quot;:\&quot;%s/status\&quot;,\&quot;val_tpl\&quot;:\&quot;%s\&quot;,&quot;</span>
+<span id="L440"><span class="lineNum">     440</span>              :         &quot;\&quot;dev\&quot;:%s,&quot;</span>
+<span id="L441"><span class="lineNum">     441</span>              :         &quot;\&quot;avty\&quot;:{\&quot;t\&quot;:\&quot;%s/online\&quot;,\&quot;pl_avail\&quot;:\&quot;online\&quot;,\&quot;pl_not_avail\&quot;:\&quot;offline\&quot;}&quot;,</span>
+<span id="L442"><span class="lineNum">     442</span> <span class="tlaGNC">          35 :         name, prefix_, entity,</span></span>
+<span id="L443"><span class="lineNum">     443</span> <span class="tlaGNC">          35 :         prefix_, value_tpl,</span></span>
+<span id="L444"><span class="lineNum">     444</span>              :         dev_json,</span>
+<span id="L445"><span class="lineNum">     445</span> <span class="tlaGNC">          35 :         prefix_);</span></span>
+<span id="L446"><span class="lineNum">     446</span>              : </span>
+<span id="L447"><span class="lineNum">     447</span> <span class="tlaGNC">          35 :     if (dev_class &amp;&amp; dev_class[0] &amp;&amp; pos &gt; 0 &amp;&amp; pos &lt; (int)sizeof(buf) - 30) {</span></span>
+<span id="L448"><span class="lineNum">     448</span> <span class="tlaGNC">          30 :         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,</span></span>
+<span id="L449"><span class="lineNum">     449</span>              :                         &quot;,\&quot;dev_cla\&quot;:\&quot;%s\&quot;&quot;, dev_class);</span>
+<span id="L450"><span class="lineNum">     450</span>              :     }</span>
+<span id="L451"><span class="lineNum">     451</span> <span class="tlaGNC">          35 :     if (pos &gt; 0 &amp;&amp; pos &lt; (int)sizeof(buf) - 10) {</span></span>
+<span id="L452"><span class="lineNum">     452</span> <span class="tlaGNC">          35 :         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, &quot;,\&quot;qos\&quot;:1}&quot;);</span></span>
+<span id="L453"><span class="lineNum">     453</span>              :     }</span>
+<span id="L454"><span class="lineNum">     454</span>              : </span>
+<span id="L455"><span class="lineNum">     455</span> <span class="tlaGNC">          35 :     publish_ha_config(&quot;binary_sensor&quot;, entity, buf);</span></span>
+<span id="L456"><span class="lineNum">     456</span> <span class="tlaGNC">          35 : }</span></span>
+<span id="L457"><span class="lineNum">     457</span>              : </span>
+<span id="L458"><span class="lineNum">     458</span> <span class="tlaGNC">          10 : void MqttInteractor::publish_ha_switch(const char* entity, const char* name,</span></span>
+<span id="L459"><span class="lineNum">     459</span>              :                                         const char* icon, const char* state_tpl,</span>
+<span id="L460"><span class="lineNum">     460</span>              :                                         const char* cmd_tpl)</span>
+<span id="L461"><span class="lineNum">     461</span>              : {</span>
+<span id="L462"><span class="lineNum">     462</span>              :     char dev_json[256];</span>
+<span id="L463"><span class="lineNum">     463</span> <span class="tlaGNC">          10 :     build_ha_device_json(dev_json, sizeof(dev_json));</span></span>
+<span id="L464"><span class="lineNum">     464</span>              : </span>
+<span id="L465"><span class="lineNum">     465</span>              :     char buf[BUF_HA];</span>
+<span id="L466"><span class="lineNum">     466</span> <span class="tlaGNC">          10 :     int pos = snprintf(buf, sizeof(buf),</span></span>
+<span id="L467"><span class="lineNum">     467</span>              :         &quot;{\&quot;name\&quot;:\&quot;%s\&quot;,\&quot;uniq_id\&quot;:\&quot;esp-ot-gw-%s_%s\&quot;,&quot;</span>
+<span id="L468"><span class="lineNum">     468</span>              :         &quot;\&quot;stat_t\&quot;:\&quot;%s/status\&quot;,\&quot;val_tpl\&quot;:\&quot;%s\&quot;,&quot;</span>
+<span id="L469"><span class="lineNum">     469</span>              :         &quot;\&quot;cmd_t\&quot;:\&quot;%s/cmd/control\&quot;,\&quot;cmd_tpl\&quot;:\&quot;%s\&quot;,&quot;</span>
+<span id="L470"><span class="lineNum">     470</span>              :         &quot;\&quot;dev\&quot;:%s,&quot;</span>
+<span id="L471"><span class="lineNum">     471</span>              :         &quot;\&quot;avty\&quot;:{\&quot;t\&quot;:\&quot;%s/online\&quot;,\&quot;pl_avail\&quot;:\&quot;online\&quot;,\&quot;pl_not_avail\&quot;:\&quot;offline\&quot;}&quot;,</span>
+<span id="L472"><span class="lineNum">     472</span> <span class="tlaGNC">          10 :         name, prefix_, entity,</span></span>
+<span id="L473"><span class="lineNum">     473</span> <span class="tlaGNC">          10 :         prefix_, state_tpl,</span></span>
+<span id="L474"><span class="lineNum">     474</span> <span class="tlaGNC">          10 :         prefix_, cmd_tpl,</span></span>
+<span id="L475"><span class="lineNum">     475</span>              :         dev_json,</span>
+<span id="L476"><span class="lineNum">     476</span> <span class="tlaGNC">          10 :         prefix_);</span></span>
+<span id="L477"><span class="lineNum">     477</span>              : </span>
+<span id="L478"><span class="lineNum">     478</span> <span class="tlaGNC">          10 :     if (icon &amp;&amp; icon[0] &amp;&amp; pos &gt; 0 &amp;&amp; pos &lt; (int)sizeof(buf) - 30) {</span></span>
+<span id="L479"><span class="lineNum">     479</span> <span class="tlaGNC">          10 :         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,</span></span>
+<span id="L480"><span class="lineNum">     480</span>              :                         &quot;,\&quot;ic\&quot;:\&quot;%s\&quot;&quot;, icon);</span>
+<span id="L481"><span class="lineNum">     481</span>              :     }</span>
+<span id="L482"><span class="lineNum">     482</span> <span class="tlaGNC">          10 :     if (pos &gt; 0 &amp;&amp; pos &lt; (int)sizeof(buf) - 10) {</span></span>
+<span id="L483"><span class="lineNum">     483</span> <span class="tlaGNC">          10 :         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, &quot;,\&quot;qos\&quot;:1}&quot;);</span></span>
+<span id="L484"><span class="lineNum">     484</span>              :     }</span>
+<span id="L485"><span class="lineNum">     485</span>              : </span>
+<span id="L486"><span class="lineNum">     486</span> <span class="tlaGNC">          10 :     publish_ha_config(&quot;switch&quot;, entity, buf);</span></span>
+<span id="L487"><span class="lineNum">     487</span> <span class="tlaGNC">          10 : }</span></span>
+<span id="L488"><span class="lineNum">     488</span>              : </span>
+<span id="L489"><span class="lineNum">     489</span> <span class="tlaGNC">          10 : void MqttInteractor::publish_ha_number(const char* entity, const char* name,</span></span>
+<span id="L490"><span class="lineNum">     490</span>              :                                         float min_v, float max_v, float step,</span>
+<span id="L491"><span class="lineNum">     491</span>              :                                         const char* unit, const char* state_tpl,</span>
+<span id="L492"><span class="lineNum">     492</span>              :                                         const char* cmd_tpl)</span>
+<span id="L493"><span class="lineNum">     493</span>              : {</span>
+<span id="L494"><span class="lineNum">     494</span>              :     char dev_json[256];</span>
+<span id="L495"><span class="lineNum">     495</span> <span class="tlaGNC">          10 :     build_ha_device_json(dev_json, sizeof(dev_json));</span></span>
+<span id="L496"><span class="lineNum">     496</span>              : </span>
+<span id="L497"><span class="lineNum">     497</span>              :     char buf[BUF_HA];</span>
+<span id="L498"><span class="lineNum">     498</span> <span class="tlaGNC">          10 :     int pos = snprintf(buf, sizeof(buf),</span></span>
+<span id="L499"><span class="lineNum">     499</span>              :         &quot;{\&quot;name\&quot;:\&quot;%s\&quot;,\&quot;uniq_id\&quot;:\&quot;esp-ot-gw-%s_%s\&quot;,&quot;</span>
+<span id="L500"><span class="lineNum">     500</span>              :         &quot;\&quot;stat_t\&quot;:\&quot;%s/status\&quot;,\&quot;val_tpl\&quot;:\&quot;%s\&quot;,&quot;</span>
+<span id="L501"><span class="lineNum">     501</span>              :         &quot;\&quot;cmd_t\&quot;:\&quot;%s/cmd/control\&quot;,\&quot;cmd_tpl\&quot;:\&quot;%s\&quot;,&quot;</span>
+<span id="L502"><span class="lineNum">     502</span>              :         &quot;\&quot;min\&quot;:%.3f,\&quot;max\&quot;:%.3f,\&quot;step\&quot;:%.3f,&quot;</span>
+<span id="L503"><span class="lineNum">     503</span>              :         &quot;\&quot;dev\&quot;:%s,&quot;</span>
+<span id="L504"><span class="lineNum">     504</span>              :         &quot;\&quot;avty\&quot;:{\&quot;t\&quot;:\&quot;%s/online\&quot;,\&quot;pl_avail\&quot;:\&quot;online\&quot;,\&quot;pl_not_avail\&quot;:\&quot;offline\&quot;}&quot;,</span>
+<span id="L505"><span class="lineNum">     505</span> <span class="tlaGNC">          10 :         name, prefix_, entity,</span></span>
+<span id="L506"><span class="lineNum">     506</span> <span class="tlaGNC">          10 :         prefix_, state_tpl,</span></span>
+<span id="L507"><span class="lineNum">     507</span> <span class="tlaGNC">          10 :         prefix_, cmd_tpl,</span></span>
+<span id="L508"><span class="lineNum">     508</span>              :         (double)min_v, (double)max_v, (double)step,</span>
+<span id="L509"><span class="lineNum">     509</span>              :         dev_json,</span>
+<span id="L510"><span class="lineNum">     510</span> <span class="tlaGNC">          10 :         prefix_);</span></span>
+<span id="L511"><span class="lineNum">     511</span>              : </span>
+<span id="L512"><span class="lineNum">     512</span> <span class="tlaGNC">          10 :     if (unit &amp;&amp; unit[0] &amp;&amp; pos &gt; 0 &amp;&amp; pos &lt; (int)sizeof(buf) - 30) {</span></span>
+<span id="L513"><span class="lineNum">     513</span> <span class="tlaGNC">          10 :         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos,</span></span>
+<span id="L514"><span class="lineNum">     514</span>              :                         &quot;,\&quot;unit_of_meas\&quot;:\&quot;%s\&quot;&quot;, unit);</span>
+<span id="L515"><span class="lineNum">     515</span>              :     }</span>
+<span id="L516"><span class="lineNum">     516</span> <span class="tlaGNC">          10 :     if (pos &gt; 0 &amp;&amp; pos &lt; (int)sizeof(buf) - 10) {</span></span>
+<span id="L517"><span class="lineNum">     517</span> <span class="tlaGNC">          10 :         pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, &quot;,\&quot;qos\&quot;:1}&quot;);</span></span>
+<span id="L518"><span class="lineNum">     518</span>              :     }</span>
+<span id="L519"><span class="lineNum">     519</span>              : </span>
+<span id="L520"><span class="lineNum">     520</span> <span class="tlaGNC">          10 :     publish_ha_config(&quot;number&quot;, entity, buf);</span></span>
+<span id="L521"><span class="lineNum">     521</span> <span class="tlaGNC">          10 : }</span></span>
+<span id="L522"><span class="lineNum">     522</span>              : </span>
+<span id="L523"><span class="lineNum">     523</span> <span class="tlaGNC">          64 : void MqttInteractor::publish_ha_next()</span></span>
+<span id="L524"><span class="lineNum">     524</span>              : {</span>
+<span id="L525"><span class="lineNum">     525</span>              :     // Publish one entity per call — prevents TCP buffer overflow</span>
+<span id="L526"><span class="lineNum">     526</span>              :     // from bursting 27 × 800 bytes at once.</span>
+<span id="L527"><span class="lineNum">     527</span> <span class="tlaGNC">          64 :     switch (ha_discovery_index_++) {</span></span>
+<span id="L528"><span class="lineNum">     528</span> <span class="tlaGNC">          23 :     case 0:  publish_ha_sensor(&quot;ch_temp&quot;,     &quot;Температура СО&quot;,   &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.ch_temp }}&quot;); break;</span></span>
+<span id="L529"><span class="lineNum">     529</span> <span class="tlaGNC">          13 :     case 1:  publish_ha_sensor(&quot;dhw_temp&quot;,    &quot;Температура ГВС&quot;,  &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.dhw_temp }}&quot;); break;</span></span>
+<span id="L530"><span class="lineNum">     530</span> <span class="tlaGNC">           2 :     case 2:  publish_ha_sensor(&quot;return_temp&quot;, &quot;Обратка&quot;,          &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.return_temp }}&quot;); break;</span></span>
+<span id="L531"><span class="lineNum">     531</span> <span class="tlaGNC">           2 :     case 3:  publish_ha_sensor(&quot;outside_temp&quot;,&quot;Улица&quot;,            &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.outside_temp }}&quot;); break;</span></span>
+<span id="L532"><span class="lineNum">     532</span> <span class="tlaGNC">           2 :     case 4:  publish_ha_sensor(&quot;t1_temp&quot;,     &quot;Комната T1&quot;,       &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.t1_temp }}&quot;); break;</span></span>
+<span id="L533"><span class="lineNum">     533</span> <span class="tlaGNC">           1 :     case 5:  publish_ha_sensor(&quot;t2_temp&quot;,     &quot;Комната T2&quot;,       &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.t2_temp }}&quot;); break;</span></span>
+<span id="L534"><span class="lineNum">     534</span> <span class="tlaGNC">           1 :     case 6:  publish_ha_sensor(&quot;modulation&quot;,  &quot;Модуляция&quot;,         &quot;%&quot;, &quot;power_factor&quot;, &quot;{{ value_json.modulation }}&quot;); break;</span></span>
+<span id="L535"><span class="lineNum">     535</span> <span class="tlaGNC">           1 :     case 7:  publish_ha_sensor(&quot;uptime&quot;,      &quot;Аптайм&quot;,            &quot;s&quot;, &quot;duration&quot;,     &quot;{{ value_json.uptime_sec }}&quot;); break;</span></span>
+<span id="L536"><span class="lineNum">     536</span> <span class="tlaGNC">           1 :     case 8:  publish_ha_sensor(&quot;total_uptime&quot;,&quot;Общий аптайм&quot;,      &quot;s&quot;, &quot;duration&quot;,     &quot;{{ value_json.total_uptime_sec }}&quot;); break;</span></span>
+<span id="L537"><span class="lineNum">     537</span> <span class="tlaGNC">           1 :     case 9:  publish_ha_binary_sensor(&quot;flame&quot;,      &quot;Пламя&quot;,         &quot;heat&quot;,         &quot;{{ 'ON' if value_json.flame else 'OFF' }}&quot;); break;</span></span>
+<span id="L538"><span class="lineNum">     538</span> <span class="tlaGNC">           1 :     case 10: publish_ha_binary_sensor(&quot;fault&quot;,      &quot;Ошибка&quot;,        &quot;problem&quot;,      &quot;{{ 'ON' if value_json.fault else 'OFF' }}&quot;); break;</span></span>
+<span id="L539"><span class="lineNum">     539</span> <span class="tlaGNC">           1 :     case 11: publish_ha_binary_sensor(&quot;ch_active&quot;,  &quot;СО активна&quot;,    &quot;running&quot;,      &quot;{{ 'ON' if value_json.ch_active else 'OFF' }}&quot;); break;</span></span>
+<span id="L540"><span class="lineNum">     540</span> <span class="tlaGNC">           1 :     case 12: publish_ha_binary_sensor(&quot;dhw_active&quot;, &quot;ГВС активно&quot;,   &quot;running&quot;,      &quot;{{ 'ON' if value_json.dhw_active else 'OFF' }}&quot;); break;</span></span>
+<span id="L541"><span class="lineNum">     541</span> <span class="tlaGNC">           1 :     case 13: publish_ha_binary_sensor(&quot;connected&quot;,  &quot;Котёл&quot;,         &quot;connectivity&quot;, &quot;{{ 'ON' if value_json.connected else 'OFF' }}&quot;); break;</span></span>
+<span id="L542"><span class="lineNum">     542</span> <span class="tlaGNC">           1 :     case 14: publish_ha_switch(&quot;ch_enable&quot;,  &quot;Отопление&quot;, &quot;mdi:radiator&quot;, &quot;{{ 'ON' if value_json.ch_enable else 'OFF' }}&quot;, &quot;{\\\&quot;ch_enable\\\&quot;:{{ (value == \\\&quot;ON\\\&quot;) | int }}}&quot;); break;</span></span>
+<span id="L543"><span class="lineNum">     543</span> <span class="tlaGNC">           1 :     case 15: publish_ha_switch(&quot;dhw_enable&quot;, &quot;ГВС&quot;,       &quot;mdi:water-boiler&quot;, &quot;{{ 'ON' if value_json.dhw_enable else 'OFF' }}&quot;, &quot;{\\\&quot;dhw_enable\\\&quot;:{{ (value == \\\&quot;ON\\\&quot;) | int }}}&quot;); break;</span></span>
+<span id="L544"><span class="lineNum">     544</span> <span class="tlaGNC">           1 :     case 16: publish_ha_number(&quot;ch_setpoint&quot;,  &quot;Уставка СО&quot;,  20, 80, 1, &quot;°C&quot;, &quot;{{ value_json.ch_setpoint }}&quot;,  &quot;{\\\&quot;ch_setpoint\\\&quot;:{{ value }}}&quot;); break;</span></span>
+<span id="L545"><span class="lineNum">     545</span> <span class="tlaGNC">           1 :     case 17: publish_ha_number(&quot;dhw_setpoint&quot;, &quot;Уставка ГВС&quot;, 35, 80, 1, &quot;°C&quot;, &quot;{{ value_json.dhw_setpoint }}&quot;, &quot;{\\\&quot;dhw_setpoint\\\&quot;:{{ value }}}&quot;); break;</span></span>
+<span id="L546"><span class="lineNum">     546</span> <span class="tlaGNC">           1 :     case 18: publish_ha_sensor(&quot;dhw_pred_rate&quot;,   &quot;Скорость ГВС&quot;,    &quot;°C/s&quot;, &quot;&quot;, &quot;{{ value_json.dhw_pred_rate }}&quot;); break;</span></span>
+<span id="L547"><span class="lineNum">     547</span> <span class="tlaGNC">           1 :     case 19: publish_ha_sensor(&quot;dhw_pred_elapsed&quot;,&quot;Время ГВС&quot;,       &quot;s&quot;, &quot;duration&quot;, &quot;{{ value_json.dhw_pred_elapsed }}&quot;); break;</span></span>
+<span id="L548"><span class="lineNum">     548</span> <span class="tlaGNC">           1 :     case 20: publish_ha_sensor(&quot;dhw_pred_remaining&quot;,&quot;Осталось ГВС&quot;,  &quot;s&quot;, &quot;duration&quot;, &quot;{{ value_json.dhw_pred_remaining }}&quot;); break;</span></span>
+<span id="L549"><span class="lineNum">     549</span> <span class="tlaGNC">           1 :     case 21: publish_ha_sensor(&quot;dhw_pred_uncertainty&quot;,&quot;±ГВС&quot;,       &quot;s&quot;, &quot;duration&quot;, &quot;{{ value_json.dhw_pred_uncertainty }}&quot;); break;</span></span>
+<span id="L550"><span class="lineNum">     550</span> <span class="tlaGNC">           1 :     case 22: publish_ha_sensor(&quot;dhw_hyst_on&quot;,     &quot;Гистерезис ГВС&quot;,  &quot;°C&quot;, &quot;&quot;, &quot;{{ value_json.dhw_hyst_on }}&quot;); break;</span></span>
+<span id="L551"><span class="lineNum">     551</span> <span class="tlaGNC">           1 :     case 23: publish_ha_binary_sensor(&quot;dhw_pred_active&quot;, &quot;Прогноз ГВС&quot;, &quot;running&quot;, &quot;{{ 'ON' if value_json.dhw_pred_active else 'OFF' }}&quot;); break;</span></span>
+<span id="L552"><span class="lineNum">     552</span> <span class="tlaGNC">           1 :     case 24: publish_ha_sensor(&quot;ch_mode&quot;,         &quot;Режим СО&quot;,         &quot;&quot;, &quot;&quot;, &quot;{{ value_json.ch_mode }}&quot;); break;</span></span>
+<span id="L553"><span class="lineNum">     553</span> <span class="tlaGNC">           1 :     case 25: publish_ha_sensor(&quot;dhw_last_session&quot;,&quot;Сеанс ГВС&quot;,        &quot;s&quot;, &quot;duration&quot;, &quot;{{ value_json.dhw_last_session_sec }}&quot;); break;</span></span>
+<span id="L554"><span class="lineNum">     554</span> <span class="tlaGNC">           1 :     case 26: publish_ha_binary_sensor(&quot;time_synced&quot;,&quot;Время SNTP&quot;,    &quot;&quot;, &quot;{{ 'ON' if value_json.time_synced else 'OFF' }}&quot;); break;</span></span>
+<span id="L555"><span class="lineNum">     555</span> <span class="tlaUNC tlaBgUNC">           0 :     default:</span></span>
+<span id="L556"><span class="lineNum">     556</span> <span class="tlaUNC">           0 :         ha_discovery_published_ = true;</span></span>
+<span id="L557"><span class="lineNum">     557</span> <span class="tlaUNC">           0 :         ha_discovery_last_us_ = time_.monotonic_us();</span></span>
+<span id="L558"><span class="lineNum">     558</span> <span class="tlaUNC">           0 :         ha_discovery_index_ = -1;</span></span>
+<span id="L559"><span class="lineNum">     559</span>              :         ESP_LOGI(&quot;mqtt_pub&quot;, &quot;HA discovery: 27 entities published&quot;);</span>
+<span id="L560"><span class="lineNum">     560</span> <span class="tlaUNC">           0 :         break;</span></span>
+<span id="L561"><span class="lineNum">     561</span>              :     }</span>
+<span id="L562"><span class="lineNum">     562</span> <span class="tlaGNC tlaBgGNC">          64 : }</span></span>
+<span id="L563"><span class="lineNum">     563</span>              : </span>
+<span id="L564"><span class="lineNum">     564</span> <span class="tlaGNC">           4 : void MqttInteractor::publish_all_ha_discovery()</span></span>
+<span id="L565"><span class="lineNum">     565</span>              : {</span>
+<span id="L566"><span class="lineNum">     566</span>              :     // Датчики температуры (9)</span>
+<span id="L567"><span class="lineNum">     567</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;ch_temp&quot;,     &quot;Температура СО&quot;,   &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.ch_temp }}&quot;);</span></span>
+<span id="L568"><span class="lineNum">     568</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;dhw_temp&quot;,    &quot;Температура ГВС&quot;,  &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.dhw_temp }}&quot;);</span></span>
+<span id="L569"><span class="lineNum">     569</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;return_temp&quot;, &quot;Обратка&quot;,          &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.return_temp }}&quot;);</span></span>
+<span id="L570"><span class="lineNum">     570</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;outside_temp&quot;,&quot;Улица&quot;,            &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.outside_temp }}&quot;);</span></span>
+<span id="L571"><span class="lineNum">     571</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;t1_temp&quot;,     &quot;Комната T1&quot;,       &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.t1_temp }}&quot;);</span></span>
+<span id="L572"><span class="lineNum">     572</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;t2_temp&quot;,     &quot;Комната T2&quot;,       &quot;°C&quot;, &quot;temperature&quot;,  &quot;{{ value_json.t2_temp }}&quot;);</span></span>
+<span id="L573"><span class="lineNum">     573</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;modulation&quot;,  &quot;Модуляция&quot;,         &quot;%&quot;, &quot;power_factor&quot;, &quot;{{ value_json.modulation }}&quot;);</span></span>
+<span id="L574"><span class="lineNum">     574</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;uptime&quot;,      &quot;Аптайм&quot;,            &quot;s&quot;, &quot;duration&quot;,     &quot;{{ value_json.uptime_sec }}&quot;);</span></span>
+<span id="L575"><span class="lineNum">     575</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;total_uptime&quot;,&quot;Общий аптайм&quot;,      &quot;s&quot;, &quot;duration&quot;,     &quot;{{ value_json.total_uptime_sec }}&quot;);</span></span>
+<span id="L576"><span class="lineNum">     576</span>              : </span>
+<span id="L577"><span class="lineNum">     577</span>              :     // Бинарные датчики (5)</span>
+<span id="L578"><span class="lineNum">     578</span> <span class="tlaGNC">           4 :     publish_ha_binary_sensor(&quot;flame&quot;,      &quot;Пламя&quot;,         &quot;heat&quot;,         &quot;{{ 'ON' if value_json.flame else 'OFF' }}&quot;);</span></span>
+<span id="L579"><span class="lineNum">     579</span> <span class="tlaGNC">           4 :     publish_ha_binary_sensor(&quot;fault&quot;,      &quot;Ошибка&quot;,        &quot;problem&quot;,      &quot;{{ 'ON' if value_json.fault else 'OFF' }}&quot;);</span></span>
+<span id="L580"><span class="lineNum">     580</span> <span class="tlaGNC">           4 :     publish_ha_binary_sensor(&quot;ch_active&quot;,  &quot;СО активна&quot;,    &quot;running&quot;,      &quot;{{ 'ON' if value_json.ch_active else 'OFF' }}&quot;);</span></span>
+<span id="L581"><span class="lineNum">     581</span> <span class="tlaGNC">           4 :     publish_ha_binary_sensor(&quot;dhw_active&quot;, &quot;ГВС активно&quot;,   &quot;running&quot;,      &quot;{{ 'ON' if value_json.dhw_active else 'OFF' }}&quot;);</span></span>
+<span id="L582"><span class="lineNum">     582</span> <span class="tlaGNC">           4 :     publish_ha_binary_sensor(&quot;connected&quot;,  &quot;Котёл&quot;,         &quot;connectivity&quot;, &quot;{{ 'ON' if value_json.connected else 'OFF' }}&quot;);</span></span>
+<span id="L583"><span class="lineNum">     583</span>              : </span>
+<span id="L584"><span class="lineNum">     584</span>              :     // Переключатели (2)</span>
+<span id="L585"><span class="lineNum">     585</span> <span class="tlaGNC">           4 :     publish_ha_switch(&quot;ch_enable&quot;,  &quot;Отопление&quot;, &quot;mdi:radiator&quot;,</span></span>
+<span id="L586"><span class="lineNum">     586</span>              :         &quot;{{ 'ON' if value_json.ch_enable else 'OFF' }}&quot;,</span>
+<span id="L587"><span class="lineNum">     587</span>              :         &quot;{\\\&quot;ch_enable\\\&quot;:{{ (value == \\\&quot;ON\\\&quot;) | int }}}&quot;);</span>
+<span id="L588"><span class="lineNum">     588</span> <span class="tlaGNC">           4 :     publish_ha_switch(&quot;dhw_enable&quot;, &quot;ГВС&quot;,       &quot;mdi:water-boiler&quot;,</span></span>
+<span id="L589"><span class="lineNum">     589</span>              :         &quot;{{ 'ON' if value_json.dhw_enable else 'OFF' }}&quot;,</span>
+<span id="L590"><span class="lineNum">     590</span>              :         &quot;{\\\&quot;dhw_enable\\\&quot;:{{ (value == \\\&quot;ON\\\&quot;) | int }}}&quot;);</span>
+<span id="L591"><span class="lineNum">     591</span>              : </span>
+<span id="L592"><span class="lineNum">     592</span>              :     // Числовые параметры (2)</span>
+<span id="L593"><span class="lineNum">     593</span> <span class="tlaGNC">           4 :     publish_ha_number(&quot;ch_setpoint&quot;,  &quot;Уставка СО&quot;,  20, 80, 1, &quot;°C&quot;,</span></span>
+<span id="L594"><span class="lineNum">     594</span>              :         &quot;{{ value_json.ch_setpoint }}&quot;,  &quot;{\\\&quot;ch_setpoint\\\&quot;:{{ value }}}&quot;);</span>
+<span id="L595"><span class="lineNum">     595</span> <span class="tlaGNC">           4 :     publish_ha_number(&quot;dhw_setpoint&quot;, &quot;Уставка ГВС&quot;, 35, 80, 1, &quot;°C&quot;,</span></span>
+<span id="L596"><span class="lineNum">     596</span>              :         &quot;{{ value_json.dhw_setpoint }}&quot;, &quot;{\\\&quot;dhw_setpoint\\\&quot;:{{ value }}}&quot;);</span>
+<span id="L597"><span class="lineNum">     597</span>              : </span>
+<span id="L598"><span class="lineNum">     598</span>              :     // DHW prediction (БКН) — 6</span>
+<span id="L599"><span class="lineNum">     599</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;dhw_pred_rate&quot;,   &quot;Скорость ГВС&quot;,    &quot;°C/s&quot;, &quot;&quot;, &quot;{{ value_json.dhw_pred_rate }}&quot;);</span></span>
+<span id="L600"><span class="lineNum">     600</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;dhw_pred_elapsed&quot;,&quot;Время ГВС&quot;,       &quot;s&quot;, &quot;duration&quot;, &quot;{{ value_json.dhw_pred_elapsed }}&quot;);</span></span>
+<span id="L601"><span class="lineNum">     601</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;dhw_pred_remaining&quot;,&quot;Осталось ГВС&quot;,  &quot;s&quot;, &quot;duration&quot;, &quot;{{ value_json.dhw_pred_remaining }}&quot;);</span></span>
+<span id="L602"><span class="lineNum">     602</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;dhw_pred_uncertainty&quot;,&quot;±ГВС&quot;,       &quot;s&quot;, &quot;duration&quot;, &quot;{{ value_json.dhw_pred_uncertainty }}&quot;);</span></span>
+<span id="L603"><span class="lineNum">     603</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;dhw_hyst_on&quot;,     &quot;Гистерезис ГВС&quot;,  &quot;°C&quot;, &quot;&quot;, &quot;{{ value_json.dhw_hyst_on }}&quot;);</span></span>
+<span id="L604"><span class="lineNum">     604</span> <span class="tlaGNC">           4 :     publish_ha_binary_sensor(&quot;dhw_pred_active&quot;, &quot;Прогноз ГВС&quot;, &quot;running&quot;, &quot;{{ 'ON' if value_json.dhw_pred_active else 'OFF' }}&quot;);</span></span>
+<span id="L605"><span class="lineNum">     605</span>              : </span>
+<span id="L606"><span class="lineNum">     606</span>              :     // Misc (Прочее) — 3</span>
+<span id="L607"><span class="lineNum">     607</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;ch_mode&quot;,         &quot;Режим СО&quot;,         &quot;&quot;, &quot;&quot;, &quot;{{ value_json.ch_mode }}&quot;);</span></span>
+<span id="L608"><span class="lineNum">     608</span> <span class="tlaGNC">           4 :     publish_ha_sensor(&quot;dhw_last_session&quot;,&quot;Сеанс ГВС&quot;,        &quot;s&quot;, &quot;duration&quot;, &quot;{{ value_json.dhw_last_session_sec }}&quot;);</span></span>
+<span id="L609"><span class="lineNum">     609</span> <span class="tlaGNC">           4 :     publish_ha_binary_sensor(&quot;time_synced&quot;,&quot;Время SNTP&quot;,    &quot;&quot;, &quot;{{ 'ON' if value_json.time_synced else 'OFF' }}&quot;);</span></span>
+<span id="L610"><span class="lineNum">     610</span> <span class="tlaGNC">           4 : }</span></span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>

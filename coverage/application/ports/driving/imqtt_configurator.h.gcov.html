@@ -1,0 +1,117 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - esp-ot-gateway test coverage - application/ports/driving/imqtt_configurator.h</title>
+  <link rel="stylesheet" type="text/css" href="../../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../../index.html">top level</a> - <a href="index.html">application/ports/driving</a> - imqtt_configurator.h<span style="font-size: 80%;"> (source / <a href="imqtt_configurator.h.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">esp-ot-gateway test coverage</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">1</td>
+            <td class="headerCovTableEntry">1</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-07-08 17:22:27</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryLo">50.0&nbsp;%</td>
+            <td class="headerCovTableEntry">2</td>
+            <td class="headerCovTableEntry">1</td>
+          </tr>
+                  <tr><td><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : #pragma once</span>
+<span id="L2"><span class="lineNum">       2</span>              : </span>
+<span id="L3"><span class="lineNum">       3</span>              : #include &lt;cstddef&gt;</span>
+<span id="L4"><span class="lineNum">       4</span>              : #include &lt;cstdint&gt;</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : /// Конфигуратор MQTT — driving-порт для HTTP API.</span>
+<span id="L7"><span class="lineNum">       7</span>              : /// Реализуется MqttInteractor'ом, используется HttpControllerAdapter'ом.</span>
+<span id="L8"><span class="lineNum">       8</span>              : /// HTTP-слой не знает о MQtt-деталях (соблюдается правило: web не знает про mqtt).</span>
+<span id="L9"><span class="lineNum">       9</span>              : class IMqttConfigurator {</span>
+<span id="L10"><span class="lineNum">      10</span>              : public:</span>
+<span id="L11"><span class="lineNum">      11</span> <span class="tlaGNC tlaBgGNC">          29 :     virtual ~IMqttConfigurator() = default;</span></span>
+<span id="L12"><span class="lineNum">      12</span>              : </span>
+<span id="L13"><span class="lineNum">      13</span>              :     // ── Геттеры текущих настроек ─────────────────────────</span>
+<span id="L14"><span class="lineNum">      14</span>              : </span>
+<span id="L15"><span class="lineNum">      15</span>              :     virtual bool is_enabled() const = 0;</span>
+<span id="L16"><span class="lineNum">      16</span>              :     virtual bool is_connected() const = 0;</span>
+<span id="L17"><span class="lineNum">      17</span>              :     virtual bool is_connecting() const = 0;</span>
+<span id="L18"><span class="lineNum">      18</span>              :     virtual const char* get_state() const = 0;  // &quot;disabled&quot;|&quot;connecting&quot;|&quot;connected&quot;|&quot;disconnected&quot;</span>
+<span id="L19"><span class="lineNum">      19</span>              :     virtual const char* get_host() const = 0;</span>
+<span id="L20"><span class="lineNum">      20</span>              :     virtual uint16_t get_port() const = 0;</span>
+<span id="L21"><span class="lineNum">      21</span>              :     virtual const char* get_user() const = 0;</span>
+<span id="L22"><span class="lineNum">      22</span>              :     virtual const char* get_prefix() const = 0;</span>
+<span id="L23"><span class="lineNum">      23</span>              :     virtual bool get_tls() const = 0;</span>
+<span id="L24"><span class="lineNum">      24</span>              :     virtual uint16_t get_status_interval_s() const = 0;</span>
+<span id="L25"><span class="lineNum">      25</span>              :     virtual uint16_t get_stats_interval_s() const = 0;</span>
+<span id="L26"><span class="lineNum">      26</span>              : </span>
+<span id="L27"><span class="lineNum">      27</span>              :     // ── Применить настройки ──────────────────────────────</span>
+<span id="L28"><span class="lineNum">      28</span>              : </span>
+<span id="L29"><span class="lineNum">      29</span>              :     /// Сохранить настройки MQTT в NVS и переподключиться с новыми параметрами.</span>
+<span id="L30"><span class="lineNum">      30</span>              :     /// @param host     Адрес брокера</span>
+<span id="L31"><span class="lineNum">      31</span>              :     /// @param port     Порт (обычно 1883 или 8883)</span>
+<span id="L32"><span class="lineNum">      32</span>              :     /// @param user     Логин (может быть &quot;&quot;)</span>
+<span id="L33"><span class="lineNum">      33</span>              :     /// @param pass     Пароль (может быть &quot;&quot;)</span>
+<span id="L34"><span class="lineNum">      34</span>              :     /// @param prefix   Префикс топиков</span>
+<span id="L35"><span class="lineNum">      35</span>              :     /// @param enabled  Включить MQTT</span>
+<span id="L36"><span class="lineNum">      36</span>              :     /// @param tls      Использовать TLS</span>
+<span id="L37"><span class="lineNum">      37</span>              :     virtual void save_and_apply(const char* host, uint16_t port,</span>
+<span id="L38"><span class="lineNum">      38</span>              :                                 const char* user, const char* pass,</span>
+<span id="L39"><span class="lineNum">      39</span>              :                                 const char* prefix, bool enabled, bool tls,</span>
+<span id="L40"><span class="lineNum">      40</span>              :                                 uint16_t status_interval_s, uint16_t stats_interval_s) = 0;</span>
+<span id="L41"><span class="lineNum">      41</span>              : };</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>
