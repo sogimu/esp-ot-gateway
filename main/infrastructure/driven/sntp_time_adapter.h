@@ -19,6 +19,8 @@ public:
     time_point now() const override;
     uint64_t monotonic_us() const override;
 
+    void init();   // nvs_flash_init
+
     /// Manual time setting (for AP mode without SNTP).
     /// @param epoch_sec  Unix timestamp to set.
     void set_manual_time(time_t epoch_sec);
@@ -31,6 +33,9 @@ public:
 
     /// Is time valid (SNTP, manual, or restored from NVS)?
     bool is_synced() const override;
+
+    /// Do we have any valid time reference (SNTP or manual/NVS)?
+    bool has_valid_time() const { return boot_offset_us_.count() != 0; }
 
 private:
     int  tz_offset_ = 3;

@@ -4,7 +4,7 @@
 #include <cstdint>
 
 /// NVS-backed storage for WiFi configuration.
-/// Implemented by WifiNvsAdapter in infrastructure/driven/.
+/// Implemented by WifiNvsStore in infrastructure/driven/.
 class IWifiCredentialStore {
 public:
     /// Load WiFi configuration from storage.

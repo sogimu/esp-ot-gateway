@@ -5,7 +5,7 @@
 #include <catch2/catch_approx.hpp>
 #include "application/services/modulation_stats_service.h"
 #include "fakes/fake_heating_state_store.h"
-#include "nvs_config_adapter.h"  // NvsHistBlob
+#include "nvs_config_store.h"  // NvsHistBlob
 
 using Catch::Approx;
 

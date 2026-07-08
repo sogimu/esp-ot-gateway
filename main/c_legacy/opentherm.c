@@ -307,12 +307,21 @@ static const char *ot_id_name(uint8_t id)
     case 17:  return "Modulation";
     case 25:  return "CH_temp";
     case 26:  return "DHW_temp";
+    case 27:  return "Outside";
     case 28:  return "Return";
     case 48:  return "DHW_bounds";
     case 49:  return "CH_bounds";
     case 56:  return "DHW_sp";
     case 57:  return "MaxCH_sp";
     case 115: return "OEM_diag";
+    case 116: return "Burner_starts";
+    case 117: return "CH_pump_starts";
+    case 118: return "DHW_valve_starts";
+    case 119: return "DHW_burner_starts";
+    case 120: return "Burner_hours";
+    case 121: return "CH_pump_hours";
+    case 122: return "DHW_valve_hours";
+    case 123: return "DHW_burner_hours";
     case 124: return "OT_ver";
     case 125: return "Slave_ver";
     case 126: return "Master_ver";
@@ -338,7 +347,8 @@ static void ot_fmt_val(char *buf, size_t len, uint8_t id, uint16_t val)
 {
     switch (id) {
     case 1:  case 56: case 57:          /* setpoints */
-    case 25: case 26: case 28: case 124:/* temperatures, OT version */
+    case 25: case 26: case 27: case 28: /* temperatures */
+    case 124:                            /* OT version */
         snprintf(buf, len, "%.1f°C", (double)OT_f88_to_float(val));
         break;
     case 17:                             /* modulation */
@@ -348,6 +358,12 @@ static void ot_fmt_val(char *buf, size_t len, uint8_t id, uint16_t val)
     case 48: case 49: case 115:
     case 125: case 126:
         snprintf(buf, len, "0x%04X", val);
+        break;
+    case 116: case 117: case 118: case 119: /* starts counters */
+        snprintf(buf, len, "%u starts", val);
+        break;
+    case 120: case 121: case 122: case 123: /* hours counters */
+        snprintf(buf, len, "%u hours", val);
         break;
     default:
         snprintf(buf, len, "%u", val);
@@ -455,9 +471,12 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
             snprintf(rx_val, sizeof(rx_val), "%s", ot_msg_name(rsp->msg_type));
         }
 
-        ESP_LOGI(TAG, "OT %-5s %-10s(%d) %-24s -> %s",
-                 ot_msg_name(req->msg_type), ot_id_name(id), id,
-                 tx_val, rx_val);
+        /* Skip logging UNKNOWN responses — boiler doesn't support this ID */
+        if (rsp->msg_type != OT_MSG_UNKNOWN_ID) {
+            ESP_LOGI(TAG, "OT %-5s %-10s(%d) %-24s -> %s",
+                     ot_msg_name(req->msg_type), ot_id_name(id), id,
+                     tx_val, rx_val);
+        }
     }
 
     /* Проверка: ID ответа должен совпадать */

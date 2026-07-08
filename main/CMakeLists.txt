@@ -12,7 +12,7 @@ idf_component_register(
         "infrastructure/driven/boiler_opentherm_adapter.cpp"
         "infrastructure/driven/temperature_sensor_adapter.cpp"
         "infrastructure/driven/web_presenter_adapter.cpp"
-        "infrastructure/driven/nvs_config_adapter.cpp"
+        "infrastructure/driven/nvs_config_store.cpp"
         "infrastructure/driving/main_poller_task_adapter.cpp"
         "infrastructure/freertos/shared_mutex.c"
         "application/use_cases/main_poller_interactor.cpp"
@@ -30,10 +30,18 @@ idf_component_register(
         "application/services/fopdt_estimator.cpp"
         "application/services/schedule_service.cpp"
         "domain/value_objects/wifi_validation.cpp"
-        "infrastructure/driven/wifi_nvs_adapter.cpp"
+        "infrastructure/driven/wifi_nvs_store.cpp"
         "infrastructure/driven/esp32_wifi_adapter.cpp"
         "infrastructure/driven/dns_captive_server.cpp"
         "infrastructure/driving/wifi_apsta_adapter.cpp"
+
+        # MQTT
+        "infrastructure/freertos/mqtt_queue.c"
+        "infrastructure/driven/mqtt_client_adapter.cpp"
+        "infrastructure/driven/mqtt_socket_adapter.cpp"
+        "infrastructure/driven/mqtt_renderer_adapter.cpp"
+        "infrastructure/driven/mqtt_nvs_store.cpp"
+        "infrastructure/driving/mqtt_interactor.cpp"
     INCLUDE_DIRS
         "application/use_cases"
         "application/services"
@@ -58,7 +66,13 @@ idf_component_register(
         esp_event
         log
         espcoredump
+        mqtt
 )
+
+# Override lwip PBUF_POOL_SIZE (default 16 → 32) — more pbufs for concurrent
+# HTTP + MQTT traffic, preventing "tcp_write error, errno=No more processes".
+idf_component_get_property(lwip_lib lwip COMPONENT_LIB)
+target_compile_definitions(${lwip_lib} PRIVATE PBUF_POOL_SIZE=32)
 
 # Ensure http_controller_adapter.cpp is recompiled when web_page_gz.inc changes
 # by touching the source file, forcing the build system to detect the change.

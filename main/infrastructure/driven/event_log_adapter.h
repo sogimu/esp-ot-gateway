@@ -1,8 +1,9 @@
 #pragma once
 
 #include "application/ports/driven/ilogger.h"
+#include "application/ports/driven/ievent_log_reader.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/portmacro.h"
+#include "freertos/semphr.h"
 #include <stdint.h>
 #include <stdarg.h>
 
@@ -12,12 +13,12 @@ struct LogEntry {
     char     msg[100];
 };
 
-#define LOG_RING_SIZE 512
+#define LOG_RING_SIZE 256
 
 /// Thread-safe ring-buffer event logger — CA implementation.
-/// Uses FreeRTOS spinlock (portMUX_TYPE) for multi-task safety.
-/// Critical sections are < 5us — does NOT block OT ISR.
-class EventLogAdapter : public ILogger {
+/// Uses FreeRTOS mutex for cross-core safety.
+/// event() is task-context only — no ISR callers, so mutex blocking is safe.
+class EventLogAdapter : public ILogger, public IEventLogReader {
 public:
     EventLogAdapter();
     ~EventLogAdapter();
@@ -26,16 +27,19 @@ public:
 
     void set_time_source(class ITimeSource* t) { time_ = t; }
 
-    /// Serialize ring buffer as JSON.
+    /// Serialize ring buffer as JSON. Caller MUST hold lock() before calling
+    /// and unlock() after httpd_resp_sendstr() completes — protects static buffer.
     const char* to_json();
+    void lock();
+    void unlock();
 
     int  get_count() const { return count_; }
     int  get_head()  const { return head_; }
 
 private:
-    LogEntry* ring_; // malloc'd (512 * 88 ≈ 45KB)
+    LogEntry* ring_; // malloc'd (256 × ~108 ≈ 27KB)
     int head_  = 0;
     int count_ = 0;
     class ITimeSource* time_ = nullptr;
-    portMUX_TYPE spinlock_ = portMUX_INITIALIZER_UNLOCKED;
+    SemaphoreHandle_t mutex_ = nullptr;
 };

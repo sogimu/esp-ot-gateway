@@ -7,3 +7,4 @@ sdkconfig.old
 *.swo
 .DS_Store
 AGENTS.md
+build_tests/

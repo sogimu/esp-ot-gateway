@@ -445,7 +445,7 @@ TEST_CASE("GasCorrection: init preserves empty blob when load fails", "[gas][orc
 TEST_CASE("GasCorrection: periodic save_meter without blob preserves corrections", "[gas][regression]")
 {
     // Bug: main.cpp called save_meter(state) without blob parameter.
-    // This triggered memset(&b, 0, sizeof(b)) in NvsConfigAdapter,
+    // This triggered memset(&b, 0, sizeof(b)) in NvsConfigStore,
     // wiping the correction log every 10 minutes.
     // Fix: main.cpp now passes &gas_corr.meter_blob().
 

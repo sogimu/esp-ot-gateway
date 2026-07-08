@@ -1,4 +1,4 @@
-#include "infrastructure/driven/nvs_config_adapter.h"
+#include "infrastructure/driven/nvs_config_store.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "domain/value_objects/ch_schedule.h"
 #include "nvs.h"
@@ -9,7 +9,7 @@
 
 // ── init ─────────────────────────────────────────────────────
 
-void NvsConfigAdapter::init()
+void NvsConfigStore::init()
 {
     esp_err_t r = nvs_flash_init();
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -20,7 +20,7 @@ void NvsConfigAdapter::init()
 
 // ── "config" namespace ───────────────────────────────────────
 
-void NvsConfigAdapter::load_all(IHeatingStateStore& s)
+void NvsConfigStore::load_all(IHeatingStateStore& s)
 {
     nvs_handle_t h;
     if (nvs_open("config", NVS_READONLY, &h) != ESP_OK) return;
@@ -137,7 +137,7 @@ void NvsConfigAdapter::load_all(IHeatingStateStore& s)
     nvs_close(h);
 }
 
-void NvsConfigAdapter::save_config(const IHeatingStateStore& s)
+void NvsConfigStore::save_config(const IHeatingStateStore& s)
 {
     nvs_handle_t h;
     if (nvs_open("config", NVS_READWRITE, &h) != ESP_OK) return;
@@ -191,9 +191,10 @@ void NvsConfigAdapter::save_config(const IHeatingStateStore& s)
     nvs_commit(h); nvs_close(h);
 }
 
+
 // ── "stats" namespace ────────────────────────────────────────
 
-bool NvsConfigAdapter::load_stats(uint32_t& bs, float& im3,
+bool NvsConfigStore::load_stats(uint32_t& bs, float& im3,
                                    void* h, void* c, void* e, void* cal)
 {
     nvs_handle_t n;
@@ -242,7 +243,7 @@ bool NvsConfigAdapter::load_stats(uint32_t& bs, float& im3,
     nvs_close(n); return true;
 }
 
-void NvsConfigAdapter::save_stats(const IHeatingStateStore&,
+void NvsConfigStore::save_stats(const IHeatingStateStore&,
                                    uint32_t bs, float im3,
                                    const void* h, const void* c,
                                    const void* e, const void* cal)
@@ -272,7 +273,7 @@ void NvsConfigAdapter::save_stats(const IHeatingStateStore&,
 
 // ── "meter" namespace ────────────────────────────────────────
 
-bool NvsConfigAdapter::load_meter(IHeatingStateStore& s, void* blob)
+bool NvsConfigStore::load_meter(IHeatingStateStore& s, void* blob)
 {
     nvs_handle_t n;
     if (nvs_open("meter", NVS_READONLY, &n) != ESP_OK) return false;
@@ -320,7 +321,7 @@ bool NvsConfigAdapter::load_meter(IHeatingStateStore& s, void* blob)
     return ok;
 }
 
-void NvsConfigAdapter::save_meter(const IHeatingStateStore& s, const void* blob)
+void NvsConfigStore::save_meter(const IHeatingStateStore& s, const void* blob)
 {
     nvs_handle_t n;
     if (nvs_open("meter", NVS_READWRITE, &n) != ESP_OK) return;
@@ -339,7 +340,7 @@ void NvsConfigAdapter::save_meter(const IHeatingStateStore& s, const void* blob)
 
 // ── "predict" namespace ──────────────────────────────────────
 
-bool NvsConfigAdapter::load_predict(float r[3], int& idx, int& cnt)
+bool NvsConfigStore::load_predict(float r[3], int& idx, int& cnt)
 {
     nvs_handle_t n;
     if (nvs_open("predict", NVS_READONLY, &n) != ESP_OK) return false;
@@ -350,7 +351,7 @@ bool NvsConfigAdapter::load_predict(float r[3], int& idx, int& cnt)
     nvs_close(n); return true;
 }
 
-void NvsConfigAdapter::save_predict(const float r[3], int idx, int cnt)
+void NvsConfigStore::save_predict(const float r[3], int idx, int cnt)
 {
     nvs_handle_t n;
     if (nvs_open("predict", NVS_READWRITE, &n) != ESP_OK) return;
@@ -362,7 +363,7 @@ void NvsConfigAdapter::save_predict(const float r[3], int idx, int cnt)
 
 // ── Burner stats persistence (stats namespace) ──
 
-bool NvsConfigAdapter::load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
+bool NvsConfigStore::load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
                                         uint32_t& inter_pause_sec, uint32_t& inter_cnt,
                                         uint32_t& mod_pause_sec, uint32_t& mod_cnt)
 {
@@ -381,7 +382,7 @@ bool NvsConfigAdapter::load_burn_stats(uint32_t& burner_sec, uint32_t& total_pau
     return ok;
 }
 
-void NvsConfigAdapter::save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
+void NvsConfigStore::save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
                                         uint32_t inter_pause_sec, uint32_t inter_cnt,
                                         uint32_t mod_pause_sec, uint32_t mod_cnt)
 {
@@ -400,7 +401,7 @@ void NvsConfigAdapter::save_burn_stats(uint32_t burner_sec, uint32_t total_pause
 
 // ── Total uptime persistence (stats namespace, "uptime" key) ──
 
-bool NvsConfigAdapter::load_total_uptime(uint32_t& total_uptime_sec)
+bool NvsConfigStore::load_total_uptime(uint32_t& total_uptime_sec)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READONLY, &n) != ESP_OK) return false;
@@ -411,7 +412,7 @@ bool NvsConfigAdapter::load_total_uptime(uint32_t& total_uptime_sec)
     return ok;
 }
 
-void NvsConfigAdapter::save_total_uptime(uint32_t total_uptime_sec)
+void NvsConfigStore::save_total_uptime(uint32_t total_uptime_sec)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
@@ -420,7 +421,7 @@ void NvsConfigAdapter::save_total_uptime(uint32_t total_uptime_sec)
     nvs_close(n);
 }
 
-void NvsConfigAdapter::save_integral(float value)
+void NvsConfigStore::save_integral(float value)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
@@ -431,7 +432,7 @@ void NvsConfigAdapter::save_integral(float value)
 
 // ── Efficiency blob (stats namespace, "eff" key) ──────────────
 
-bool NvsConfigAdapter::save_eff(const IHeatingStateStore& state)
+bool NvsConfigStore::save_eff(const IHeatingStateStore& state)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return false;
@@ -445,7 +446,7 @@ bool NvsConfigAdapter::save_eff(const IHeatingStateStore& state)
     return r == ESP_OK;
 }
 
-bool NvsConfigAdapter::load_eff(IHeatingStateStore& state)
+bool NvsConfigStore::load_eff(IHeatingStateStore& state)
 {
     nvs_handle_t n;
     if (nvs_open("stats", NVS_READONLY, &n) != ESP_OK) return false;

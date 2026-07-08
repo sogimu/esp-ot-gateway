@@ -1,14 +1,19 @@
-#include "infrastructure/driven/wifi_nvs_adapter.h"
+#include "infrastructure/driven/wifi_nvs_store.h"
 
 #include "esp_log.h"
 #include "nvs.h"
 #include "nvs_flash.h"
 #include <cstring>
 
-const char* WifiNvsAdapter::TAG   = "wifi_nvs";
-const char* WifiNvsAdapter::NVS_NS = "config";
+const char* WifiNvsStore::TAG   = "wifi_nvs";
+const char* WifiNvsStore::NVS_NS = "config";
 
-bool WifiNvsAdapter::load(int& mode,
+void WifiNvsStore::init()
+{
+    nvs_flash_init();
+}
+
+bool WifiNvsStore::load(int& mode,
                           char* sta_ssid, size_t ssid_sz,
                           char* sta_pass, size_t pass_sz,
                           char* ap_pass,  size_t ap_sz)
@@ -85,7 +90,7 @@ bool WifiNvsAdapter::load(int& mode,
     return true;
 }
 
-void WifiNvsAdapter::save(int mode,
+void WifiNvsStore::save(int mode,
                           const char* sta_ssid, const char* sta_pass,
                           const char* ap_pass)
 {
@@ -119,7 +124,7 @@ void WifiNvsAdapter::save(int mode,
     ESP_LOGI(TAG, "WiFi настройки сохранены (mode=%d)", mode);
 }
 
-void WifiNvsAdapter::erase()
+void WifiNvsStore::erase()
 {
     nvs_handle_t handle;
     if (nvs_open(NVS_NS, NVS_READWRITE, &handle) != ESP_OK) {
@@ -136,7 +141,7 @@ void WifiNvsAdapter::erase()
     ESP_LOGI(TAG, "WiFi ключи стёрты из NVS");
 }
 
-uint8_t WifiNvsAdapter::sta_fail_count()
+uint8_t WifiNvsStore::sta_fail_count()
 {
     nvs_handle_t handle;
     if (nvs_open(NVS_NS, NVS_READONLY, &handle) != ESP_OK) return 0;
@@ -146,7 +151,7 @@ uint8_t WifiNvsAdapter::sta_fail_count()
     return count;
 }
 
-void WifiNvsAdapter::set_sta_fail_count(uint8_t count)
+void WifiNvsStore::set_sta_fail_count(uint8_t count)
 {
     nvs_handle_t handle;
     if (nvs_open(NVS_NS, NVS_READWRITE, &handle) != ESP_OK) return;

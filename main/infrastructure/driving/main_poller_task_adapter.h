@@ -19,6 +19,6 @@ private:
     static void task_loop(void* arg);
 
     static constexpr int STACK_SIZE = 8192;  // 6 IPollable + OT_Transaction + sensors_poll
-    static constexpr int PRIORITY = 5;
+    static constexpr int PRIORITY = 4;  // ниже MQTT(5) — чтобы PING_RESP не терялся
     static constexpr int INTERVAL_MS = 1100;
 };

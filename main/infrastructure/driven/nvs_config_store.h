@@ -2,6 +2,7 @@
 
 #include "application/ports/driven/iconfiguration_store.h"
 #include <cstdint>
+#include <cstddef>
 
 // ── NVS blob structures (on-disk format) ──────────────────────
 
@@ -61,7 +62,7 @@ static_assert(sizeof(NvsPredictBlob) == 3 * 4 + 4 + 4, "NvsPredictBlob size mism
 
 // ── CA NVS adapter (standalone, no MVC dependencies) ──────────
 
-class NvsConfigAdapter : public IConfigurationStore {
+class NvsConfigStore : public IConfigurationStore {
 public:
     void init();   // nvs_flash_init
 

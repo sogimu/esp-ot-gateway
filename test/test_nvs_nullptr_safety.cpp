@@ -1,5 +1,5 @@
 /// Tests for nullptr safety in save_stats / load_stats.
-/// Regression: NvsConfigAdapter passed nullptr blob pointers to nvs_set_blob,
+/// Regression: NvsConfigStore passed nullptr blob pointers to nvs_set_blob,
 /// writing garbage from address 0x0 to NVS flash, corrupting the namespace
 /// and causing IllegalInstruction crash on next boot (cmpMultiPageBlob).
 
@@ -7,7 +7,7 @@
 #include <catch2/catch_approx.hpp>
 #include "fakes/fake_configuration_store.h"
 #include "fakes/fake_heating_state_store.h"
-#include "nvs_config_adapter.h"
+#include "nvs_config_store.h"
 #include <cstdint>
 #include <cstring>
 
@@ -184,12 +184,12 @@ TEST_CASE("ConfigStore: save_stats + load_stats round-trip with only hist blob",
 
 // ── Static assert verification (compile-time) ─────────────────────────
 // These are tested implicitly: if blob sizes don't match, the build fails.
-// The static_assert lines are in nvs_config_adapter.h.
+// The static_assert lines are in nvs_config_store.h.
 // This test exists to document the expected sizes.
 
 TEST_CASE("ConfigStore: blob size invariants are documented", "[nvs][struct]")
 {
-    // These must match the static_assert values in nvs_config_adapter.h
+    // These must match the static_assert values in nvs_config_store.h
     // If any fail, the static_assert catches it at compile time.
 
     // NvsHistBlob: 4 (samples) + 1000 * 4 (hist) = 4004
@@ -200,7 +200,7 @@ TEST_CASE("ConfigStore: blob size invariants are documented", "[nvs][struct]")
     // NvsPredictBlob: 3*4 + 4 + 4 = 20
 
     // Volatile test — verifies sizeof at runtime as a sanity check
-    // (the real guard is static_assert in nvs_config_adapter.h)
+    // (the real guard is static_assert in nvs_config_store.h)
     REQUIRE(sizeof(NvsHistBlob) == 4004);
     REQUIRE(sizeof(NvsCycleBlob) == 1040);
     REQUIRE(sizeof(NvsGasEmaBlob) == 28);

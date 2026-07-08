@@ -3,6 +3,7 @@
 #include "application/ports/driven/iwifi_hardware.h"
 #include "esp_netif.h"
 #include "esp_event.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
@@ -32,6 +33,8 @@ private:
     EventGroupHandle_t event_group_ = nullptr;
     bool sta_connected_ = false;
     int  sta_retry_ = 0;
+    esp_timer_handle_t reconnect_timer_ = nullptr;
+    int  reconnect_delay_sec_ = 5;  // doubles on each failure, capped
     char sta_ip_[16]   = "0.0.0.0";
     char sta_ssid_[33] = "";
     char ap_ssid_[33]  = "";
@@ -49,11 +52,14 @@ private:
     /// In APSTA mode the STA interface is for scanning only — never auto-connect.
     bool should_auto_connect() const { return sta_mode_ && !scan_in_progress_; }
 
-    static constexpr int MAX_RETRY   = 10;
+    static constexpr int RECONNECT_MIN_SEC = 5;
+    static constexpr int RECONNECT_MAX_SEC = 60;
     static constexpr int CONNECT_TIMEOUT_SEC = 30;
 
     static Esp32WifiAdapter* s_self;
     static void event_handler(void* arg, esp_event_base_t base,
                               int32_t id, void* data);
+    static void reconnect_timer_cb(void* arg);
+    void schedule_reconnect();
     static const char* TAG;
 };

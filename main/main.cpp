@@ -15,7 +15,7 @@
 #include "infrastructure/driven/boiler_opentherm_adapter.h"
 #include "infrastructure/driven/temperature_sensor_adapter.h"
 #include "infrastructure/driven/web_presenter_adapter.h"
-#include "infrastructure/driven/nvs_config_adapter.h"
+#include "infrastructure/driven/nvs_config_store.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
@@ -24,9 +24,16 @@
 #include "infrastructure/driving/http_controller_adapter.h"
 
 // ── WiFi provisioning ────────────────────────────────────
-#include "infrastructure/driven/wifi_nvs_adapter.h"
+#include "infrastructure/driven/wifi_nvs_store.h"
 #include "infrastructure/driven/esp32_wifi_adapter.h"
 #include "infrastructure/driving/wifi_apsta_adapter.h"
+
+// ── MQTT ─────────────────────────────────────────────────
+#include "infrastructure/freertos/mqtt_queue_adapter.h"
+#include "infrastructure/driven/mqtt_socket_adapter.h"
+#include "infrastructure/driven/mqtt_renderer_adapter.h"
+#include "infrastructure/driven/mqtt_nvs_store.h"
+#include "infrastructure/driving/mqtt_interactor.h"
 
 // ── Use cases ────────────────────────────────────────────
 #include "application/use_cases/main_poller_interactor.h"
@@ -51,7 +58,7 @@ extern "C" void app_main(void)
     // ── Phase 1: Foundation ──────────────────────────────
     EventLogAdapter ca_log;
 
-    NvsConfigAdapter nvs;
+    NvsConfigStore nvs;
     nvs.init();
 
     CrashDiagnosticsAdapter crash_diag(ca_log);
@@ -66,22 +73,29 @@ extern "C" void app_main(void)
     // ── Phase 2: Driven adapters ────────────────────────
     HeatingStateAdapter      ca_state;
     SntpTimeAdapter          ca_time;
+    ca_time.init();
     OtHardwareAdapter        ca_ot_hw;
     BoilerOpenThermAdapter   ca_boiler(ca_ot_hw);
     TemperatureSensorAdapter ca_sensors;
     WebPresenterAdapter      ca_web;
 
+    FreeRtosMqttQueue        ca_mqtt_queue;
+    MqttSocketAdapter        ca_mqtt(ca_mqtt_queue, ca_time);
+    MqttRendererAdapter      ca_mqtt_renderer(ca_web);
+
     ca_log.set_time_source(&ca_time);
 
     ca_web.set_state(&ca_state);
-    ca_web.set_logger(&ca_log);
+    ca_web.set_log_reader(&ca_log);   // IEventLogReader (lock/unlock/to_json)
     ca_web.set_time_source(&ca_time);
 
     nvs.load_all(ca_state);  // restore persisted config into state
     nvs.load_meter(ca_state); // restore gas meter base reading
 
     // ── Phase 3: Network ─────────────────────────────────
-    WifiNvsAdapter     wifi_nvs;
+    WifiNvsStore     wifi_nvs;
+    wifi_nvs.init();
+
     Esp32WifiAdapter   wifi_hw;
     WifiApStaAdapter   wifi(wifi_hw, wifi_nvs);
     auto wifi_mode = wifi.boot();
@@ -92,6 +106,9 @@ extern "C" void app_main(void)
         // Full SNTP sync (STA mode has internet)
         ca_time.start();
         ca_time.set_timezone(ca_state.get_tz_offset());
+        if (ca_time.is_synced()) {
+            ca_time.save_time_offset();  // сохранить смещение в NVS для будущих загрузок
+        }
     } else {
         // No internet — try restoring manual time offset from NVS
         if (ca_time.restore_time_offset()) {
@@ -142,24 +159,20 @@ extern "C" void app_main(void)
         }
     }
 
-    // Restore modulation histogram from NVS (NvsHistBlob — heap, too large for stack)
+    // Restore modulation histogram from NVS
     {
-        NvsHistBlob* hist_blob = static_cast<NvsHistBlob*>(malloc(sizeof(NvsHistBlob)));
-        if (!hist_blob) { ESP_LOGE("main", "OOM: NvsHistBlob"); }
-        else {
-            memset(hist_blob, 0, sizeof(NvsHistBlob));
+        static NvsHistBlob hist_blob;
+        memset(&hist_blob, 0, sizeof(hist_blob));
         float saved_integ_m3 = 0;
         uint32_t saved_burner_sec_hist = 0;
         if (nvs.load_stats(saved_burner_sec_hist, saved_integ_m3,
-                           hist_blob, nullptr, nullptr, nullptr)) {
-            *mod_stats.samples_ptr() = hist_blob->samples;
+                           &hist_blob, nullptr, nullptr, nullptr)) {
+            *mod_stats.samples_ptr() = hist_blob.samples;
             for (int i = 0; i < HIST_BINS; i++)
-                mod_stats.hist_ptr()[i] = hist_blob->hist[i];
+                mod_stats.hist_ptr()[i] = hist_blob.hist[i];
             gas_flow.set_integral(saved_integ_m3);
             ESP_LOGI("main", "NVS: восстановлена гистограмма (samples=%" PRIu32 ") и integral_m3=%.3f",
-                     hist_blob->samples, (double)saved_integ_m3);
-        }
-        free(hist_blob);
+                     hist_blob.samples, (double)saved_integ_m3);
         }
     }
 
@@ -173,6 +186,26 @@ extern "C" void app_main(void)
     ca_web.set_gas_flow(&gas_flow);
     ca_web.set_gas_correction(&gas_corr);
 
+    // ── MQTT interactor ──────────────────────────────────
+    MqttNvsStore       mqtt_nvs;
+    mqtt_nvs.init();
+
+    MqttInteractor mqtt(ca_mqtt, ca_mqtt_queue,
+                        mqtt_nvs,      // IMqttConfigStore
+                        ca_state,
+                        sys_cfg,       // IConfigureSystem
+                        ca_log,
+                        ca_time,
+                        ca_mqtt_renderer);  // IMqttStateRenderer
+
+    // MQTT инициализируется всегда (если enabled в NVS).
+    // Время нужно только для таймстемпов в логах, MQTT работает без него.
+    mqtt.init();
+    if (!ca_time.has_valid_time()) {
+        ESP_LOGW("main", "SNTP: время недостоверно, но MQTT запущен");
+        ca_log.event(ILogger::SYSTEM, "SNTP: время недостоверно, MQTT запущен без времени");
+    }
+
     // ── Phase 6: Main poller ─────────────────────────────
     MainPollerInteractor main_poller;
     main_poller.add(&boiler_poll);
@@ -182,6 +215,7 @@ extern "C" void app_main(void)
     main_poller.add(&burn_cycles);
     main_poller.add(&gas_flow);
     main_poller.add(&dhw_predict);
+    main_poller.add(&mqtt);       // MQTT: публикация после обновления состояния
 
     // ── Phase 7: Hardware init + start ───────────────────
     ca_sensors.init();
@@ -200,32 +234,75 @@ extern "C" void app_main(void)
     http.set_gas(&gas_corr);
     http.set_wifi(&wifi);
     http.set_time_adapter(&ca_time);
+    http.set_mqtt(&mqtt);
     http.start();
 
     // ── Idle: CPU stats every 60s, periodic NVS save every 10 min ──
     static const char* TAG = "main";
     int save_tick = 0;
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(60000));
+        vTaskDelay(pdMS_TO_TICKS(15000));  // keep 15s until fragmentation is fixed
         save_tick++;
 
-        int idle0 = (int)ulTaskGetIdleRunTimePercentForCore(0);
-        int idle1 = (int)ulTaskGetIdleRunTimePercentForCore(1);
+        uint32_t idle0 = ulTaskGetIdleRunTimePercentForCore(0);
+        uint32_t idle1 = ulTaskGetIdleRunTimePercentForCore(1);
+        int cpu0 = 100 - (int)idle0;
+        int cpu1 = 100 - (int)idle1;
         uint32_t free_heap = esp_get_free_heap_size();
 
-        ESP_LOGI(TAG, "Аптайм: %lld с, свободно: %" PRIu32
+        multi_heap_info_t info;
+        heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
+        uint32_t largest_free = info.largest_free_block;
+
+        ESP_LOGI(TAG, "Аптайм: %lld с, куча: своб=%" PRIu32 " крупн=%" PRIu32
+                 " блоков: алл=%" PRIu32 " своб=%" PRIu32
                  " | CPU: core0=%d%% core1=%d%% total=%d%%",
                  ca_time.monotonic_us() / 1000000,
-                 free_heap,
-                 100 - idle0, 100 - idle1, (200 - idle0 - idle1) / 2);
+                 free_heap, largest_free,
+                 (uint32_t)info.allocated_blocks, (uint32_t)info.free_blocks,
+                 cpu0, cpu1, (cpu0 + cpu1) / 2);
+
+        // Per-task CPU stats every 5 min (5 ticks)
+        if (save_tick % 5 == 0) {
+            static char stats_buf[2048];
+            vTaskGetRunTimeStats(stats_buf);
+            ESP_LOGI(TAG, "── Статистика задач (CPU) ──\n%s", stats_buf);
+        }
 
         // AP watchdog: restart AP if WiFi died
         wifi.try_recover_ap();
 
-        if (free_heap < 40 * 1024) {
-            ca_log.event(ILogger::SYSTEM,
-                "Мало свободной кучи: %" PRIu32 " байт", free_heap);
+        // ── Recovery ladder: prevent silent death from fragmentation ──
+        static int recovery_level = 0;  // highest level reached
+        if (largest_free < 4096 || free_heap < 8192) {
+            // Level 4: last resort — reboot
+            ESP_LOGE(TAG, "Куча исчерпана (своб=%" PRIu32 " крупн=%" PRIu32 ") — перезагрузка",
+                     free_heap, largest_free);
+            ca_log.event(ILogger::SYSTEM, "Перезагрузка: куча исчерпана (%" PRIu32 "/%" PRIu32 ")",
+                         free_heap, largest_free);
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            esp_restart();
+        } else if (largest_free < 6144 && recovery_level < 3) {
+            recovery_level = 3;
+            ESP_LOGW(TAG, "Recovery L3: перезапуск HTTP (своб=%" PRIu32 " крупн=%" PRIu32 ")",
+                     free_heap, largest_free);
+            ca_log.event(ILogger::SYSTEM, "Recovery L3: перезапуск HTTP");
+            http.stop();
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            http.start();
+        } else if (largest_free < 12288 && recovery_level < 2) {
+            recovery_level = 2;
+            ESP_LOGW(TAG, "Recovery L2: фрагментация (своб=%" PRIu32 " крупн=%" PRIu32 ")",
+                     free_heap, largest_free);
+            ca_log.event(ILogger::SYSTEM, "Recovery L2: фрагментация кучи");
+        } else if (largest_free < 16384 && recovery_level < 1) {
+            recovery_level = 1;
+            ESP_LOGW(TAG, "Recovery L1: предупреждение (своб=%" PRIu32 " крупн=%" PRIu32 ")",
+                     free_heap, largest_free);
+            ca_log.event(ILogger::SYSTEM, "Recovery L1: фрагментация растёт");
         }
+        // Reset ladder when heap recovers
+        if (largest_free >= 32768) recovery_level = 0;
 
         // Save all persistent state to NVS every 10 min (10 ticks)
         if (save_tick >= 10) {
@@ -238,21 +315,15 @@ extern "C" void app_main(void)
                                 burn_cycles.inter_session_cnt(),
                                 burn_cycles.modulation_pause_sec(),
                                 burn_cycles.modulation_cnt());
-            // Save modulation histogram (heap — 4KB, too large for stack)
-            NvsHistBlob* hist_blob = static_cast<NvsHistBlob*>(malloc(sizeof(NvsHistBlob)));
-            if (hist_blob) {
-                hist_blob->samples = mod_stats.samples();
-                for (int i = 0; i < HIST_BINS; i++) {
-                    hist_blob->hist[i] = mod_stats.hist_ptr()[i];  // uint32_t no overflow
-                }
-                nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
-                               hist_blob, nullptr, nullptr, nullptr);
-                free(hist_blob);
+            static NvsHistBlob hist_blob;
+            hist_blob.samples = mod_stats.samples();
+            for (int i = 0; i < HIST_BINS; i++) {
+                hist_blob.hist[i] = mod_stats.hist_ptr()[i];
             }
-            // Save total uptime
+            nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
+                           &hist_blob, nullptr, nullptr, nullptr);
             nvs.save_total_uptime(total_uptime_base_sec +
                                   (uint32_t)(ca_time.monotonic_us() / 1000000));
-            // Save gas meter blob (includes correction log)
             nvs.save_meter(ca_state, &gas_corr.meter_blob());
         }
     }

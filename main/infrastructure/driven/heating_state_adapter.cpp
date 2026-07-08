@@ -198,3 +198,7 @@ void HeatingStateAdapter::set_sntp_server0(const char* v) { strncpy(state_.sntp_
 void HeatingStateAdapter::set_sntp_server1(const char* v) { strncpy(state_.sntp_srv1_, v, 63); }
 const char* HeatingStateAdapter::get_sntp_server0() const { return state_.sntp_srv0_; }
 const char* HeatingStateAdapter::get_sntp_server1() const { return state_.sntp_srv1_; }
+
+// MQTT
+void HeatingStateAdapter::set_mqtt_connected(bool v) { state_.mqtt_connected_ = v; }
+bool HeatingStateAdapter::is_mqtt_connected() const  { return state_.mqtt_connected_; }

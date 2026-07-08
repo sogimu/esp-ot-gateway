@@ -9,7 +9,7 @@
 #include "domain/value_objects/gas_correction_metrics.h"
 #include "application/services/pid_quality_assessor.h"
 #include "application/services/fopdt_estimator.h"
-#include "infrastructure/driven/event_log_adapter.h"
+#include "application/ports/driven/ievent_log_reader.h"
 #include "domain/value_objects/ch_schedule.h"
 #include <cstdio>
 #include <cmath>
@@ -182,19 +182,24 @@ int WebPresenterAdapter::render_pid_schedule(char* buf, size_t size)
 
 int WebPresenterAdapter::render_log(char* buf, size_t size)
 {
-    if (logger_) {
-        auto* elog = static_cast<EventLogAdapter*>(logger_);
-        return snprintf(buf, size, "%s", elog->to_json());
+    if (log_reader_) {
+        return snprintf(buf, size, "%s", log_reader_->to_json());
     }
     return snprintf(buf, size, "{\"count\":0,\"events\":[]}");
 }
 
+void WebPresenterAdapter::log_lock()
+{
+    if (log_reader_) log_reader_->lock();
+}
+void WebPresenterAdapter::log_unlock()
+{
+    if (log_reader_) log_reader_->unlock();
+}
+
 const char* WebPresenterAdapter::log_json()
 {
-    if (logger_) {
-        auto* elog = static_cast<EventLogAdapter*>(logger_);
-        return elog->to_json();
-    }
+    if (log_reader_) return log_reader_->to_json();
     return nullptr;
 }
 

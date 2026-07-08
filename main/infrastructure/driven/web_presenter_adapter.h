@@ -5,6 +5,7 @@
 
 class IHeatingStateStore;
 class ILogger;
+class IEventLogReader;
 class ModulationStatsService;
 class BurnCycleService;
 class GasFlowService;
@@ -17,6 +18,7 @@ class FopdtEstimator;
 class WebPresenterAdapter {
 public:
     void set_state(IHeatingStateStore* s)    { state_ = s; }
+    void set_log_reader(IEventLogReader* r)  { log_reader_ = r; }
     void set_logger(ILogger* l)              { logger_ = l; }
     void set_mod_stats(ModulationStatsService* m) { mod_stats_ = m; }
     void set_burn_cycles(BurnCycleService* b)    { burn_cycles_ = b; }
@@ -33,7 +35,11 @@ public:
     /// Render log JSON into buf, returns length.
     int render_log(char* buf, size_t size);
     /// Return pre-rendered log JSON (no copy needed).
+    /// Caller MUST call log_lock() before and log_unlock() after
+    /// httpd_resp_sendstr() — protects static buffer from concurrent access.
     const char* log_json();
+    void log_lock();
+    void log_unlock();
 
     /// Render stats JSON into buf, returns length.
     int render_stats(char* buf, size_t size);
@@ -49,7 +55,8 @@ public:
 
 private:
     IHeatingStateStore*       state_ = nullptr;
-    ILogger*                  logger_ = nullptr;
+    ILogger*                  logger_ = nullptr;     // for event() logging (optional)
+    IEventLogReader*          log_reader_ = nullptr; // for lock/unlock/to_json
     ModulationStatsService*   mod_stats_ = nullptr;
     BurnCycleService*         burn_cycles_ = nullptr;
     GasFlowService*           gas_flow_ = nullptr;
