@@ -10,7 +10,7 @@ The blue onboard LED (GPIO 2 on typical ESP32 devkits) is the network status ind
 
 | LED behavior | Meaning |
 |---|---|
-| Fast blinking | Setup access point `Baxi-OT-Setup-XXXXXX` is active, waiting for configuration |
+| Fast blinking | Setup access point `ot-gateway-setup-XXXXXX` is active, waiting for configuration |
 | Slow blinking | Connecting to the saved WiFi network |
 | Off / steady `TODO(verify)` | Connected — normal operation |
 
@@ -22,7 +22,7 @@ If the LED **keeps blinking for minutes** after start, the device can't reach yo
 
 On a fresh flash (or after a settings reset) the device has no WiFi credentials, so it starts its **own access point**:
 
-- **SSID:** `Baxi-OT-Setup-XXXXXX` (the suffix is derived from the chip's MAC address, so it's unique per device)
+- **SSID:** `ot-gateway-setup-XXXXXX` (the suffix is derived from the chip's MAC address, so it's unique per device)
 - **Portal address:** `http://192.168.4.1` — most phones open the captive-portal page automatically right after connecting
 
 From the portal you can choose one of two modes:
@@ -67,7 +67,7 @@ The firmware never gives up on WiFi:
 | Symptom | What to check |
 |---|---|
 | Blue LED keeps blinking after start | The device is still without a WiFi connection — either the setup AP is waiting for you (fast blink) or it can't reach the saved network (slow blink): router down, out of range, changed password |
-| No `Baxi-OT-Setup-…` network after flashing | Give it ~30 s after boot; check serial monitor (`idf.py monitor`) for boot errors; confirm the flash completed without errors |
+| No `ot-gateway-setup-…` network after flashing | Give it ~30 s after boot; check serial monitor (`idf.py monitor`) for boot errors; confirm the flash completed without errors |
 | Captive portal doesn't open automatically | Open `http://192.168.4.1` manually; disable mobile data on the phone so it doesn't route around the AP |
 | Device joined WiFi but you can't find it | Look in the router's DHCP list for the hostname; or watch the serial log — the IP is printed on connect |
 | Dashboard is slow / drops | Check RSSI on the WiFi tab; ESP32 antennas dislike metal boiler enclosures — move the board or use a board with an external antenna |

@@ -9,14 +9,14 @@
 | | |
 |---|---|
 | OS | Linux (Ubuntu 22.04/24.04 tested). macOS works with a manual ESP-IDF install. Windows: use WSL2 + [usbipd](https://learn.microsoft.com/windows/wsl/connect-usb) for the serial port |
-| ESP-IDF | **v5.3.x** (other majors are not guaranteed to build) |
+| ESP-IDF | **v5.3.2** (other majors are not guaranteed to build) |
 | Disk / RAM | ~4 GB free for the toolchain, 4 GB RAM is enough |
 | Hardware | ESP32 dev board on USB (shows up as `/dev/ttyUSB0` or `/dev/ttyACM0`) |
 
 ## Option A — one-command setup (Ubuntu)
 
 ```bash
-bash scripts/setup.sh          # installs system packages, ESP-IDF v5.3.x and the toolchain into ~/esp
+bash scripts/setup.sh          # installs system packages, ESP-IDF v5.3.2 and the toolchain into ~/esp
 ```
 
 ## Option B — manual ESP-IDF install
