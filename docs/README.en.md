@@ -13,7 +13,7 @@ Most gas boilers spend their lives being switched on and off by a dumb relay the
 
 - 🔥 **Smooth, modulating heating** — PID room-temperature control instead of on/off cycling: stable room temperature, fewer burner starts, less wear
 - 💰 **Know your gas bill before it arrives** — live gas flow estimation (m³/h), daily/weekly consumption, calibration against your real gas meter
-- 🏠 **Home Assistant out of the box** — MQTT autodiscovery publishes 27 entities: just point it at your broker and your boiler appears in HA
+- 🏠 **Home Assistant out of the box** — MQTT autodiscovery publishes 29 entities: just point it at your broker and your boiler appears in HA
 - 📱 **Control from any device** — a fast, dark-theme web dashboard served straight from the ESP32; no app, no account
 - ☁️ **No cloud. Ever.** — everything runs on your LAN. No subscriptions, no servers to shut down, no data leaving your home
 - 🚿 **Hot water, predicted** — a Kalman filter estimates when your DHW tank will be ready ("hot water in ~12 min")
@@ -93,12 +93,13 @@ Detailed WiFi setup, troubleshooting and factory reset: **[WiFi Setup Guide](wif
 
 ## Home Assistant integration
 
-The gateway publishes **27 autodiscovered entities** — no YAML required:
+The gateway publishes **29 autodiscovered entities** — no YAML required:
 
 - **Sensors (9):** CH supply, return, DHW tank, outdoor, room T1/T2, modulation %, and more
 - **Binary sensors (5 + system):** flame, CH active, DHW active, fault, time-sync status
 - **Controls:** switches for CH and DHW enable, numbers for CH setpoint (20–80 °C) and DHW setpoint, CH mode
 - **DHW prediction (6):** remaining heating time and uncertainty for the current hot-water session
+- **Journal (2):** live event stream (`event.journal`) and latest event (`sensor.last_event`)
 
 Everything is also available over plain MQTT topics (JSON), so Node-RED, Zigbee2MQTT-style dashboards or your own scripts work just as well:
 
