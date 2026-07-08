@@ -201,6 +201,10 @@ extern "C" void app_main(void)
     // MQTT инициализируется всегда (если enabled в NVS).
     // Время нужно только для таймстемпов в логах, MQTT работает без него.
     mqtt.init();
+
+    // Wire journal → MQTT: every log entry published live to {prefix}/journal
+    ca_log.set_event_callback(MqttInteractor::journal_callback, &mqtt);
+
     if (!ca_time.has_valid_time()) {
         ESP_LOGW("main", "SNTP: время недостоверно, но MQTT запущен");
         ca_log.event(ILogger::SYSTEM, "SNTP: время недостоверно, MQTT запущен без времени");

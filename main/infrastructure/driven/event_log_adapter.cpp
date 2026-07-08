@@ -66,6 +66,12 @@ void EventLogAdapter::event(Category cat, const char* fmt, ...)
     head_ = (head_ + 1) % LOG_RING_SIZE;
     if (count_ < LOG_RING_SIZE) count_++;
     xSemaphoreGive(mutex_);
+
+    // Notify subscriber outside mutex — subscriber may do I/O (MQTT publish)
+    if (cb_) {
+        bool valid = (ts > 0 && time_ && time_->is_synced());
+        cb_(static_cast<uint8_t>(cat), buf, ts, valid, cb_ctx_);
+    }
 }
 
 void EventLogAdapter::lock()   { if (mutex_) xSemaphoreTake(mutex_, portMAX_DELAY); }

@@ -51,6 +51,11 @@ public:
     bool is_connected() const override;
     bool is_connecting() const override;
     const char* get_state() const override;
+
+    // ── Колбек журнала → MQTT (вызывается EventLogAdapter) ─
+    static void journal_callback(uint8_t category, const char* message,
+                                 uint32_t time_sec, bool ts_valid, void* ctx);
+    void publish_journal_events();
     void save_and_apply(const char* host, uint16_t port,
                         const char* user, const char* pass,
                         const char* prefix, bool enabled, bool tls,
@@ -140,7 +145,16 @@ private:
     // ── HA discovery ───────────────────────────────────
     bool     ha_discovery_published_ = false;
     uint64_t ha_discovery_last_us_ = 0;
-    int      ha_discovery_index_ = -1;  // -1 = idle, 0..26 = publishing one per cycle
+    int      ha_discovery_index_ = -1;  // -1 = idle, 0..28 = publishing one per cycle
+
+    // ── Journal event ring buffer (SPSC: callback→poll) ─
+    static constexpr int JOURNAL_RING_SIZE = 16;
+    struct JournalEntry { uint8_t cat; uint32_t ts; bool ts_valid; char msg[100]; };
+    JournalEntry jring_[JOURNAL_RING_SIZE] = {};
+    int jhead_ = 0, jcount_ = 0;
+
+    void publish_ha_event();
+    void publish_ha_last_event_sensor();
 
     // ── Константы ──────────────────────────────────────
     static constexpr int BUF_STATUS = 2048;

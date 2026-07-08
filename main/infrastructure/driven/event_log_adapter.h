@@ -7,6 +7,11 @@
 #include <stdint.h>
 #include <stdarg.h>
 
+/// Callback invoked on every event append. Called OUTSIDE the ring-buffer mutex
+/// — safe for I/O. The message pointer is valid only until the callback returns.
+using EventAppendCallback = void (*)(uint8_t category, const char* message,
+                                      uint32_t time_sec, bool ts_valid, void* ctx);
+
 struct LogEntry {
     uint32_t time_sec;
     uint8_t  category;
@@ -27,6 +32,12 @@ public:
 
     void set_time_source(class ITimeSource* t) { time_ = t; }
 
+    /// Register a callback for live event streaming (MQTT journal).
+    /// Called once during init — no locking needed.
+    void set_event_callback(EventAppendCallback cb, void* ctx) {
+        cb_ = cb; cb_ctx_ = ctx;
+    }
+
     /// Serialize ring buffer as JSON. Caller MUST hold lock() before calling
     /// and unlock() after httpd_resp_sendstr() completes — protects static buffer.
     const char* to_json();
@@ -42,4 +53,6 @@ private:
     int count_ = 0;
     class ITimeSource* time_ = nullptr;
     SemaphoreHandle_t mutex_ = nullptr;
+    EventAppendCallback cb_ = nullptr;
+    void* cb_ctx_ = nullptr;
 };

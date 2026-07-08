@@ -103,11 +103,16 @@ void MqttInteractor::poll()
         // ensures HA has fresh entity configs after broker/HA restart
         ha_discovery_published_ = false;
         ha_discovery_index_ = 0;
-        ESP_LOGI(MQTT_TAG, "HA discovery: starting incremental publish (27 entities)");
+        ESP_LOGI(MQTT_TAG, "HA discovery: starting incremental publish (29 entities)");
     }
     // Publish HA discovery one entity per cycle (non-blocking)
     if (ha_discovery_index_ >= 0) {
         publish_ha_next();
+    }
+
+    // Drain journal event ring buffer → MQTT (only when connected)
+    if (mqtt_state_ == State::CONNECTED) {
+        publish_journal_events();
     }
 
     poll_counter_++;
@@ -243,6 +248,84 @@ void MqttInteractor::mqtt_callback(int event_id, void* event_data, void* user_ct
             self->disconnect_reason_[0] = '\0';
         }
     }
+}
+
+// ── journal_callback ──────────────────────────────────────────
+
+void MqttInteractor::journal_callback(uint8_t category, const char* message,
+                                       uint32_t time_sec, bool ts_valid, void* ctx)
+{
+    auto* self = static_cast<MqttInteractor*>(ctx);
+    // SPSC ring buffer — producer side. Drop on overflow (QoS 0 semantics).
+    if (self->jcount_ < JOURNAL_RING_SIZE) {
+        int idx = self->jhead_;
+        auto& e = self->jring_[idx];
+        e.cat = category;
+        e.ts = time_sec;
+        e.ts_valid = ts_valid;
+        size_t n = 0;
+        for (const char* s = message; *s && n < sizeof(e.msg) - 1; s++, n++)
+            e.msg[n] = *s;
+        e.msg[n] = '\0';
+        self->jhead_ = (idx + 1) % JOURNAL_RING_SIZE;
+        self->jcount_++;
+    }
+}
+
+// ── publish_journal_events ────────────────────────────────────
+
+static void json_escape(const char* src, char* dst, size_t dst_size)
+{
+    size_t dp = 0;
+    for (const char* s = src; *s && dp < dst_size - 4; s++) {
+        unsigned char c = static_cast<unsigned char>(*s);
+        if (c == '"' || c == '\\') {
+            dst[dp++] = '\\';
+            if (dp < dst_size - 1) dst[dp++] = c;
+        } else if (c < 0x20) {
+            // Control character → \u00XX
+            dp += snprintf(dst + dp, dst_size - dp, "\\u%04x", c);
+        } else {
+            dst[dp++] = *s;
+        }
+    }
+    dst[dp] = '\0';
+}
+
+void MqttInteractor::publish_journal_events()
+{
+    if (jcount_ == 0) return;
+
+    int count = jcount_;
+    int start = (jhead_ - count + JOURNAL_RING_SIZE) % JOURNAL_RING_SIZE;
+
+    static const char* CAT_NAMES[] = {"system", "user", "equip", "mode", "boot"};
+
+    char json[400];        // 100 msg * 2 (escape) + ~60 JSON framing
+    char escaped[210];     // worst-case: 100 chars all escaped → 200 + null
+    char topic[128];
+
+    for (int i = 0; i < count; i++) {
+        int idx = (start + i) % JOURNAL_RING_SIZE;
+        const auto& e = jring_[idx];
+        const char* et = (e.cat < 5) ? CAT_NAMES[e.cat] : "unknown";
+
+        json_escape(e.msg, escaped, sizeof(escaped));
+
+        snprintf(json, sizeof(json),
+                 "{\"event_type\":\"%s\",\"message\":\"%s\",\"ts\":%lu,\"ts_valid\":%s}",
+                 et, escaped, (unsigned long)e.ts, e.ts_valid ? "true" : "false");
+
+        // Journal event: QoS 0, no retain (live-only, fire-and-forget)
+        snprintf(topic, sizeof(topic), "%s/journal", prefix_);
+        mqtt_.publish(topic, json, -1, IMqttHardware::QoS::AT_MOST_ONCE, false);
+
+        // Companion "last event" sensor: retain=1 (visible on dashboard after HA restart)
+        snprintf(topic, sizeof(topic), "%s/last_event", prefix_);
+        mqtt_.publish(topic, json, -1, IMqttHardware::QoS::AT_LEAST_ONCE, true);
+    }
+
+    jcount_ = 0;
 }
 
 // ── drain_queue ──────────────────────────────────────────────
@@ -383,6 +466,48 @@ char* MqttInteractor::build_ha_device_json(char* buf, size_t size)
         "\"model\":\"ESP-OT-Gateway\",\"manufacturer\":\"Custom\"}",
         prefix_);
     return buf;
+}
+
+void MqttInteractor::publish_ha_event()
+{
+    char dev_json[256];
+    build_ha_device_json(dev_json, sizeof(dev_json));
+
+    char buf[BUF_HA];
+    snprintf(buf, sizeof(buf),
+        "{\"name\":\"%s\",\"uniq_id\":\"esp-ot-gw-%s_%s\","
+        "\"stat_t\":\"%s/journal\","
+        "\"event_types\":[\"system\",\"user\",\"equip\",\"mode\",\"boot\"],"
+        "\"dev\":%s,"
+        "\"avty\":{\"t\":\"%s/online\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\"},"
+        "\"qos\":0}",
+        "Журнал котла", prefix_, "journal",
+        prefix_,
+        dev_json,
+        prefix_);
+
+    publish_ha_config("event", "journal", buf);
+}
+
+void MqttInteractor::publish_ha_last_event_sensor()
+{
+    char dev_json[256];
+    build_ha_device_json(dev_json, sizeof(dev_json));
+
+    char buf[BUF_HA];
+    snprintf(buf, sizeof(buf),
+        "{\"name\":\"%s\",\"uniq_id\":\"esp-ot-gw-%s_%s\","
+        "\"stat_t\":\"%s/last_event\","
+        "\"val_tpl\":\"{{ value_json.message }}\","
+        "\"dev\":%s,"
+        "\"avty\":{\"t\":\"%s/online\",\"pl_avail\":\"online\",\"pl_not_avail\":\"offline\"},"
+        "\"qos\":1}",
+        "Последнее событие", prefix_, "last_event",
+        prefix_,
+        dev_json,
+        prefix_);
+
+    publish_ha_config("sensor", "last_event", buf);
 }
 
 void MqttInteractor::publish_ha_config(const char* component, const char* entity,
@@ -552,11 +677,13 @@ void MqttInteractor::publish_ha_next()
     case 24: publish_ha_sensor("ch_mode",         "Режим СО",         "", "", "{{ value_json.ch_mode }}"); break;
     case 25: publish_ha_sensor("dhw_last_session","Сеанс ГВС",        "s", "duration", "{{ value_json.dhw_last_session_sec }}"); break;
     case 26: publish_ha_binary_sensor("time_synced","Время SNTP",    "", "{{ 'ON' if value_json.time_synced else 'OFF' }}"); break;
+    case 27: publish_ha_event(); break;
+    case 28: publish_ha_last_event_sensor(); break;
     default:
         ha_discovery_published_ = true;
         ha_discovery_last_us_ = time_.monotonic_us();
         ha_discovery_index_ = -1;
-        ESP_LOGI("mqtt_pub", "HA discovery: 27 entities published");
+        ESP_LOGI("mqtt_pub", "HA discovery: 29 entities published");
         break;
     }
 }
@@ -607,4 +734,8 @@ void MqttInteractor::publish_all_ha_discovery()
     publish_ha_sensor("ch_mode",         "Режим СО",         "", "", "{{ value_json.ch_mode }}");
     publish_ha_sensor("dhw_last_session","Сеанс ГВС",        "s", "duration", "{{ value_json.dhw_last_session_sec }}");
     publish_ha_binary_sensor("time_synced","Время SNTP",    "", "{{ 'ON' if value_json.time_synced else 'OFF' }}");
+
+    // Journal (Журнал) — 2
+    publish_ha_event();
+    publish_ha_last_event_sensor();
 }
