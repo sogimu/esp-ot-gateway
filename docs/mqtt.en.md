@@ -12,7 +12,7 @@
    - **Username / password** — a broker login (create a dedicated HA user for the device)
    - **Prefix** — base topic, default `esp-ot-gateway`
    - **Status / statistics intervals** — how often the device publishes (see below)
-3. Save. Within seconds the connection indicator goes green, discovery is published, and a new device with **27 entities** appears in HA → Settings → Devices & Services → MQTT.
+3. Save. Within seconds the connection indicator goes green, discovery is published, and a new device with **29 entities** appears in HA → Settings → Devices & Services → MQTT.
 
 No YAML is needed. If entities don't appear, publish an empty message to the rediscovery command topic (below) or press *Re-announce* on the MQTT tab.
 
@@ -37,6 +37,8 @@ All topics live under the configurable prefix (default `esp-ot-gateway`).
 | `<prefix>/stats` `TODO(verify)` | device → broker | no | JSON: gas flow & consumption, modulation percentiles, burner cycles |
 | `<prefix>/control` `TODO(verify)` | broker → device | — | JSON commands, see below |
 | `<prefix>/cmd/ha_discovery` | broker → device | — | any payload → re-publish HA discovery (rate-limited to once per 10 min) |
+| `<prefix>/journal` | device → broker | no | JSON: live event stream (QoS 0, new events only) |
+| `<prefix>/last_event` | device → broker | yes | JSON: latest journal event (retain=1, for dashboards) |
 
 ### Control payload
 
@@ -65,7 +67,7 @@ Watch everything the device says:
 mosquitto_sub -h <broker> -u <user> -P <pass> -v -t 'esp-ot-gateway/#'
 ```
 
-## The 27 Home Assistant entities
+## The 29 Home Assistant entities
 
 | Group | Count | Entities |
 |---|---|---|
@@ -77,6 +79,25 @@ mosquitto_sub -h <broker> -u <user> -P <pass> -v -t 'esp-ot-gateway/#'
 | CH mode | 1 | manual / PID / schedule `TODO(verify: entity type)` |
 | DHW prediction | 6 | time-to-ready, uncertainty, session metrics |
 | DHW last session | 1 | summary of the previous DHW heat-up |
+| Journal events | 1 | `event.journal` — live event stream (types: system/user/equip/mode/boot) |
+| Last event | 1 | `sensor.last_event` — latest event text (retain=1, for dashboards) |
+
+### Journal event payload
+
+Topic `<prefix>/journal` (QoS 0, retain=0):
+
+```json
+{"event_type": "system", "message": "MQTT: подключён к 192.168.1.100", "ts": 1783958400, "ts_valid": true}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `event_type` | string | category: `system`, `user`, `equip`, `mode`, `boot` |
+| `message` | string | exact journal entry text |
+| `ts` | number | Unix timestamp of the event |
+| `ts_valid` | bool | `true` if SNTP is synced (timestamp is reliable) |
+
+**Acknowledged data loss:** events logged before the MQTT broker connects (including boot) and during connection outages are never delivered to HA. The on-device journal (dashboard «Journal» tab) remains the complete source of truth; MQTT is a live feed only.
 
 ## Example automations
 
@@ -110,6 +131,19 @@ action:
 ```
 
 *(Entity IDs above depend on your HA naming; copy the real ones from the device page.)*
+
+React to journal events (e.g. boiler fault notification):
+
+```yaml
+alias: Journal event alert
+trigger:
+  - platform: state
+    entity_id: event.zal_kontroller_kotla_zhurnal_kotla
+action:
+  - service: notify.mobile_app_phone
+    data:
+      message: "{{ trigger.to_state.attributes.message }}"
+```
 
 ## Monitoring the MQTT link itself
 

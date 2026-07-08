@@ -431,7 +431,7 @@ TEST_CASE("MqttInteractor: HA discovery можно принудительно п
     f.interactor.poll();
 
     int ha_count = f.mqtt.count_publishes_to("homeassistant");
-    REQUIRE(ha_count == 27);
+    REQUIRE(ha_count == 29);
 }
 
 TEST_CASE("MqttInteractor: ha_discovery повторный вызов в cooldown игнорируется", "[mqtt][interactor][ha]") {
@@ -453,7 +453,7 @@ TEST_CASE("MqttInteractor: ha_discovery повторный вызов в cooldow
     f.sink.push(cmd);
     f.interactor.poll();
     int first = f.mqtt.count_publishes_to("homeassistant");
-    REQUIRE(first == 27);
+    REQUIRE(first == 29);
 
     // Второй сразу — должен игнорироваться (cooldown 10 min)
     f.mqtt.publishes_.clear();
@@ -603,4 +603,137 @@ TEST_CASE("MqttInteractor: set_mqtt_connected(false) после disconnect", "[m
     f.mqtt.inject_disconnected();
     f.interactor.poll();
     REQUIRE_FALSE(f.state.is_mqtt_connected());
+}
+
+// ── Тесты публикации событий журнала ─────────────────────────
+
+TEST_CASE("MqttInteractor: journal callback публикует событие в MQTT", "[mqtt][interactor][journal]") {
+    MqttTestFixture f;
+    f.cfg.preset("gw", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.inject_connected();
+    f.interactor.poll();  // flush state
+    f.mqtt.publishes_.clear();
+
+    // Push a journal event via callback (simulating EventLogAdapter)
+    MqttInteractor::journal_callback(
+        static_cast<uint8_t>(ILogger::SYSTEM),
+        "MQTT: подключён к 192.168.1.100",
+        1710514325, true,
+        &f.interactor);
+
+    // poll() drains the ring buffer
+    f.interactor.poll();
+
+    // Verify journal topic publish (QoS 0, no retain)
+    auto* j = f.mqtt.last_publish_to("/journal");
+    REQUIRE(j != nullptr);
+    REQUIRE(j->qos == IMqttHardware::QoS::AT_MOST_ONCE);
+    REQUIRE(j->retain == false);
+
+    std::string payload(j->data);
+    REQUIRE(payload.find("\"event_type\":\"system\"") != std::string::npos);
+    REQUIRE(payload.find("\"message\":\"MQTT: подключён к 192.168.1.100\"") != std::string::npos);
+    REQUIRE(payload.find("\"ts\":1710514325") != std::string::npos);
+    REQUIRE(payload.find("\"ts_valid\":true") != std::string::npos);
+}
+
+TEST_CASE("MqttInteractor: companion sensor last_event публикуется с retain=1", "[mqtt][interactor][journal]") {
+    MqttTestFixture f;
+    f.cfg.preset("gw", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+    f.mqtt.publishes_.clear();
+
+    MqttInteractor::journal_callback(
+        static_cast<uint8_t>(ILogger::MODE),
+        "ГВС нагрев начат с 45.3 C",
+        1710514325, true,
+        &f.interactor);
+    f.interactor.poll();
+
+    auto* le = f.mqtt.last_publish_to("/last_event");
+    REQUIRE(le != nullptr);
+    REQUIRE(le->qos == IMqttHardware::QoS::AT_LEAST_ONCE);
+    REQUIRE(le->retain == true);
+
+    std::string payload(le->data);
+    REQUIRE(payload.find("\"message\":\"ГВС нагрев начат с 45.3 C\"") != std::string::npos);
+}
+
+TEST_CASE("MqttInteractor: journal не публикуется без CONNECTED", "[mqtt][interactor][journal]") {
+    MqttTestFixture f;
+    f.cfg.preset("gw", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    // No connect — mqtt_state_ stays in connecting/disconnected
+    f.mqtt.publishes_.clear();
+
+    MqttInteractor::journal_callback(
+        static_cast<uint8_t>(ILogger::SYSTEM),
+        "Система запущена",
+        0, false,
+        &f.interactor);
+    f.interactor.poll();
+
+    // Should NOT have published — not connected
+    auto* j = f.mqtt.last_publish_to("/journal");
+    REQUIRE(j == nullptr);
+}
+
+TEST_CASE("MqttInteractor: JSON экранирование кавычек и бэкслешей", "[mqtt][interactor][journal]") {
+    MqttTestFixture f;
+    f.cfg.preset("gw", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+    f.mqtt.publishes_.clear();
+
+    MqttInteractor::journal_callback(
+        static_cast<uint8_t>(ILogger::USER),
+        "значение \"тест\" и бэкслеш \\ здесь",
+        1710514325, false,
+        &f.interactor);
+    f.interactor.poll();
+
+    auto* j = f.mqtt.last_publish_to("/journal");
+    REQUIRE(j != nullptr);
+    std::string payload(j->data);
+    // Escaped quotes: \"тест\"
+    REQUIRE(payload.find("\\\"тест\\\"") != std::string::npos);
+    // Escaped backslash: two backslashes in JSON = one literal backslash
+    REQUIRE(payload.find("\\\\") != std::string::npos);
+    // ts_valid = false
+    REQUIRE(payload.find("\"ts_valid\":false") != std::string::npos);
+}
+
+TEST_CASE("MqttInteractor: шторм событий не блокирует callback и poll", "[mqtt][interactor][journal]") {
+    MqttTestFixture f;
+    f.cfg.preset("gw", 1883, "", "", "gw", true, false);
+    f.interactor.init();
+    f.mqtt.inject_connected();
+    f.interactor.poll();
+    f.mqtt.publishes_.clear();
+
+    // Push 20 events (more than ring size of 16) — should drop silently
+    for (int i = 0; i < 20; i++) {
+        char msg[80];
+        snprintf(msg, sizeof(msg), "событие номер %d", i);
+        MqttInteractor::journal_callback(
+            static_cast<uint8_t>(ILogger::SYSTEM),
+            msg, 1000 + i, true,
+            &f.interactor);
+    }
+
+    // poll() should drain without issues
+    f.interactor.poll();
+
+    // Ring size=16, so at most 16 events published
+    int j_count = f.mqtt.count_publishes_to("/journal");
+    REQUIRE(j_count > 0);
+    REQUIRE(j_count <= 16);
+
+    int le_count = f.mqtt.count_publishes_to("/last_event");
+    REQUIRE(le_count > 0);
+    REQUIRE(le_count <= 16);
 }
