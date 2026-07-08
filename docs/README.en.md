@@ -61,7 +61,7 @@ Most gas boilers spend their lives being switched on and off by a dumb relay the
 
 | Component | Notes |
 |---|---|
-| ESP32 dev board | any common DevKit (240 MHz, WiFi) — [tested board](https://ozon.ru/t/91Jlr6E) |
+| ESP32 dev board | any common ESP32 DevKit (240 MHz, WiFi) |
 | OpenTherm adapter | SmartTherm-style level adapter between ESP32 GPIO and the boiler's OT bus |
 | Gas boiler with OpenTherm | tested: [Baxi Duo-tec Compact 1.24](https://shop.baxi.ru/products/duo-tec-compact-1-24) |
 | *(optional)* 2 × DS18B20 | room temperature sensors for PID control (GPIO 15 / 26) |
@@ -81,7 +81,7 @@ Wiring: OT TX → GPIO 4, OT RX → GPIO 16, fail-safe relay → GPIO 23 (closes
    bash scripts/build_and_flash.sh /dev/ttyUSB0
    ```
 
-2. **Connect it to WiFi — no code editing needed.** On first boot the device opens a WiFi network **`Baxi-OT-Setup-XXXXXX`**. Connect with your phone, the setup page opens automatically (or go to `http://192.168.4.1`), pick your home WiFi *or* let the device run its own access point — it works fully offline too. The blinking blue LED just means "no WiFi connection yet" — it settles once the device is online ([details](wifi-setup.en.md)).
+2. **Connect it to WiFi — no code editing needed.** On first boot the device opens a WiFi network **`ot-gateway-setup-XXXXXX`**. Connect with your phone, the setup page opens automatically (or go to `http://192.168.4.1`), pick your home WiFi *or* let the device run its own access point — it works fully offline too. The blinking blue LED just means "no WiFi connection yet" — it settles once the device is online ([details](wifi-setup.en.md)).
 
 3. **Open the dashboard** at `http://<device-ip>` — and you're looking at your boiler's live state: flame, modulation, supply/return temperatures, 3-way valve position.
 
@@ -161,10 +161,8 @@ Actively developed and running in production on the author's own heating system 
 
 ## License
 
-**Free for personal and home use.** The source code is available under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/): you may use, study, modify and share the firmware for any noncommercial purpose — running it on your own boiler is exactly that.
+This project is licensed under the [GNU General Public License v3.0](../LICENSE) — free, copyleft software: you may use, study, modify and redistribute the firmware, including commercially, provided derivative works stay under GPL-3.0 and their source is made available to recipients.
 
-**Commercial use** (selling preflashed devices, bundling with hardware, offering paid installation based on this firmware, use inside a company's products or services) requires a separate commercial license — open an issue or contact the author.
+By submitting a contribution (pull request) you agree it is accepted under the same GPL-3.0 terms (see [CONTRIBUTING.en.md](CONTRIBUTING.en.md)).
 
-By submitting a contribution (pull request) you agree to the terms in [CONTRIBUTING.en.md](CONTRIBUTING.en.md), including the license grant that allows the project to relicense your contribution.
-
-See [LICENSING.en.md](LICENSING.en.md) for the full rationale and FAQ.
+See [LICENSING.en.md](LICENSING.en.md) for details and FAQ.

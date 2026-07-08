@@ -11,7 +11,7 @@
 #include <cstring>
 
 const char* WifiApStaAdapter::TAG = "wifi";
-const char* WifiApStaAdapter::AP_SSID_BASE = "Baxi-OT-Setup";
+const char* WifiApStaAdapter::AP_SSID_BASE = "ot-gateway-setup";
 
 WifiApStaAdapter::WifiApStaAdapter(IWifiHardware& hw, IWifiCredentialStore& store)
     : hw_(hw), store_(store)

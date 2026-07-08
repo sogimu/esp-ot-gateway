@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$SCRIPT_DIR/.."
 IDF_DIR="$HOME/esp/esp-idf"
-IDF_VERSION="v5.2.2"    # стабильная версия
+IDF_VERSION="v5.3.2"    # стабильная версия
 
 echo "=== Установка зависимостей для ESP32 ==="
 
@@ -25,7 +25,16 @@ if [ ! -d "$IDF_DIR" ]; then
     git clone --depth 1 --branch "$IDF_VERSION" --recursive \
         https://github.com/espressif/esp-idf.git "$IDF_DIR"
 else
-    echo "[✓] ESP-IDF уже присутствует: $IDF_DIR"
+    CURRENT="$(git -C "$IDF_DIR" describe --tags --always 2>/dev/null || echo unknown)"
+    if [ "$CURRENT" = "$IDF_VERSION" ]; then
+        echo "[✓] ESP-IDF уже на $IDF_VERSION: $IDF_DIR"
+    else
+        echo "[*] ESP-IDF в $IDF_DIR на $CURRENT — переключаю на $IDF_VERSION"
+        git -C "$IDF_DIR" fetch --depth 1 --force origin \
+            "refs/tags/$IDF_VERSION:refs/tags/$IDF_VERSION"
+        git -C "$IDF_DIR" checkout "$IDF_VERSION"
+        git -C "$IDF_DIR" submodule update --init --recursive
+    fi
 fi
 
 # ─── Установка тулчейна ESP-IDF ──────────────────────────────────────────────

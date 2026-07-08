@@ -122,6 +122,43 @@ curl -s -X POST http://192.168.0.37/api/gas/correction \
 
 Mirrors the Info tab: OEM fault code, ASF flags, OEM diagnostics, boiler-reported CH/DHW setpoint bounds, boiler firmware version, OpenTherm version, platform, timezone (UTC offset, editable), NTP servers 1/2 (editable), ESP32 time, uptime.
 
+## OpenTherm Data-IDs
+
+The values the gateway exchanges with the boiler over the OpenTherm protocol. R/W is derived from how the firmware uses each one: **R** — the gateway polls it (read), **W** — the gateway writes it. These Data-IDs are what back the fields in `/api/status`, `/api/stats` and `/api/info`.
+
+| ID | Purpose | R/W | Notes |
+|---|---|---|---|
+| 0 | STATUS (status flags) | R/W | Master writes its flags (CH/DHW/CH2 enable), slave returns its own (fault, burner, flame, DHW) |
+| 1 | CH flow setpoint | W | |
+| 2 | Master configuration | W | |
+| 3 | Slave configuration | R | |
+| 5 | ASF fault flags | R | HB = flags, LB = OEM code |
+| 8 | CH2 setpoint | W | Used for the DHW tank on system boilers |
+| 17 | Modulation, % | R | |
+| 18 | CH pressure | R | |
+| 25 | CH flow temperature | R | |
+| 26 | DHW temperature (tank) | R | |
+| 27 | Outside temperature | R | |
+| 28 | Return temperature | R | |
+| 48 | DHW setpoint bounds | R | lo/hi bytes |
+| 49 | CH setpoint bounds | R | lo/hi bytes |
+| 56 | DHW setpoint | R | Writable per spec, but the tested Baxi rejects the write — see note below |
+| 57 | Max CH setpoint | W | |
+| 115 | OEM diagnostic | R | |
+| 116 | Burner starts counter | R | |
+| 117 | CH pump starts counter | R | |
+| 118 | 3-way valve switches counter | R | |
+| 119 | DHW burner starts counter | R | |
+| 120 | Burner hours | R | |
+| 121 | CH pump hours | R | |
+| 122 | DHW valve hours | R | |
+| 123 | DHW burner hours | R | |
+| 124 | OT protocol version (slave) | R | |
+| 125 | Slave firmware version | R | |
+| 126 | Master firmware version | W | |
+
+> ⚠️ **ID 56 (DHW setpoint).** Per the OpenTherm spec this is a writable parameter, but on the tested **Baxi Duo-tec Compact** the write is rejected (NO_RESP / `DATA_INVALID` response) and the boiler holds its own internal setpoint (~60 °C set from the front panel). That is why ID 56 is marked **R** (effectively read-only) in the table. Do not expect a successful write to ID 56; the gateway regulates DHW through the `DHW_ENABLE` flag in STATUS (ID 0) with hysteresis — the `dhw_setpoint` from `/api/control` is enforced by the gateway itself.
+
 ## `GET /api/log`
 
 The 256-entry journal with the same categories as the UI filters: system, user, hardware, modes, boot. Timestamps before the first SNTP sync are shown as unknown (`??:??:??`) — the journal is still ordered.
