@@ -34,7 +34,7 @@ TEST_CASE("ConfigStore: save_stats with partial blobs — hist non-null, rest nu
 
     NvsHistBlob hist_blob;
     hist_blob.samples = 42;
-    for (int i = 0; i < 1000; i++) hist_blob.hist[i] = (uint16_t)i;
+    for (int i = 0; i < HIST_BINS; i++) hist_blob.hist[i] = (uint16_t)i;
 
     // Exact pattern from main.cpp: hist=non-null, cycles=null, ema=null, calib=null
     REQUIRE_NOTHROW(
@@ -166,7 +166,7 @@ TEST_CASE("ConfigStore: save_stats + load_stats round-trip with only hist blob",
 
     NvsHistBlob saved_hist;
     saved_hist.samples = 77;
-    for (int i = 0; i < 1000; i++) saved_hist.hist[i] = (uint16_t)(i % 100);
+    for (int i = 0; i < HIST_BINS; i++) saved_hist.hist[i] = (uint16_t)(i % 100);
 
     store.save_stats(state, 8888, 9.99f,
                      &saved_hist, nullptr, nullptr, nullptr);
@@ -192,7 +192,7 @@ TEST_CASE("ConfigStore: blob size invariants are documented", "[nvs][struct]")
     // These must match the static_assert values in nvs_config_store.h
     // If any fail, the static_assert catches it at compile time.
 
-    // NvsHistBlob: 4 (samples) + 1000 * 4 (hist) = 4004
+    // NvsHistBlob: 4 (samples) + 100 * 4 (hist) = 404
     // NvsCycleBlob: 4+4+4+4 + 256*2 + 256*2 = 1040
     // NvsGasEmaBlob: 5*4 + 8 = 28
     // NvsCalibBlob: 8*4 = 32
@@ -201,7 +201,7 @@ TEST_CASE("ConfigStore: blob size invariants are documented", "[nvs][struct]")
 
     // Volatile test — verifies sizeof at runtime as a sanity check
     // (the real guard is static_assert in nvs_config_store.h)
-    REQUIRE(sizeof(NvsHistBlob) == 4004);
+    REQUIRE(sizeof(NvsHistBlob) == 404);
     REQUIRE(sizeof(NvsCycleBlob) == 1040);
     REQUIRE(sizeof(NvsGasEmaBlob) == 28);
     REQUIRE(sizeof(NvsCalibBlob) == 32);

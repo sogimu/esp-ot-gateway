@@ -6,7 +6,7 @@
 
 // ── NVS blob structures (on-disk format) ──────────────────────
 
-#define HIST_BINS 1000
+#define HIST_BINS 100
 #define CYCLE_RING 256
 #define CORRECTION_LOG_SIZE 10
 
@@ -14,7 +14,7 @@ struct __attribute__((packed)) NvsHistBlob {
     uint32_t samples;
     uint32_t hist[HIST_BINS];  // 32-bit to prevent overflow (>65535 in single bin)
 };
-static_assert(sizeof(NvsHistBlob) == 4 + 1000 * 4, "NvsHistBlob size mismatch");
+static_assert(sizeof(NvsHistBlob) == 4 + HIST_BINS * 4, "NvsHistBlob size mismatch");
 
 struct __attribute__((packed)) NvsCycleBlob {
     uint32_t burner_sec; uint32_t cycle_cnt;

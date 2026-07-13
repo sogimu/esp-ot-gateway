@@ -119,7 +119,7 @@ Eight tabs, served straight from the ESP32 (see the screenshots above):
 
 - **Status** — live boiler diagram (burner, heat exchanger, pump, 3-way valve), every temperature the system knows, link indicators (controller / OpenTherm / SNTP / MQTT), DHW readiness prediction
 - **Journal** — 256-entry event log with category filters (system / user / hardware / modes / boot); SNTP sync, MQTT connections and DHW heat-up sessions are all traceable
-- **Statistics** — modulation percentiles (p1–p99), burn/pause cycle analysis, burner runtime hours — great for spotting an oversized boiler or short-cycling
+- **Statistics** — burner modulation percentiles (p1–p99), sampled only while the burner is firing over a rolling recent-history window (1% resolution), plus burn/pause cycle analysis and burner runtime hours — great for spotting an oversized boiler or short-cycling
 - **Virtual gas meter** — instant flow (m³/h), cumulative volume, 1h/3h/12h/24h/7d averages, an estimation-error indicator, and a **reconciliation journal**: enter your physical meter reading and a Kalman-smoothed calibration coefficient K keeps the estimate honest (it survives reboots)
 - **Control** — heating enable; mode **Manual** or **Adaptive (PID)**, plus a submode **Static** or **Scheduled** — so the 24-hour grid can drive either fixed flow setpoints or PID room targets; DHW tank (indirect cylinder) enable, setpoint and hysteresis; a big red boiler-off button
 - **Info** — OEM/ASF fault codes, boiler-reported setpoint bounds, boiler firmware & OpenTherm versions, NTP servers and timezone, uptime

@@ -19,15 +19,35 @@ ModulationStatsService::~ModulationStatsService()
 void ModulationStatsService::poll()
 {
     state_.lock_shared();
-    float mod = state_.get_modulation();
+    bool  flame = state_.is_flame_on();
+    float mod   = state_.get_modulation();
     state_.unlock_shared();
 
-    int bin = static_cast<int>(mod * 10.0f); // 0.1% resolution
+    // Only sample while the burner is actually firing. When it is off the
+    // reported modulation collapses to 0 and would otherwise pile up in bin 0,
+    // pulling every percentile down toward zero.
+    if (!flame) return;
+
+    int bin = static_cast<int>(mod * BINS_PER_PCT); // 1% resolution
     if (bin < 0) bin = 0;
     if (bin >= BINS) bin = BINS - 1;
 
     hist_[bin]++;
     samples_++;
+
+    // Age out old data once the window is full so recent operation dominates
+    // and the counters stay bounded across months of runtime.
+    if (samples_ >= DECAY_THRESHOLD) decay();
+}
+
+void ModulationStatsService::decay()
+{
+    uint32_t remaining = 0;
+    for (int i = 0; i < BINS; i++) {
+        hist_[i] >>= 1;          // halve — exponential aging of old samples
+        remaining += hist_[i];
+    }
+    samples_ = remaining;        // keep the counter exact, no drift
 }
 
 void ModulationStatsService::reset()
@@ -42,7 +62,7 @@ float ModulationStatsService::percentile(float p) const
     if (samples_ == 1) {
         // Single sample: return the bin containing it
         for (int i = 0; i < BINS; i++) {
-            if (hist_[i] > 0) return static_cast<float>(i) / 10.0f;
+            if (hist_[i] > 0) return static_cast<float>(i) / BINS_PER_PCT;
         }
         return 0;
     }
@@ -50,9 +70,9 @@ float ModulationStatsService::percentile(float p) const
     uint32_t cum = 0;
     for (int i = 0; i < BINS; i++) {
         cum += hist_[i];
-        if (cum > target) return static_cast<float>(i) / 10.0f;
+        if (cum > target) return static_cast<float>(i) / BINS_PER_PCT;
     }
-    return 99.9f;
+    return static_cast<float>(BINS - 1) / BINS_PER_PCT;
 }
 
 float ModulationStatsService::p1()  const { return percentile(0.01f); }
