@@ -4,6 +4,7 @@
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/services/dhw_hysteresis_service.h"
+#include "domain/value_objects/fault_codes.h"
 #include <cmath>
 
 // OpenTherm data IDs (mirrored from opentherm.h to avoid dependency)
@@ -123,6 +124,23 @@ void BoilerPollInteractor::poll()
     do_status();
     do_extra_step();
     check_connectivity();
+
+    // Log fault state changes AFTER OEM code has been read by do_extra_step()
+    state_.lock_shared();
+    bool cur_fault = state_.has_fault();
+    state_.unlock_shared();
+    if (cur_fault != last_fault_) {
+        if (cur_fault) {
+            state_.lock_shared();
+            uint8_t oem = state_.get_oem_fault_code();
+            state_.unlock_shared();
+            log_.event(ILogger::EQUIP, "АВАРИЯ: %s", FaultCodes::oem_fault_text(oem));
+        } else {
+            log_.event(ILogger::EQUIP, "Авария сброшена, ошибок нет");
+        }
+        last_fault_ = cur_fault;
+    }
+
 
     // Dual-write bridge REMOVED — caused data race with HTTP task (no mutex on Model)
     // Web reads Model::to_json() from its own fields (updated by SystemConfigInteractor)
@@ -284,13 +302,10 @@ void BoilerPollInteractor::do_status()
             log_.event(ILogger::SYSTEM, "Котёл подключён");
         }
 
-        if (fault != last_fault_ || flame != last_flame_ ||
-            ch_active != last_ch_active_ || dhw_active != last_dhw_active_) {
-            last_fault_ = fault;
-            last_flame_ = flame;
-            last_ch_active_ = ch_active;
-            last_dhw_active_ = dhw_active;
-        }
+        // Track state changes for connectivity monitoring and polling logic
+        last_flame_ = flame;
+        last_ch_active_ = ch_active;
+        last_dhw_active_ = dhw_active;
     }
 }
 

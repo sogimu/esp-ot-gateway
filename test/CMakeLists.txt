@@ -104,6 +104,9 @@ set(TEST_SRCS
 
     # GasFlowService model configuration (DHW, efficiency, gas temp offset)
     test_gas_model_config.cpp
+
+    # Fault codes (OEM + ASF flag decoding, JSON rendering)
+    test_fault_codes.cpp
 )
 
 # ── Stubs (replace ESP-IDF-dependent implementations) ──────
