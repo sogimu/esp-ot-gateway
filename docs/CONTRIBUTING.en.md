@@ -15,15 +15,10 @@ Thanks for helping make more boilers smart! Bug reports, boiler-compatibility re
 2. Keep `domain/` free of ESP-IDF dependencies; add unit tests for new logic.
 3. The host test suite and sanitizers must pass (see [docs/build.en.md](build.en.md)).
 
-## Contributor License Grant
+## Contribution license
 
-*(Template — have it reviewed by a lawyer before relying on it commercially.)*
+The project is released under GPL-3.0 (see [LICENSING.en.md](LICENSING.en.md)). Contributions are accepted on an inbound=outbound basis: by submitting a contribution (code, documentation or other material) you agree that it is distributed under the same GPL-3.0 license as the project, and you certify that you have the right to submit it under those terms (you wrote it yourself or otherwise hold the necessary rights, and it does not knowingly infringe third-party rights). You retain your own copyright.
 
-By submitting a contribution (code, documentation or other material) to this repository you:
+Optionally, you may sign off your commits with the Developer Certificate of Origin (`git commit -s`, which adds a `Signed-off-by` line) to certify your right to contribute.
 
-1. **Certify** that you wrote the contribution yourself or otherwise have the right to submit it under these terms, and that it does not knowingly infringe third-party rights.
-2. **Grant** the project maintainer a perpetual, worldwide, non-exclusive, irrevocable, royalty-free right to use, reproduce, modify, distribute, publicly display, sublicense and **relicense** your contribution — including under commercial or proprietary license terms — as part of this project or derivative works.
-3. **Retain** your own copyright: you may reuse your contribution anywhere else without restriction.
-4. Understand that the project's public releases are currently licensed under the PolyForm Noncommercial License 1.0.0 (see [LICENSING.en.md](LICENSING.en.md)), and that the maintainer may offer the project, including your contribution, under separate commercial licenses.
-
-If you cannot agree to this grant (for example, your employer owns your work), please say so in the PR and we'll figure out an alternative.
+If you cannot agree to these terms (for example, your employer owns your work), please say so in the PR and we'll figure out an alternative.

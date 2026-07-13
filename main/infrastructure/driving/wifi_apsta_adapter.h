@@ -44,7 +44,7 @@ private:
     mutable char sta_ip_buf_[16] = "0.0.0.0";
 
     static constexpr int STA_FAIL_REBOOT_MAX = 3;
-    static const char* AP_SSID_BASE;  // "Baxi-OT-Setup"
+    static const char* AP_SSID_BASE;  // "ot-gateway-setup"
     static const char* TAG;
 
     void boot_first_boot();
