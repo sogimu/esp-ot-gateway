@@ -37,7 +37,7 @@
           </tr>
           <tr>
             <td class="headerItem">Test Date:</td>
-            <td class="headerValue">2026-07-08 19:06:29</td>
+            <td class="headerValue">2026-07-13 05:24:23</td>
             <td></td>
             <td class="headerItem">Functions:</td>
             <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
@@ -67,40 +67,63 @@
 <span id="L5"><span class="lineNum">       5</span>              : </span>
 <span id="L6"><span class="lineNum">       6</span>              : class IHeatingStateStore;</span>
 <span id="L7"><span class="lineNum">       7</span>              : </span>
-<span id="L8"><span class="lineNum">       8</span>              : /// Tracks modulation histogram (1000 bins) — heap-allocated to avoid stack overflow.</span>
-<span id="L9"><span class="lineNum">       9</span>              : ///</span>
-<span id="L10"><span class="lineNum">      10</span>              : /// Thread safety: poll() is called ONLY from main_poll task (single writer).</span>
-<span id="L11"><span class="lineNum">      11</span>              : /// Accessors are called from HTTP task (reader). ESP32 word-aligned reads of</span>
-<span id="L12"><span class="lineNum">      12</span>              : /// uint32_t/float are atomic. hist_[] entries may lag 1-2 poll cycles behind</span>
-<span id="L13"><span class="lineNum">      13</span>              : /// samples_ counter — acceptable for dashboard display.</span>
-<span id="L14"><span class="lineNum">      14</span>              : class ModulationStatsService : public IPollable {</span>
-<span id="L15"><span class="lineNum">      15</span>              : public:</span>
-<span id="L16"><span class="lineNum">      16</span>              :     static constexpr int BINS = 1000;</span>
-<span id="L17"><span class="lineNum">      17</span>              : </span>
-<span id="L18"><span class="lineNum">      18</span>              :     ModulationStatsService(IHeatingStateStore&amp; state);</span>
-<span id="L19"><span class="lineNum">      19</span>              :     ~ModulationStatsService();</span>
-<span id="L20"><span class="lineNum">      20</span>              : </span>
-<span id="L21"><span class="lineNum">      21</span>              :     void poll() override;</span>
-<span id="L22"><span class="lineNum">      22</span>              :     void reset();</span>
-<span id="L23"><span class="lineNum">      23</span>              : </span>
-<span id="L24"><span class="lineNum">      24</span> <span class="tlaGNC tlaBgGNC">          22 :     uint32_t samples() const { return samples_; }</span></span>
-<span id="L25"><span class="lineNum">      25</span>              :     const uint32_t* hist() const { return hist_; }</span>
-<span id="L26"><span class="lineNum">      26</span>              :     float p1()  const;</span>
-<span id="L27"><span class="lineNum">      27</span>              :     float p10() const;</span>
-<span id="L28"><span class="lineNum">      28</span>              :     float p25() const;</span>
-<span id="L29"><span class="lineNum">      29</span>              :     float p50() const;</span>
-<span id="L30"><span class="lineNum">      30</span>              :     float p75() const;</span>
-<span id="L31"><span class="lineNum">      31</span>              :     float p90() const;</span>
-<span id="L32"><span class="lineNum">      32</span>              :     float p99() const;</span>
-<span id="L33"><span class="lineNum">      33</span>              :     uint32_t* samples_ptr() { return &amp;samples_; }</span>
-<span id="L34"><span class="lineNum">      34</span> <span class="tlaGNC">           2 :     uint32_t* hist_ptr() { return hist_; }</span></span>
-<span id="L35"><span class="lineNum">      35</span>              : </span>
-<span id="L36"><span class="lineNum">      36</span>              : private:</span>
-<span id="L37"><span class="lineNum">      37</span>              :     IHeatingStateStore&amp; state_;</span>
-<span id="L38"><span class="lineNum">      38</span>              :     uint32_t* hist_; // malloc'd</span>
-<span id="L39"><span class="lineNum">      39</span>              :     uint32_t samples_ = 0;</span>
-<span id="L40"><span class="lineNum">      40</span>              :     float percentile(float p) const;</span>
-<span id="L41"><span class="lineNum">      41</span>              : };</span>
+<span id="L8"><span class="lineNum">       8</span>              : /// Tracks modulation histogram (100 bins, 1% resolution) — heap-allocated to</span>
+<span id="L9"><span class="lineNum">       9</span>              : /// avoid stack overflow.</span>
+<span id="L10"><span class="lineNum">      10</span>              : ///</span>
+<span id="L11"><span class="lineNum">      11</span>              : /// Sampling policy:</span>
+<span id="L12"><span class="lineNum">      12</span>              : ///   * Only samples while the burner flame is on — idle time would otherwise</span>
+<span id="L13"><span class="lineNum">      13</span>              : ///     flood bin 0 and drag every percentile toward zero.</span>
+<span id="L14"><span class="lineNum">      14</span>              : ///   * Exponential aging: once the sample count reaches DECAY_THRESHOLD, every</span>
+<span id="L15"><span class="lineNum">      15</span>              : ///     bin is halved. This keeps percentiles responsive to recent operation</span>
+<span id="L16"><span class="lineNum">      16</span>              : ///     (a sliding window ~DECAY_THRESHOLD burning-samples wide) and bounds the</span>
+<span id="L17"><span class="lineNum">      17</span>              : ///     counters so they never grow without limit across months of runtime.</span>
+<span id="L18"><span class="lineNum">      18</span>              : ///</span>
+<span id="L19"><span class="lineNum">      19</span>              : /// Thread safety: poll() is called ONLY from main_poll task (single writer).</span>
+<span id="L20"><span class="lineNum">      20</span>              : /// Accessors are called from HTTP task (reader). ESP32 word-aligned reads of</span>
+<span id="L21"><span class="lineNum">      21</span>              : /// uint32_t/float are atomic. hist_[] entries may lag 1-2 poll cycles behind</span>
+<span id="L22"><span class="lineNum">      22</span>              : /// samples_ counter — acceptable for dashboard display.</span>
+<span id="L23"><span class="lineNum">      23</span>              : class ModulationStatsService : public IPollable {</span>
+<span id="L24"><span class="lineNum">      24</span>              : public:</span>
+<span id="L25"><span class="lineNum">      25</span>              :     static constexpr int BINS = 100;</span>
+<span id="L26"><span class="lineNum">      26</span>              : </span>
+<span id="L27"><span class="lineNum">      27</span>              :     /// Histogram bins per 1% of modulation — the single place that encodes</span>
+<span id="L28"><span class="lineNum">      28</span>              :     /// resolution. Bin i covers [i / BINS_PER_PCT, (i+1) / BINS_PER_PCT) percent.</span>
+<span id="L29"><span class="lineNum">      29</span>              :     static constexpr float BINS_PER_PCT = BINS / 100.0f;</span>
+<span id="L30"><span class="lineNum">      30</span>              : </span>
+<span id="L31"><span class="lineNum">      31</span>              :     /// Sample count at which the histogram is halved (see decay()).</span>
+<span id="L32"><span class="lineNum">      32</span>              :     /// At ~1.1 s per burning sample this is ~15 h of cumulative burn time</span>
+<span id="L33"><span class="lineNum">      33</span>              :     /// before the first halving, giving an effective window of a few days of</span>
+<span id="L34"><span class="lineNum">      34</span>              :     /// operation — recent enough to react to changes, wide enough to be stable.</span>
+<span id="L35"><span class="lineNum">      35</span>              :     static constexpr uint32_t DECAY_THRESHOLD = 50000;</span>
+<span id="L36"><span class="lineNum">      36</span>              : </span>
+<span id="L37"><span class="lineNum">      37</span>              :     ModulationStatsService(IHeatingStateStore&amp; state);</span>
+<span id="L38"><span class="lineNum">      38</span>              :     ~ModulationStatsService();</span>
+<span id="L39"><span class="lineNum">      39</span>              : </span>
+<span id="L40"><span class="lineNum">      40</span>              :     void poll() override;</span>
+<span id="L41"><span class="lineNum">      41</span>              :     void reset();</span>
+<span id="L42"><span class="lineNum">      42</span>              : </span>
+<span id="L43"><span class="lineNum">      43</span> <span class="tlaGNC tlaBgGNC">          25 :     uint32_t samples() const { return samples_; }</span></span>
+<span id="L44"><span class="lineNum">      44</span>              :     const uint32_t* hist() const { return hist_; }</span>
+<span id="L45"><span class="lineNum">      45</span>              :     float p1()  const;</span>
+<span id="L46"><span class="lineNum">      46</span>              :     float p10() const;</span>
+<span id="L47"><span class="lineNum">      47</span>              :     float p25() const;</span>
+<span id="L48"><span class="lineNum">      48</span>              :     float p50() const;</span>
+<span id="L49"><span class="lineNum">      49</span>              :     float p75() const;</span>
+<span id="L50"><span class="lineNum">      50</span>              :     float p90() const;</span>
+<span id="L51"><span class="lineNum">      51</span>              :     float p99() const;</span>
+<span id="L52"><span class="lineNum">      52</span>              :     uint32_t* samples_ptr() { return &amp;samples_; }</span>
+<span id="L53"><span class="lineNum">      53</span> <span class="tlaGNC">           1 :     uint32_t* hist_ptr() { return hist_; }</span></span>
+<span id="L54"><span class="lineNum">      54</span>              : </span>
+<span id="L55"><span class="lineNum">      55</span>              : private:</span>
+<span id="L56"><span class="lineNum">      56</span>              :     IHeatingStateStore&amp; state_;</span>
+<span id="L57"><span class="lineNum">      57</span>              :     uint32_t* hist_; // malloc'd</span>
+<span id="L58"><span class="lineNum">      58</span>              :     uint32_t samples_ = 0;</span>
+<span id="L59"><span class="lineNum">      59</span>              :     float percentile(float p) const;</span>
+<span id="L60"><span class="lineNum">      60</span>              : </span>
+<span id="L61"><span class="lineNum">      61</span>              :     /// Halve every bin and re-derive samples_ from the halved counts, keeping</span>
+<span id="L62"><span class="lineNum">      62</span>              :     /// the counter exactly consistent with the histogram (no drift).</span>
+<span id="L63"><span class="lineNum">      63</span>              :     void decay();</span>
+<span id="L64"><span class="lineNum">      64</span>              : };</span>
         </pre>
               </td>
             </tr>
