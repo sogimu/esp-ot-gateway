@@ -1,0 +1,117 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <title>LCOV - esp-ot-gateway test coverage - domain/value_objects/fault_codes.h</title>
+  <link rel="stylesheet" type="text/css" href="../../gcov.css">
+</head>
+
+<body>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="title">LCOV - code coverage report</td></tr>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+
+            <tr>
+              <td width="100%">
+                <table cellpadding=1 border=0 width="100%">
+          <tr>
+            <td width="10%" class="headerItem">Current view:</td>
+            <td width="10%" class="headerValue"><a href="../../index.html">top level</a> - <a href="index.html">domain/value_objects</a> - fault_codes.h<span style="font-size: 80%;"> (source / <a href="fault_codes.h.func-c.html">functions</a>)</span></td>
+            <td width="5%"></td>
+            <td width="5%"></td>
+            <td width="5%" class="headerCovTableHead">Coverage</td>
+            <td width="5%" class="headerCovTableHead" title="Covered + Uncovered code">Total</td>
+            <td width="5%" class="headerCovTableHead" title="Exercised code only">Hit</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test:</td>
+            <td class="headerValue">esp-ot-gateway test coverage</td>
+            <td></td>
+            <td class="headerItem">Lines:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">11</td>
+            <td class="headerCovTableEntry">11</td>
+          </tr>
+          <tr>
+            <td class="headerItem">Test Date:</td>
+            <td class="headerValue">2026-07-13 09:21:52</td>
+            <td></td>
+            <td class="headerItem">Functions:</td>
+            <td class="headerCovTableEntryHi">100.0&nbsp;%</td>
+            <td class="headerCovTableEntry">1</td>
+            <td class="headerCovTableEntry">1</td>
+          </tr>
+                  <tr><td><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+                </table>
+              </td>
+            </tr>
+
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+          </table>
+
+          <table cellpadding=0 cellspacing=0 border=0>
+            <tr>
+              <td><br></td>
+            </tr>
+            <tr>
+              <td>
+<pre class="sourceHeading">            Line data    Source code</pre>
+<pre class="source">
+<span id="L1"><span class="lineNum">       1</span>              : #pragma once</span>
+<span id="L2"><span class="lineNum">       2</span>              : </span>
+<span id="L3"><span class="lineNum">       3</span>              : #include &lt;cstdint&gt;</span>
+<span id="L4"><span class="lineNum">       4</span>              : #include &lt;cstdio&gt;</span>
+<span id="L5"><span class="lineNum">       5</span>              : </span>
+<span id="L6"><span class="lineNum">       6</span>              : /// OpenTherm ASF (Application Status Flags) decoding.</span>
+<span id="L7"><span class="lineNum">       7</span>              : /// These bits are standard OpenTherm — universal across all boiler brands.</span>
+<span id="L8"><span class="lineNum">       8</span>              : /// OEM fault codes are manufacturer-specific and intentionally NOT decoded here.</span>
+<span id="L9"><span class="lineNum">       9</span>              : namespace FaultCodes {</span>
+<span id="L10"><span class="lineNum">      10</span>              : </span>
+<span id="L11"><span class="lineNum">      11</span>              : /// Build a human-readable Russian description of ASF flags bits into buf.</span>
+<span id="L12"><span class="lineNum">      12</span>              : /// Returns the number of characters written (excluding null terminator).</span>
+<span id="L13"><span class="lineNum">      13</span> <span class="tlaGNC tlaBgGNC">          11 : inline int asf_flags_text(uint8_t flags, char* buf, size_t size) {</span></span>
+<span id="L14"><span class="lineNum">      14</span> <span class="tlaGNC">          11 :     if (flags == 0) return snprintf(buf, size, &quot;нет флагов&quot;);</span></span>
+<span id="L15"><span class="lineNum">      15</span>              : </span>
+<span id="L16"><span class="lineNum">      16</span> <span class="tlaGNC">           8 :     int pos = 0;</span></span>
+<span id="L17"><span class="lineNum">      17</span> <span class="tlaGNC">           8 :     struct { uint8_t bit; const char* name; } bits[] = {</span></span>
+<span id="L18"><span class="lineNum">      18</span>              :         {0, &quot;сервис&quot;},</span>
+<span id="L19"><span class="lineNum">      19</span>              :         {1, &quot;блокировка&quot;},</span>
+<span id="L20"><span class="lineNum">      20</span>              :         {2, &quot;низкое давление воды&quot;},</span>
+<span id="L21"><span class="lineNum">      21</span>              :         {3, &quot;ошибка газа/пламени&quot;},</span>
+<span id="L22"><span class="lineNum">      22</span>              :         {4, &quot;ошибка давления воздуха&quot;},</span>
+<span id="L23"><span class="lineNum">      23</span>              :         {5, &quot;перегрев&quot;},</span>
+<span id="L24"><span class="lineNum">      24</span>              :         {6, &quot;резерв (bit6)&quot;},</span>
+<span id="L25"><span class="lineNum">      25</span>              :         {7, &quot;резерв (bit7)&quot;},</span>
+<span id="L26"><span class="lineNum">      26</span>              :     };</span>
+<span id="L27"><span class="lineNum">      27</span>              : </span>
+<span id="L28"><span class="lineNum">      28</span> <span class="tlaGNC">          72 :     for (auto&amp; b : bits) {</span></span>
+<span id="L29"><span class="lineNum">      29</span> <span class="tlaGNC">          64 :         if (flags &amp; (1 &lt;&lt; b.bit)) {</span></span>
+<span id="L30"><span class="lineNum">      30</span> <span class="tlaGNC">          15 :             if (pos &gt; 0 &amp;&amp; pos &lt; (int)size - 1) {</span></span>
+<span id="L31"><span class="lineNum">      31</span> <span class="tlaGNC">           7 :                 pos += snprintf(buf + pos, size - pos, &quot;, &quot;);</span></span>
+<span id="L32"><span class="lineNum">      32</span>              :             }</span>
+<span id="L33"><span class="lineNum">      33</span> <span class="tlaGNC">          15 :             if (pos &lt; (int)size) {</span></span>
+<span id="L34"><span class="lineNum">      34</span> <span class="tlaGNC">          15 :                 pos += snprintf(buf + pos, size - pos, &quot;%s&quot;, b.name);</span></span>
+<span id="L35"><span class="lineNum">      35</span>              :             }</span>
+<span id="L36"><span class="lineNum">      36</span>              :         }</span>
+<span id="L37"><span class="lineNum">      37</span>              :     }</span>
+<span id="L38"><span class="lineNum">      38</span> <span class="tlaGNC">           8 :     return pos;</span></span>
+<span id="L39"><span class="lineNum">      39</span>              : }</span>
+<span id="L40"><span class="lineNum">      40</span>              : </span>
+<span id="L41"><span class="lineNum">      41</span>              : } // namespace FaultCodes</span>
+        </pre>
+              </td>
+            </tr>
+          </table>
+          <br>
+
+          <table width="100%" border=0 cellspacing=0 cellpadding=0>
+            <tr><td class="ruler"><img src="../../glass.png" width=3 height=3 alt=""></td></tr>
+            <tr><td class="versionInfo">Generated by: <a href="https://github.com//linux-test-project/lcov" target="_parent">LCOV version 2.0-1</a></td></tr>
+          </table>
+          <br>
+
+</body>
+</html>
