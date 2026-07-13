@@ -2,6 +2,7 @@
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
+#include "domain/value_objects/fault_codes.h"
 #include "application/services/modulation_stats_service.h"
 #include "application/services/burn_cycle_service.h"
 #include "application/services/gas_flow_estimator.h"
@@ -68,6 +69,10 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
                  (int)uh.count(), (int)um.count(), (int)us.count());
     }
 
+    // Prepare fault descriptions
+    char asf_text_buf[256];
+    FaultCodes::asf_flags_text(state_->get_asf_flags(), asf_text_buf, sizeof(asf_text_buf));
+
     int len = snprintf(buf, size,
         "{"
         "\"connected\":%d,\"fault\":%d,\"ch_active\":%d,\"dhw_active\":%d,\"flame\":%d,"
@@ -79,6 +84,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"dhw_pred_active\":%d,\"dhw_pred_remaining\":%d,\"dhw_pred_uncertainty\":%d,"
         "\"dhw_pred_elapsed\":%d,\"dhw_pred_rate\":%.4f,\"dhw_last_session_sec\":%d,"
         "\"asf_flags\":%d,\"oem_fault\":%d,\"oem_diag\":%d,"
+        "\"asf_text\":\"%s\","
         "\"slave_type\":%d,\"slave_ver\":%d,\"ot_ver\":%.1f,"
         "\"t1_temp\":%.1f,\"t2_temp\":%.1f,"
         "\"sched_on\":0,\"hour\":%d,\"time\":\"%s\",\"tz_offset\":%d,"
@@ -111,6 +117,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         state_->get_dhw_pred_elapsed_sec(), (double)state_->get_dhw_pred_rate_cps(),
         state_->get_dhw_last_session_sec(),
         state_->get_asf_flags(), state_->get_oem_fault_code(), state_->get_oem_diagnostic(),
+        asf_text_buf,
         state_->get_slave_type(), state_->get_slave_version(), (double)state_->get_ot_version(),
         (double)state_->get_t1_temp(), (double)state_->get_t2_temp(),
         sched_hour, timebuf,

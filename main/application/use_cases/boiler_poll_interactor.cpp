@@ -4,6 +4,7 @@
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/services/dhw_hysteresis_service.h"
+#include "domain/value_objects/fault_codes.h"
 #include <cmath>
 
 // OpenTherm data IDs (mirrored from opentherm.h to avoid dependency)
@@ -123,6 +124,37 @@ void BoilerPollInteractor::poll()
     do_status();
     do_extra_step();
     check_connectivity();
+
+    // Log fault state changes with code and ASF description
+    state_.lock_shared();
+    bool cur_fault = state_.has_fault();
+    state_.unlock_shared();
+    if (cur_fault != last_fault_) {
+        if (cur_fault) {
+            // Force-read ASF flags immediately to get OEM code and description
+            uint8_t oem = 0, asf = 0;
+            auto r = boiler_.read(OT_ID_ASF_FLAGS);
+            if (r.success && !std::isnan(r.value_f88)) {
+                uint16_t raw = float_to_f88(r.value_f88);
+                asf = static_cast<uint8_t>((raw >> 8) & 0xFF);
+                oem = static_cast<uint8_t>(raw & 0xFF);
+                state_.lock_exclusive();
+                state_.set_fault_codes(asf, oem, state_.get_oem_diagnostic());
+                state_.unlock_exclusive();
+            }
+            char asf_buf[128];
+            FaultCodes::asf_flags_text(asf, asf_buf, sizeof(asf_buf));
+            if (oem != 0) {
+                log_.event(ILogger::EQUIP, "АВАРИЯ: код %d, %s", oem, asf_buf);
+            } else {
+                log_.event(ILogger::EQUIP, "АВАРИЯ: %s", asf_buf);
+            }
+        } else {
+            log_.event(ILogger::EQUIP, "Авария сброшена, ошибок нет");
+        }
+        last_fault_ = cur_fault;
+    }
+
 
     // Dual-write bridge REMOVED — caused data race with HTTP task (no mutex on Model)
     // Web reads Model::to_json() from its own fields (updated by SystemConfigInteractor)
@@ -284,13 +316,10 @@ void BoilerPollInteractor::do_status()
             log_.event(ILogger::SYSTEM, "Котёл подключён");
         }
 
-        if (fault != last_fault_ || flame != last_flame_ ||
-            ch_active != last_ch_active_ || dhw_active != last_dhw_active_) {
-            last_fault_ = fault;
-            last_flame_ = flame;
-            last_ch_active_ = ch_active;
-            last_dhw_active_ = dhw_active;
-        }
+        // Track state changes for connectivity monitoring and polling logic
+        last_flame_ = flame;
+        last_ch_active_ = ch_active;
+        last_dhw_active_ = dhw_active;
     }
 }
 
