@@ -252,6 +252,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         "\"eff_t3\":%.0f,\"eff_v3\":%.2f,"
         "\"gas_meter_base\":%.3f,\"gas_meter_total\":%.3f,"
         "\"gas_error_pct\":%.1f,"
+        "\"total_uptime_sec\":%lu,"
         "\"corrections\":[",
         (unsigned)mod_stats_->samples(),
         (double)mod_stats_->p1(), (double)mod_stats_->p10(),
@@ -282,7 +283,8 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         (double)state_->get_eff_t3(), (double)state_->get_eff_v3(),
         (double)state_->get_gas_meter_base(),
         (double)(state_->get_gas_meter_base() + gas_flow_->integral_m3()),
-        (double)compute_monthly_error_pct()
+        (double)compute_monthly_error_pct(),
+        (unsigned long)(total_uptime_base_ + (time_ ? time_->monotonic_us() / 1000000 : 0))
     );
 
     // Render last 10 corrections, oldest first

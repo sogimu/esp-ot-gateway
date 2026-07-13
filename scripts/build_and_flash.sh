@@ -55,7 +55,7 @@ start = time.time()
 while time.time() - start < 75:
     line = ser.readline()
     if line:
-        s = line.decode('utf-8','')
+        s = line.decode('utf-8','ignore')
         if 'compile time' in s:
             print('BUILD:', s.strip())
         if 'куча' in s:

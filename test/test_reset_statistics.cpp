@@ -83,6 +83,7 @@ TEST_CASE("ResetStats: reset_modulation_stats clears histogram", "[reset][mod]")
     ResetTestLogger log;
 
     ModulationStatsService mod_stats(state);
+    state.set_flame(true);
     state.set_modulation(50.0f);
     mod_stats.poll();
     state.set_modulation(60.0f);

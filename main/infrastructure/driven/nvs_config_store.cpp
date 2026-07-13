@@ -204,17 +204,12 @@ bool NvsConfigStore::load_stats(uint32_t& bs, float& im3,
     if (nvs_get_blob(n, "integ_m3", &fv, &sz)==ESP_OK) im3=fv;
     if (e)   { sz=sizeof(NvsGasEmaBlob); nvs_get_blob(n, "gas_ema", e, &sz); }
     if (h)   {
+        // A blob written in any older format (different HIST_BINS → different
+        // size) is rejected by nvs_get_blob with ESP_ERR_NVS_INVALID_LENGTH and
+        // leaves the caller's zero-initialized buffer untouched — a clean slate.
+        // The next periodic save rewrites the "hist" key in the current format.
         sz = sizeof(NvsHistBlob);
-        if (nvs_get_blob(n, "hist", h, &sz) != ESP_OK || sz == 2004) {
-            // Migration from old 16-bit histogram format
-            struct { uint32_t samples; uint16_t bins[HIST_BINS]; } old_hist;
-            size_t osz = sizeof(old_hist);
-            if (nvs_get_blob(n, "hist", &old_hist, &osz) == ESP_OK && osz == 2004) {
-                auto* nh = static_cast<NvsHistBlob*>(h);
-                nh->samples = old_hist.samples;
-                for (int i = 0; i < HIST_BINS; i++) nh->hist[i] = old_hist.bins[i];
-            }
-        }
+        nvs_get_blob(n, "hist", h, &sz);
     }
     if (c)   { sz=sizeof(NvsCycleBlob);  nvs_get_blob(n, "cycles", c, &sz); }
     if (cal) {
@@ -257,7 +252,7 @@ void NvsConfigStore::save_stats(const IHeatingStateStore&,
         nvs_set_blob(n, "gas_ema", e, sizeof(NvsGasEmaBlob));
     }
     if (h) {
-        assert(sizeof(NvsHistBlob) == 4004); // 4 + 1000*4
+        assert(sizeof(NvsHistBlob) == 4 + HIST_BINS * 4);
         nvs_set_blob(n, "hist", h, sizeof(NvsHistBlob));
     }
     if (c) {

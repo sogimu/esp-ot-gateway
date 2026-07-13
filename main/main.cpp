@@ -167,12 +167,25 @@ extern "C" void app_main(void)
         uint32_t saved_burner_sec_hist = 0;
         if (nvs.load_stats(saved_burner_sec_hist, saved_integ_m3,
                            &hist_blob, nullptr, nullptr, nullptr)) {
-            *mod_stats.samples_ptr() = hist_blob.samples;
-            for (int i = 0; i < HIST_BINS; i++)
-                mod_stats.hist_ptr()[i] = hist_blob.hist[i];
+            // Migration: under the new bounded scheme the histogram is halved
+            // whenever samples reaches DECAY_THRESHOLD, so a live count can
+            // never reach it. A restored blob at/above the threshold is
+            // old-format cumulative data (unbounded, not flame-gated, idle-time
+            // flooded bin 0) — discard it for a clean slate instead of letting
+            // months of skewed history slowly decay away.
+            if (hist_blob.samples >= ModulationStatsService::DECAY_THRESHOLD) {
+                ESP_LOGW("main", "NVS: старая накопительная гистограмма (samples=%" PRIu32
+                                 ") отброшена — статистика модуляции начнётся заново",
+                         hist_blob.samples);
+            } else {
+                *mod_stats.samples_ptr() = hist_blob.samples;
+                for (int i = 0; i < HIST_BINS; i++)
+                    mod_stats.hist_ptr()[i] = hist_blob.hist[i];
+                ESP_LOGI("main", "NVS: восстановлена гистограмма (samples=%" PRIu32 ")",
+                         hist_blob.samples);
+            }
             gas_flow.set_integral(saved_integ_m3);
-            ESP_LOGI("main", "NVS: восстановлена гистограмма (samples=%" PRIu32 ") и integral_m3=%.3f",
-                     hist_blob.samples, (double)saved_integ_m3);
+            ESP_LOGI("main", "NVS: integral_m3=%.3f", (double)saved_integ_m3);
         }
     }
 

@@ -4,7 +4,7 @@
 
 /// Burner modulation percentage.
 /// Range 0.0 – 100.0%.
-/// Provides bin() for 1000-bin histogram (0.1% resolution).
+/// Provides bin() for 100-bin histogram (1% resolution).
 class Modulation {
 public:
     Modulation() = default;
@@ -13,7 +13,7 @@ public:
     float percent() const { return percent_; }
     bool  is_valid() const { return valid_; }
 
-    /// Histogram bin index 0–999 (0.1% resolution).
+    /// Histogram bin index 0–99 (1% resolution).
     /// Clamped to valid range.
     int   bin() const;
 
