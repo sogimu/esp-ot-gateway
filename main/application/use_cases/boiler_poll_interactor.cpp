@@ -125,16 +125,30 @@ void BoilerPollInteractor::poll()
     do_extra_step();
     check_connectivity();
 
-    // Log fault state changes AFTER OEM code has been read by do_extra_step()
+    // Log fault state changes with code and ASF description
     state_.lock_shared();
     bool cur_fault = state_.has_fault();
     state_.unlock_shared();
     if (cur_fault != last_fault_) {
         if (cur_fault) {
-            state_.lock_shared();
-            uint8_t oem = state_.get_oem_fault_code();
-            state_.unlock_shared();
-            log_.event(ILogger::EQUIP, "АВАРИЯ: %s", FaultCodes::oem_fault_text(oem));
+            // Force-read ASF flags immediately to get OEM code and description
+            uint8_t oem = 0, asf = 0;
+            auto r = boiler_.read(OT_ID_ASF_FLAGS);
+            if (r.success && !std::isnan(r.value_f88)) {
+                uint16_t raw = float_to_f88(r.value_f88);
+                asf = static_cast<uint8_t>((raw >> 8) & 0xFF);
+                oem = static_cast<uint8_t>(raw & 0xFF);
+                state_.lock_exclusive();
+                state_.set_fault_codes(asf, oem, state_.get_oem_diagnostic());
+                state_.unlock_exclusive();
+            }
+            char asf_buf[128];
+            FaultCodes::asf_flags_text(asf, asf_buf, sizeof(asf_buf));
+            if (oem != 0) {
+                log_.event(ILogger::EQUIP, "АВАРИЯ: код %d, %s", oem, asf_buf);
+            } else {
+                log_.event(ILogger::EQUIP, "АВАРИЯ: %s", asf_buf);
+            }
         } else {
             log_.event(ILogger::EQUIP, "Авария сброшена, ошибок нет");
         }

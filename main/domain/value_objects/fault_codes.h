@@ -3,25 +3,12 @@
 #include <cstdint>
 #include <cstdio>
 
-/// OpenTherm fault code formatting utilities.
-/// No lookup table — OEM codes are manufacturer-specific and undocumented
-/// for Baxi in OpenTherm. We always show the numeric code so the user can
-/// look it up in the boiler manual or observe patterns over time.
+/// OpenTherm ASF (Application Status Flags) decoding.
+/// These bits are standard OpenTherm — universal across all boiler brands.
+/// OEM fault codes are manufacturer-specific and intentionally NOT decoded here.
 namespace FaultCodes {
 
-/// Returns a static string describing the OEM fault code.
-/// Always includes the numeric code.
-inline const char* oem_fault_text(uint8_t code) {
-    // Static buffer for codes not covered by the simple cases below.
-    // NOT thread-safe, but this project runs single-threaded polling.
-    static char buf[32];
-    if (code == 0) return "нет ошибки";
-    snprintf(buf, sizeof(buf), "код %d", code);
-    return buf;
-}
-
 /// Build a human-readable Russian description of ASF flags bits into buf.
-/// These bits ARE standard OpenTherm — no guessing here.
 /// Returns the number of characters written (excluding null terminator).
 inline int asf_flags_text(uint8_t flags, char* buf, size_t size) {
     if (flags == 0) return snprintf(buf, size, "нет флагов");
