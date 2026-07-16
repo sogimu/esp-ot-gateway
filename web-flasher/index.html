@@ -21,11 +21,16 @@
                 <p>Просто подключите ESP32 USB-кабелем к компьютеру. ESP Web Tools сам переведёт устройство в режим прошивки.</p>
                 <details>
                     <summary>Не получается? Ручной вход в режим прошивки</summary>
+                    <p>На плате ESP32 найдите две маленькие кнопки рядом друг с другом:</p>
                     <ul>
-                        <li>Удерживайте <strong>BOOT</strong></li>
-                        <li>Нажмите и отпустите <strong>EN</strong></li>
-                        <li>Отпустите <strong>BOOT</strong></li>
+                        <li><strong>BOOT</strong> — обычно подписана как BOOT или IO0, часто ближе к USB-разъёму</li>
+                        <li><strong>EN</strong> — подписана как EN или RST, рядом с BOOT</li>
                     </ul>
+                    <ol>
+                        <li>Зажмите и удерживайте <strong>BOOT</strong></li>
+                        <li>Кратко нажмите <strong>EN</strong> и отпустите</li>
+                        <li>Отпустите <strong>BOOT</strong></li>
+                    </ol>
                 </details>
             </section>
 
