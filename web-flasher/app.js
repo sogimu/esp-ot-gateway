@@ -67,12 +67,13 @@ async function updateManifest(tag) {
         }]
     };
 
-    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-    manifestBlobUrl = URL.createObjectURL(blob);
+    // Use data: URL — same origin, always fetchable
+    const json = JSON.stringify(manifest);
+    const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
 
     // Create button with manifest set BEFORE it initializes
     installButton = document.createElement('esp-web-install-button');
-    installButton.setAttribute('manifest', manifestBlobUrl);
+    installButton.setAttribute('manifest', dataUrl);
     installButton.innerHTML = `
         <button slot="activate" class="flash-btn">Подключить и прошить</button>
         <span slot="unsupported">
