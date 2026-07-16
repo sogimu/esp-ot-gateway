@@ -41,7 +41,7 @@
             <!-- Шаг 3: Прошивка -->
             <section class="step">
                 <h2>3. Прошейте устройство</h2>
-                <esp-web-install-button id="install-button">
+                <esp-web-install-button id="install-button" transport="serial">
                     <button slot="activate" class="flash-btn" disabled>Подключить и прошить</button>
                     <span slot="unsupported">Ваш браузер не поддерживает WebSerial. Используйте Chrome, Edge или Opera.</span>
                     <span slot="not-allowed">Разрешите доступ к последовательному порту в диалоге браузера.</span>
