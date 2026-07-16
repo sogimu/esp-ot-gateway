@@ -22,15 +22,15 @@
                 <details>
                     <summary>Не получается? Проверьте</summary>
                     <img src="esp32-devkitc-functional-overview.webp" alt="Плата ESP32-DevKitC: USB, кнопки BOOT и EN" class="board-img">
-                    <p><strong>Кабель.</strong> Нужен data-кабель, а не только для зарядки. Попробуйте другой.</p>
-                    <p><strong>Драйверы.</strong> Windows — установите CP210x или CH340. Linux и macOS — работают без драйверов.</p>
-                    <p><strong>Режим прошивки.</strong> Если автосброс не сработал, переведите ESP32 вручную:</p>
+                    <p>Самое частое — <strong>кабель</strong>. Нужен именно data-кабель (для передачи данных), а не только для зарядки. Попробуйте другой кабель, если плата не определяется.</p>
+                    <p>Если плата видна, но не прошивается — автосброс мог не сработать. Переведите ESP32 в режим прошивки вручную:</p>
                     <ol>
                         <li>Зажмите и удерживайте <strong>BOOT</strong></li>
                         <li>Нажмите и отпустите <strong>EN</strong></li>
                         <li>Отпустите <strong>BOOT</strong></li>
                     </ol>
-                    <p><strong>Браузер.</strong> Google Chrome, Edge или Opera. Chromium на Linux — включите флаг <code>chrome://flags/#enable-experimental-web-platform-features</code>.</p>
+                    <p><strong>Браузер.</strong> Нужен Google Chrome, Edge или Opera. Если Chromium на Linux — включите <code>chrome://flags/#enable-experimental-web-platform-features</code>.</p>
+                    <p><strong>Драйверы.</strong> Windows — установите CP210x или CH340. Linux и macOS работают без драйверов.</p>
                 </details>
             </section>
 
