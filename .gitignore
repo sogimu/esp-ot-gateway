@@ -11,3 +11,4 @@ build_tests/
 
 # Generated GZIP-compressed web page (changes on every build)
 main/infrastructure/driving/web_page_gz.inc
+web-flasher/firmware/
