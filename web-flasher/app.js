@@ -1,20 +1,97 @@
 // esp-ot-gateway Web Flasher — app.js
-// Fetches available firmware versions from GitHub Releases,
-// builds manifest dynamically, and flashes via ESP Web Tools.
-
 import 'https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module';
 
 const REPO = 'sogimu/esp-ot-gateway';
-const installButton = document.getElementById('install-button');
 const versionSelect = document.getElementById('version-select');
-const flashBtn = document.querySelector('.flash-btn');
+const buttonContainer = document.getElementById('button-container');
 const progressBar = document.getElementById('progress-bar');
 const progressText = document.getElementById('progress-text');
 const progressSection = document.getElementById('flash-progress');
 const statusMsg = document.getElementById('flash-status');
 const versionLoading = document.getElementById('version-loading');
 
-// Fetch available firmware versions from GitHub Releases
+let installButton = null;
+let manifestBlobUrl = null;
+
+function findAssetUrl(release, filename) {
+    const asset = release.assets.find(a => a.name.endsWith(filename));
+    if (!asset) throw new Error(`Asset not found: ${filename}`);
+    return asset.browser_download_url;
+}
+
+// Build manifest, create ESP Web Tools button, inject into page
+async function updateManifest(tag) {
+    // Clean up previous
+    if (manifestBlobUrl) URL.revokeObjectURL(manifestBlobUrl);
+    if (installButton) {
+        installButton.remove();
+        installButton = null;
+    }
+
+    const release = await fetch(
+        `https://api.github.com/repos/${REPO}/releases/tags/${tag}`
+    ).then(r => {
+        if (!r.ok) throw new Error(`GitHub API: ${r.status}`);
+        return r.json();
+    });
+
+    const manifest = {
+        name: 'ESP OpenTherm Gateway',
+        version: tag,
+        home_url: 'https://github.com/sogimu/esp-ot-gateway',
+        builds: [{
+            chipFamily: 'ESP32',
+            flashMode: 'dio',
+            flashSize: '2MB',
+            flashFreq: '80m',
+            parts: [
+                { path: findAssetUrl(release, 'bootloader.bin'),      offset: 4096  },
+                { path: findAssetUrl(release, 'partition-table.bin'), offset: 32768 },
+                { path: findAssetUrl(release, 'esp-ot-gateway.bin'),  offset: 65536 }
+            ]
+        }]
+    };
+
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+    manifestBlobUrl = URL.createObjectURL(blob);
+
+    // Create button with manifest set BEFORE it initializes
+    installButton = document.createElement('esp-web-install-button');
+    installButton.setAttribute('manifest', manifestBlobUrl);
+    installButton.innerHTML = `
+        <button slot="activate" class="flash-btn">Подключить и прошить</button>
+        <span slot="unsupported">
+            Ваш браузер не поддерживает WebSerial.<br>
+            Нужен <strong>Google Chrome</strong>, Edge или Opera.<br>
+            <small>Chromium на Linux — включите флаг:<br>
+            <code>chrome://flags/#enable-experimental-web-platform-features</code> → Enabled</small>
+        </span>
+        <span slot="not-allowed">Разрешите доступ к последовательному порту в диалоге браузера.</span>
+    `;
+
+    // Events
+    installButton.addEventListener('flash-progress', (e) => {
+        progressSection.style.display = 'block';
+        progressBar.value = e.detail.percentage;
+        progressText.textContent = e.detail.message || 'Flashing...';
+    });
+
+    installButton.addEventListener('flash-complete', () => {
+        progressText.textContent = 'Flashing complete!';
+        statusMsg.textContent = 'Device rebooting. Connect to ot-gateway-setup-XXXXXX WiFi for setup.';
+    });
+
+    installButton.addEventListener('flash-error', (e) => {
+        progressText.textContent = 'Flash error';
+        statusMsg.textContent = 'Error: ' + (e.detail.message || 'unknown');
+    });
+
+    buttonContainer.innerHTML = '';
+    buttonContainer.appendChild(installButton);
+    statusMsg.textContent = `Ready: ${tag}`;
+}
+
+// Load available versions from GitHub Releases
 async function loadVersions() {
     try {
         const releases = await fetch(
@@ -43,7 +120,6 @@ async function loadVersions() {
 
         versionSelect.disabled = false;
         versionLoading.textContent = '';
-        flashBtn.disabled = false;
 
         // Auto-select latest non-prerelease
         const latestStable = releases.find(r => !r.prerelease);
@@ -55,80 +131,15 @@ async function loadVersions() {
     } catch (err) {
         versionLoading.textContent = 'Error loading';
         statusMsg.textContent = err.message;
-        console.error('Failed to load releases:', err);
-    }
-}
-
-// Find asset URL by filename
-function findAssetUrl(release, filename) {
-    const asset = release.assets.find(a => a.name.endsWith(filename));
-    if (!asset) throw new Error(`Asset not found: ${filename}`);
-    return asset.browser_download_url;
-}
-
-// Build manifest for selected version
-async function updateManifest(tag) {
-    try {
-        const release = await fetch(
-            `https://api.github.com/repos/${REPO}/releases/tags/${tag}`
-        ).then(r => {
-            if (!r.ok) throw new Error(`GitHub API: ${r.status}`);
-            return r.json();
-        });
-
-        const manifest = {
-            name: 'ESP OpenTherm Gateway',
-            version: tag,
-            home_url: 'https://github.com/sogimu/esp-ot-gateway',
-            builds: [{
-                chipFamily: 'ESP32',
-                flashMode: 'dio',
-                flashSize: '2MB',
-                flashFreq: '80m',
-                parts: [
-                    { path: findAssetUrl(release, 'bootloader.bin'),      offset: 4096  },
-                    { path: findAssetUrl(release, 'partition-table.bin'), offset: 32768 },
-                    { path: findAssetUrl(release, 'esp-ot-gateway.bin'),  offset: 65536 }
-                ]
-            }]
-        };
-
-        // Use Blob URL to avoid fetch issues with inline objects
-        const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        installButton.setAttribute('manifest', url);
-
-        statusMsg.textContent = `Ready: ${tag}`;
-
-    } catch (err) {
-        statusMsg.textContent = err.message;
-        console.error('Failed to build manifest:', err);
+        console.error(err);
     }
 }
 
 // Version selection
-versionSelect.addEventListener('change', async () => {
-    flashBtn.disabled = true;
-    await updateManifest(versionSelect.value);
-    flashBtn.disabled = false;
+versionSelect.addEventListener('change', () => {
+    updateManifest(versionSelect.value).catch(err => {
+        statusMsg.textContent = err.message;
+    });
 });
 
-// Flash events
-installButton.addEventListener('flash-progress', (e) => {
-    progressSection.style.display = 'block';
-    progressBar.value = e.detail.percentage;
-    progressText.textContent = e.detail.message || 'Flashing...';
-});
-
-installButton.addEventListener('flash-complete', () => {
-    progressText.textContent = 'Flashing complete!';
-    statusMsg.textContent = 'Device rebooting. Connect to ot-gateway-setup-XXXXXX WiFi for setup.';
-});
-
-installButton.addEventListener('flash-error', (e) => {
-    progressText.textContent = 'Flash error';
-    statusMsg.textContent = 'Error: ' + (e.detail.message || 'unknown');
-});
-
-// Start
 loadVersions();

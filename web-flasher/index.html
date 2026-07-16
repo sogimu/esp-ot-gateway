@@ -41,16 +41,9 @@
             <!-- Шаг 3: Прошивка -->
             <section class="step">
                 <h2>3. Прошейте устройство</h2>
-                <esp-web-install-button id="install-button" transport="serial">
-                    <button slot="activate" class="flash-btn" disabled>Подключить и прошить</button>
-                    <span slot="unsupported">
-                        Ваш браузер не поддерживает WebSerial.<br>
-                        Нужен <strong>Google Chrome</strong>, Edge или Opera.<br>
-                        <small>Chromium на Linux — включите флаг:<br>
-                        <code>chrome://flags/#enable-experimental-web-platform-features</code> → Enabled</small>
-                    </span>
-                    <span slot="not-allowed">Разрешите доступ к последовательному порту в диалоге браузера.</span>
-                </esp-web-install-button>
+                <div id="button-container">
+                    <button class="flash-btn" disabled id="flash-placeholder">Загрузка списка версий…</button>
+                </div>
 
                 <div id="flash-progress" class="progress-section" style="display:none">
                     <progress id="progress-bar" value="0" max="100"></progress>
