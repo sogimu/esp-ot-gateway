@@ -76,7 +76,7 @@ async function updateManifest(tag) {
             return r.json();
         });
 
-        installButton.manifest = {
+        const manifest = {
             name: 'ESP OpenTherm Gateway',
             version: tag,
             home_url: 'https://github.com/sogimu/esp-ot-gateway',
@@ -92,6 +92,11 @@ async function updateManifest(tag) {
                 ]
             }]
         };
+
+        // Use Blob URL to avoid fetch issues with inline objects
+        const blob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        installButton.setAttribute('manifest', url);
 
         statusMsg.textContent = `Ready: ${tag}`;
 
