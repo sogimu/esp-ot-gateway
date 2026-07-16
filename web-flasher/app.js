@@ -13,10 +13,27 @@ const versionLoading = document.getElementById('version-loading');
 let installButton = null;
 let manifestBlobUrl = null;
 
-function findAssetUrl(release, filename) {
-    const asset = release.assets.find(a => a.name.endsWith(filename));
-    if (!asset) throw new Error(`Asset not found: ${filename}`);
-    return asset.browser_download_url;
+// Resolve GitHub API asset URL to S3 redirect target (S3 has CORS)
+async function resolveAssetUrl(assetId) {
+    const apiUrl = `https://api.github.com/repos/${REPO}/releases/assets/${assetId}`;
+    const resp = await fetch(apiUrl, {
+        headers: { 'Accept': 'application/octet-stream' }
+    });
+    if (!resp.ok) throw new Error(`Asset ${assetId}: ${resp.status}`);
+    return resp.url; // final S3 URL after redirects — has CORS
+}
+
+async function buildParts(release) {
+    const files = ['bootloader.bin', 'partition-table.bin', 'esp-ot-gateway.bin'];
+    const offsets = [4096, 32768, 65536];
+    const parts = [];
+    for (let i = 0; i < files.length; i++) {
+        const asset = release.assets.find(a => a.name.endsWith(files[i]));
+        if (!asset) throw new Error(`Asset not found: ${files[i]}`);
+        const url = await resolveAssetUrl(asset.id);
+        parts.push({ path: url, offset: offsets[i] });
+    }
+    return parts;
 }
 
 // Build manifest, create ESP Web Tools button, inject into page
@@ -35,6 +52,8 @@ async function updateManifest(tag) {
         return r.json();
     });
 
+    const parts = await buildParts(release);
+
     const manifest = {
         name: 'ESP OpenTherm Gateway',
         version: tag,
@@ -44,11 +63,7 @@ async function updateManifest(tag) {
             flashMode: 'dio',
             flashSize: '2MB',
             flashFreq: '80m',
-            parts: [
-                { path: findAssetUrl(release, 'bootloader.bin'),      offset: 4096  },
-                { path: findAssetUrl(release, 'partition-table.bin'), offset: 32768 },
-                { path: findAssetUrl(release, 'esp-ot-gateway.bin'),  offset: 65536 }
-            ]
+            parts
         }]
     };
 
