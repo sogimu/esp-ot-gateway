@@ -1,4 +1,5 @@
 // esp-ot-gateway Web Flasher — app.js
+// Versions list from GitHub Release API, binaries from same-origin Pages.
 import 'https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module';
 
 const REPO = 'sogimu/esp-ot-gateway';
@@ -11,50 +12,13 @@ const statusMsg = document.getElementById('flash-status');
 const versionLoading = document.getElementById('version-loading');
 
 let installButton = null;
-let manifestBlobUrl = null;
 
-// Resolve GitHub API asset URL to S3 redirect target (S3 has CORS)
-async function resolveAssetUrl(assetId) {
-    const apiUrl = `https://api.github.com/repos/${REPO}/releases/assets/${assetId}`;
-    const resp = await fetch(apiUrl, {
-        headers: { 'Accept': 'application/octet-stream' }
-    });
-    if (!resp.ok) throw new Error(`Asset ${assetId}: ${resp.status}`);
-    return resp.url; // final S3 URL after redirects — has CORS
-}
-
-async function buildParts(release) {
+function buildManifest(tag) {
     const files = ['bootloader.bin', 'partition-table.bin', 'esp-ot-gateway.bin'];
     const offsets = [4096, 32768, 65536];
-    const parts = [];
-    for (let i = 0; i < files.length; i++) {
-        const asset = release.assets.find(a => a.name.endsWith(files[i]));
-        if (!asset) throw new Error(`Asset not found: ${files[i]}`);
-        const url = await resolveAssetUrl(asset.id);
-        parts.push({ path: url, offset: offsets[i] });
-    }
-    return parts;
-}
+    const base = `firmware/${tag}`;
 
-// Build manifest, create ESP Web Tools button, inject into page
-async function updateManifest(tag) {
-    // Clean up previous
-    if (manifestBlobUrl) URL.revokeObjectURL(manifestBlobUrl);
-    if (installButton) {
-        installButton.remove();
-        installButton = null;
-    }
-
-    const release = await fetch(
-        `https://api.github.com/repos/${REPO}/releases/tags/${tag}`
-    ).then(r => {
-        if (!r.ok) throw new Error(`GitHub API: ${r.status}`);
-        return r.json();
-    });
-
-    const parts = await buildParts(release);
-
-    const manifest = {
+    return {
         name: 'ESP OpenTherm Gateway',
         version: tag,
         home_url: 'https://github.com/sogimu/esp-ot-gateway',
@@ -63,17 +27,24 @@ async function updateManifest(tag) {
             flashMode: 'dio',
             flashSize: '2MB',
             flashFreq: '80m',
-            parts
+            parts: files.map((f, i) => ({
+                path: `${base}/${f}`,
+                offset: offsets[i]
+            }))
         }]
     };
+}
 
-    // Use data: URL — same origin, always fetchable
-    const json = JSON.stringify(manifest);
-    const dataUrl = 'data:application/json;base64,' + btoa(unescape(encodeURIComponent(json)));
+function createButton(manifest) {
+    // Clean up previous
+    if (installButton) {
+        installButton.remove();
+        installButton = null;
+    }
 
-    // Create button with manifest set BEFORE it initializes
     installButton = document.createElement('esp-web-install-button');
-    installButton.setAttribute('manifest', dataUrl);
+    // Set as property (JS object) — not attribute (URL string)
+    installButton.manifest = manifest;
     installButton.innerHTML = `
         <button slot="activate" class="flash-btn">Подключить и прошить</button>
         <span slot="unsupported">
@@ -104,6 +75,11 @@ async function updateManifest(tag) {
 
     buttonContainer.innerHTML = '';
     buttonContainer.appendChild(installButton);
+}
+
+async function updateManifest(tag) {
+    const manifest = buildManifest(tag);
+    createButton(manifest);
     statusMsg.textContent = `Ready: ${tag}`;
 }
 
@@ -151,7 +127,6 @@ async function loadVersions() {
     }
 }
 
-// Version selection
 versionSelect.addEventListener('change', () => {
     updateManifest(versionSelect.value).catch(err => {
         statusMsg.textContent = err.message;

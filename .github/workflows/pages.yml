@@ -9,8 +9,27 @@ jobs:
     permissions:
       pages: write
       id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download firmware from Releases
+        run: |
+          mkdir -p web-flasher/firmware
+          RELEASES=$(gh release list --limit 50 --json tagName -q '.[].tagName')
+          for tag in $RELEASES; do
+            echo "Downloading $tag..."
+            mkdir -p "web-flasher/firmware/$tag"
+            gh release download "$tag" \
+              --pattern '*.bin' \
+              --dir "web-flasher/firmware/$tag" \
+              --clobber || echo "Skipping $tag (no assets)"
+          done
+          echo "Firmware downloads complete:"
+          find web-flasher/firmware -type f -name '*.bin' | sort
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: 'web-flasher'
