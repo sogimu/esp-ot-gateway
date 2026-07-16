@@ -1,3 +1,16 @@
+# ── Firmware version from git tags ──
+execute_process(
+    COMMAND git describe --tags --always --dirty
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+    OUTPUT_VARIABLE FIRMWARE_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT FIRMWARE_VERSION)
+    set(FIRMWARE_VERSION "unknown")
+endif()
+message(STATUS "Firmware version: ${FIRMWARE_VERSION}")
+
 idf_component_register(
     SRCS
         "main.cpp"
@@ -67,6 +80,12 @@ idf_component_register(
         log
         espcoredump
         mqtt
+    )
+
+# ── Firmware version compile definition ──
+idf_component_get_property(main_lib main COMPONENT_LIB)
+target_compile_definitions(${main_lib} PRIVATE
+    FIRMWARE_VERSION="${FIRMWARE_VERSION}"
 )
 
 # Override lwip PBUF_POOL_SIZE (default 16 → 32) — more pbufs for concurrent
