@@ -20,8 +20,21 @@
                 <h2>1. Подключите ESP32 по USB</h2>
                 <p>Просто подключите ESP32 USB-кабелем к компьютеру. ESP Web Tools сам переведёт устройство в режим прошивки.</p>
                 <details>
-                    <summary>Не получается? Ручной вход в режим прошивки</summary>
+                    <summary>Не получается? Проверьте</summary>
                     <img src="esp32-devkitc-functional-overview.webp" alt="Плата ESP32-DevKitC: USB, кнопки BOOT и EN" class="board-img">
+                    <ul>
+                        <li><strong>Кабель</strong> — обязательно data-кабель, не только для зарядки. Попробуйте другой.</li>
+                        <li><strong>Драйверы</strong> — Windows: установите <a href="https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers" target="_blank">CP210x</a> или CH340 драйвер. Linux и macOS — работают из коробки.</li>
+                        <li><strong>Режим прошивки</strong> — вручную:</li>
+                    </ul>
+                    <ol>
+                        <li>Зажмите и удерживайте <strong>BOOT</strong></li>
+                        <li>Нажмите и отпустите <strong>EN</strong></li>
+                        <li>Отпустите <strong>BOOT</strong></li>
+                    </ol>
+                    <ul>
+                        <li><strong>Браузер</strong> — Google Chrome, Edge или Opera. Chromium на Linux — включите <code>chrome://flags/#enable-experimental-web-platform-features</code>.</li>
+                    </ul>
                 </details>
             </section>
 
