@@ -81,9 +81,11 @@ idf_component_register(
         espcoredump
         mqtt
     )
-target_compile_definitions(${COMPONENT_LIB} PRIVATE
+
+# ── Firmware version compile definition ──
+idf_component_get_property(main_lib main COMPONENT_LIB)
+target_compile_definitions(${main_lib} PRIVATE
     FIRMWARE_VERSION="${FIRMWARE_VERSION}"
-)
 )
 
 # Override lwip PBUF_POOL_SIZE (default 16 → 32) — more pbufs for concurrent
