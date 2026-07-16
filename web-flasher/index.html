@@ -22,19 +22,15 @@
                 <details>
                     <summary>Не получается? Проверьте</summary>
                     <img src="esp32-devkitc-functional-overview.webp" alt="Плата ESP32-DevKitC: USB, кнопки BOOT и EN" class="board-img">
-                    <ul>
-                        <li><strong>Кабель</strong> — обязательно data-кабель, не только для зарядки. Попробуйте другой.</li>
-                        <li><strong>Драйверы</strong> — Windows: установите CP210x или CH340 драйвер. Linux и macOS — работают из коробки.</li>
-                        <li><strong>Режим прошивки</strong> — вручную:</li>
-                    </ul>
+                    <p><strong>Кабель.</strong> Нужен data-кабель, а не только для зарядки. Попробуйте другой.</p>
+                    <p><strong>Драйверы.</strong> Windows — установите CP210x или CH340. Linux и macOS — работают без драйверов.</p>
+                    <p><strong>Режим прошивки.</strong> Если автосброс не сработал, переведите ESP32 вручную:</p>
                     <ol>
                         <li>Зажмите и удерживайте <strong>BOOT</strong></li>
                         <li>Нажмите и отпустите <strong>EN</strong></li>
                         <li>Отпустите <strong>BOOT</strong></li>
                     </ol>
-                    <ul>
-                        <li><strong>Браузер</strong> — Google Chrome, Edge или Opera. Chromium на Linux — включите <code>chrome://flags/#enable-experimental-web-platform-features</code>.</li>
-                    </ul>
+                    <p><strong>Браузер.</strong> Google Chrome, Edge или Opera. Chromium на Linux — включите флаг <code>chrome://flags/#enable-experimental-web-platform-features</code>.</p>
                 </details>
             </section>
 
