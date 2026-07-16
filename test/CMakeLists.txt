@@ -147,12 +147,25 @@ target_link_libraries(run_tests PRIVATE Catch2::Catch2WithMain)
 target_compile_features(run_tests PRIVATE cxx_std_17)
 target_compile_options(run_tests PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
+# ── Firmware version (same logic as main/CMakeLists.txt) ──
+execute_process(
+    COMMAND git describe --tags --always --dirty
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+    OUTPUT_VARIABLE FIRMWARE_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+)
+if(NOT FIRMWARE_VERSION)
+    set(FIRMWARE_VERSION "unknown")
+endif()
+
 # ── Debug-build hardening (ABI-compatible, safe with prebuilt Catch2) ──
 target_compile_definitions(run_tests PRIVATE
     $<$<CONFIG:Debug>:
         _GLIBCXX_ASSERTIONS         # std::vector bounds, std::optional access (ABI-safe)
         DEBUG                       # application-level debug paths
     >
+    FIRMWARE_VERSION="${FIRMWARE_VERSION}"
 )
 target_compile_options(run_tests PRIVATE
     $<$<CONFIG:Debug>:
