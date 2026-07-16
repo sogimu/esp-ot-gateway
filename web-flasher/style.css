@@ -62,8 +62,10 @@ header h1 {
 .step details {
     margin-top: 0.5rem;
 }
-.step details {
-    margin-top: 0.5rem;
+.troubleshooting {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
 }
 .board-img {
     display: block;
