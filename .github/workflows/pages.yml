@@ -19,14 +19,18 @@ jobs:
           RELEASES=$(gh release list --limit 50 --json tagName -q '.[].tagName')
           for tag in $RELEASES; do
             echo "Downloading $tag..."
-            mkdir -p "web-flasher/firmware/$tag"
+            DST="web-flasher/firmware/$tag"
+            mkdir -p "$DST"
             gh release download "$tag" \
               --pattern '*.bin' \
-              --dir "web-flasher/firmware/$tag" \
+              --dir "$DST" \
               --clobber || echo "Skipping $tag (no assets)"
+            # Flatten nested paths (gh release download may preserve build/ subdirs)
+            find "$DST" -name '*.bin' -not -path "$DST/*.bin" -exec mv {} "$DST/" \; 2>/dev/null || true
+            find "$DST" -type d -empty -delete 2>/dev/null || true
           done
           echo "Firmware downloads complete:"
-          find web-flasher/firmware -type f -name '*.bin' | sort
+          find web-flasher/firmware -type f | sort
         env:
           GH_TOKEN: ${{ github.token }}
 

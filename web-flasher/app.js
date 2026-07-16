@@ -13,29 +13,7 @@ const versionLoading = document.getElementById('version-loading');
 
 let installButton = null;
 
-function buildManifest(tag) {
-    const files = ['bootloader.bin', 'partition-table.bin', 'esp-ot-gateway.bin'];
-    const offsets = [4096, 32768, 65536];
-    const base = `firmware/${tag}`;
-
-    return {
-        name: 'ESP OpenTherm Gateway',
-        version: tag,
-        home_url: 'https://github.com/sogimu/esp-ot-gateway',
-        builds: [{
-            chipFamily: 'ESP32',
-            flashMode: 'dio',
-            flashSize: '2MB',
-            flashFreq: '80m',
-            parts: files.map((f, i) => ({
-                path: `${base}/${f}`,
-                offset: offsets[i]
-            }))
-        }]
-    };
-}
-
-function createButton(manifest) {
+function createButton(tag) {
     // Clean up previous
     if (installButton) {
         installButton.remove();
@@ -43,8 +21,6 @@ function createButton(manifest) {
     }
 
     installButton = document.createElement('esp-web-install-button');
-    // Set as property (JS object) — not attribute (URL string)
-    installButton.manifest = manifest;
     installButton.innerHTML = `
         <button slot="activate" class="flash-btn">Подключить и прошить</button>
         <span slot="unsupported">
@@ -56,7 +32,30 @@ function createButton(manifest) {
         <span slot="not-allowed">Разрешите доступ к последовательному порту в диалоге браузера.</span>
     `;
 
-    // Events
+    // Build manifest with absolute paths from page origin
+    const files = ['bootloader.bin', 'partition-table.bin', 'esp-ot-gateway.bin'];
+    const offsets = [4096, 32768, 65536];
+    const base = `${location.pathname}firmware/${tag}`;
+    const manifest = {
+        name: 'ESP OpenTherm Gateway',
+        version: tag,
+        home_url: 'https://github.com/sogimu/esp-ot-gateway',
+        builds: [{
+            chipFamily: 'ESP32',
+            flashMode: 'dio',
+            flashSize: '2MB',
+            flashFreq: '80m',
+            parts: files.map((f, i) => ({ path: `${base}/${f}`, offset: offsets[i] }))
+        }]
+    };
+
+    // Attach to DOM first, then set manifest property
+    buttonContainer.innerHTML = '';
+    buttonContainer.appendChild(installButton);
+
+    // Use manifest property (JS object) — ESP Web Tools supports inline manifests
+    installButton.manifest = manifest;
+
     installButton.addEventListener('flash-progress', (e) => {
         progressSection.style.display = 'block';
         progressBar.value = e.detail.percentage;
@@ -72,14 +71,10 @@ function createButton(manifest) {
         progressText.textContent = 'Flash error';
         statusMsg.textContent = 'Error: ' + (e.detail.message || 'unknown');
     });
-
-    buttonContainer.innerHTML = '';
-    buttonContainer.appendChild(installButton);
 }
 
 async function updateManifest(tag) {
-    const manifest = buildManifest(tag);
-    createButton(manifest);
+    createButton(tag);
     statusMsg.textContent = `Ready: ${tag}`;
 }
 
