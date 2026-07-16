@@ -62,8 +62,16 @@ header h1 {
 .step details {
     margin-top: 0.5rem;
 }
+.step details {
+    margin-top: 0.5rem;
+}
+.step details summary {
+    cursor: pointer;
+    color: var(--accent);
+}
 .step details ol {
-    padding-left: 1.5rem;
+    padding-left: 1.25rem;
+    margin-top: 0.5rem;
 }
 .step li {
     margin-bottom: 0.25rem;
