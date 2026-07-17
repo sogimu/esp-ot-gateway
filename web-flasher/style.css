@@ -77,6 +77,20 @@ header h1 {
     cursor: pointer;
     color: var(--accent);
 }
+.release-body {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    display: none;
+}
+.release-body:not(:empty) { display: block; }
 .step details ol {
     padding-left: 1.25rem;
     margin-top: 0.5rem;
