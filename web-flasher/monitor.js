@@ -34,7 +34,9 @@ async function connect() {
             buffer = lines.pop(); // incomplete line
 
             for (const line of lines) {
-                serialOutput.textContent += line + '\n';
+                // Strip ANSI escape codes (color, cursor, etc.)
+                const clean = line.replace(/\x1b\[[0-9;]*m/g, '');
+                serialOutput.textContent += clean + '\n';
             }
             serialOutput.scrollTop = serialOutput.scrollHeight;
         }
