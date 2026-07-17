@@ -75,6 +75,10 @@ Wiring: OT TX → GPIO 4, OT RX → GPIO 16, fail-safe relay → GPIO 23 (closes
 
 1. **Flash the firmware**
 
+   **The easiest way — [Web Flasher](https://sogimu.github.io/esp-ot-gateway)** (Chrome + USB cable required). Open the page, select firmware version, connect your ESP32, and click "Flash". A serial monitor for viewing logs is also available. No tools to install.
+
+   *For developers — build from source:*
+
    ```bash
    bash scripts/setup.sh                  # installs ESP-IDF + toolchain (Ubuntu)
    source ~/esp/esp-idf/export.sh

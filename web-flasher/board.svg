@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <defs>
+    <filter id="sketch">
+      <feTurbulence type="turbulence" baseFrequency="0.03" numOctaves="3" result="t"/>
+      <feDisplacementMap in="SourceGraphic" in2="t" scale="2" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="400" height="300" rx="12" fill="#faf8f5"/>
+  
+  <!-- Board (hand-drawn feel) -->
+  <rect x="40" y="40" width="320" height="180" rx="12" fill="#e8e0d5" stroke="#5c4a3a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#sketch)"/>
+  
+  <!-- ESP32 Module (metal can) -->
+  <rect x="60" y="70" width="140" height="110" rx="6" fill="#c0b8a8" stroke="#5c4a3a" stroke-width="2" stroke-linecap="round"/>
+  <text x="130" y="130" text-anchor="middle" font-size="13" fill="#5c4a3a" font-family="Comic Sans MS, cursive, sans-serif" font-weight="bold">ESP32</text>
+  
+  <!-- Pins left -->
+  <g fill="#8b7355" stroke="#5c4a3a" stroke-width="1">
+    <rect x="44" y="62" width="14" height="10" rx="2"/>
+    <rect x="44" y="76" width="14" height="10" rx="2"/>
+    <rect x="44" y="90" width="14" height="10" rx="2"/>
+    <rect x="44" y="104" width="14" height="10" rx="2"/>
+    <rect x="44" y="118" width="14" height="10" rx="2"/>
+  </g>
+  
+  <!-- Pins right -->
+  <g fill="#8b7355" stroke="#5c4a3a" stroke-width="1">
+    <rect x="342" y="62" width="14" height="10" rx="2"/>
+    <rect x="342" y="76" width="14" height="10" rx="2"/>
+    <rect x="342" y="90" width="14" height="10" rx="2"/>
+    <rect x="342" y="104" width="14" height="10" rx="2"/>
+    <rect x="342" y="118" width="14" height="10" rx="2"/>
+  </g>
+  
+  <!-- USB port (right edge) -->
+  <rect x="330" y="145" width="28" height="22" rx="4" fill="#d4c8b4" stroke="#5c4a3a" stroke-width="1.5"/>
+  <rect x="333" y="150" width="22" height="12" rx="2" fill="#5c4a3a"/>
+  
+  <!-- BOOT button -->
+  <rect x="230" y="80" width="36" height="24" rx="6" fill="#d4a84b" stroke="#8b6914" stroke-width="2"/>
+  <rect x="233" y="83" width="30" height="18" rx="4" fill="#e8c760"/>
+  <text x="248" y="96" text-anchor="middle" font-size="8" fill="#5c3a00" font-family="Comic Sans MS, cursive, sans-serif" font-weight="bold">BOOT</text>
+  
+  <!-- EN button -->
+  <rect x="230" y="118" width="36" height="24" rx="6" fill="#d4985b" stroke="#8b4513" stroke-width="2"/>
+  <rect x="233" y="121" width="30" height="18" rx="4" fill="#e8a860"/>
+  <text x="248" y="134" text-anchor="middle" font-size="8" fill="#5c2a00" font-family="Comic Sans MS, cursive, sans-serif" font-weight="bold">EN</text>
+  
+  <!-- Callout BOOT -->
+  <line x1="265" y1="92" x2="310" y2="52" stroke="#8b6914" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <circle cx="265" cy="92" r="3" fill="#e8c760"/>
+  <text x="315" y="46" font-size="12" fill="#5c3a00" font-family="Comic Sans MS, cursive, sans-serif">Нажимаем</text>
+  <text x="315" y="60" font-size="12" fill="#5c3a00" font-family="Comic Sans MS, cursive, sans-serif">и держим!</text>
+  
+  <!-- Callout EN -->
+  <line x1="265" y1="130" x2="310" y2="170" stroke="#8b4513" stroke-width="1.5" stroke-dasharray="4,2"/>
+  <circle cx="265" cy="130" r="3" fill="#e8a860"/>
+  <text x="315" y="165" font-size="12" fill="#5c2a00" font-family="Comic Sans MS, cursive, sans-serif">Коротко</text>
+  <text x="315" y="179" font-size="12" fill="#5c2a00" font-family="Comic Sans MS, cursive, sans-serif">нажимаем</text>
+  
+  <!-- Step bubbles at bottom -->
+  <g transform="translate(40, 240)">
+    <!-- Step 1 -->
+    <circle cx="40" cy="20" r="16" fill="#e8c760" stroke="#8b6914" stroke-width="2"/>
+    <text x="40" y="25" text-anchor="middle" font-size="14" fill="#5c3a00" font-family="Comic Sans MS, cursive, sans-serif" font-weight="bold">1</text>
+    <text x="80" y="17" font-size="11" fill="#5c4a3a" font-family="Comic Sans MS, cursive, sans-serif">Зажмите BOOT</text>
+    <text x="80" y="30" font-size="9" fill="#8b7355" font-family="sans-serif">(кнопка с надписью BOOT или IO0)</text>
+    
+    <!-- Step 2 -->
+    <circle cx="40" cy="68" r="16" fill="#e8a860" stroke="#8b4513" stroke-width="2"/>
+    <text x="40" y="73" text-anchor="middle" font-size="14" fill="#5c2a00" font-family="Comic Sans MS, cursive, sans-serif" font-weight="bold">2</text>
+    <text x="80" y="65" font-size="11" fill="#5c4a3a" font-family="Comic Sans MS, cursive, sans-serif">Нажмите и отпустите EN</text>
+    <text x="80" y="78" font-size="9" fill="#8b7355" font-family="sans-serif">(кнопка с надписью EN или RST)</text>
+    
+    <!-- Step 3 -->
+    <circle cx="40" cy="116" r="16" fill="#d4985b" stroke="#8b4513" stroke-width="2"/>
+    <text x="40" y="121" text-anchor="middle" font-size="14" fill="#5c2a00" font-family="Comic Sans MS, cursive, sans-serif" font-weight="bold">3</text>
+    <text x="80" y="115" font-size="11" fill="#5c4a3a" font-family="Comic Sans MS, cursive, sans-serif">Отпустите BOOT</text>
+    <text x="80" y="128" font-size="9" fill="#8b7355" font-family="sans-serif">Устройство в режиме прошивки!</text>
+  </g>
+</svg>
