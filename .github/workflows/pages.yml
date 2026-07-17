@@ -30,28 +30,29 @@ jobs:
             find "$DST" -type d -empty -delete 2>/dev/null || true
           done
           # Generate manifest.json for each version
+          gen_manifest() {
+            printf '{\n'
+            printf '  "name": "ESP OpenTherm Gateway",\n'
+            printf '  "version": "%s",\n' "$1"
+            printf '  "home_url": "https://github.com/sogimu/esp-ot-gateway",\n'
+            printf '  "builds": [{\n'
+            printf '    "chipFamily": "ESP32",\n'
+            printf '    "flashMode": "dio",\n'
+            printf '    "flashSize": "2MB",\n'
+            printf '    "flashFreq": "80m",\n'
+            printf '    "parts": [\n'
+            printf '      { "path": "bootloader.bin", "offset": 4096 },\n'
+            printf '      { "path": "partition-table.bin", "offset": 32768 },\n'
+            printf '      { "path": "esp-ot-gateway.bin", "offset": 65536 }\n'
+            printf '    ]\n'
+            printf '  }]\n'
+            printf '}\n'
+          }
           for tag in $RELEASES; do
             DST="web-flasher/firmware/$tag"
             if [ -f "$DST/bootloader.bin" ]; then
               echo "Generating manifest for $tag..."
-              cat > "$DST/manifest.json" << MANIFESTEOF
-{
-  "name": "ESP OpenTherm Gateway",
-  "version": "$tag",
-  "home_url": "https://github.com/sogimu/esp-ot-gateway",
-  "builds": [{
-    "chipFamily": "ESP32",
-    "flashMode": "dio",
-    "flashSize": "2MB",
-    "flashFreq": "80m",
-    "parts": [
-      { "path": "bootloader.bin", "offset": 4096 },
-      { "path": "partition-table.bin", "offset": 32768 },
-      { "path": "esp-ot-gateway.bin", "offset": 65536 }
-    ]
-  }]
-}
-MANIFESTEOF
+              gen_manifest "$tag" > "$DST/manifest.json"
             fi
           done
           echo "Firmware downloads complete:"
