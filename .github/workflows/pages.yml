@@ -45,9 +45,9 @@ jobs:
     "flashSize": "2MB",
     "flashFreq": "80m",
     "parts": [
-      { "path": "firmware/$tag/bootloader.bin", "offset": 4096 },
-      { "path": "firmware/$tag/partition-table.bin", "offset": 32768 },
-      { "path": "firmware/$tag/esp-ot-gateway.bin", "offset": 65536 }
+      { "path": "bootloader.bin", "offset": 4096 },
+      { "path": "partition-table.bin", "offset": 32768 },
+      { "path": "esp-ot-gateway.bin", "offset": 65536 }
     ]
   }]
 }
