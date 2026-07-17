@@ -253,6 +253,9 @@ esp-web-install-button:defined { display: block; }
 .back-link:hover { text-decoration: underline; }
 
 /* Serial monitor */
+.monitor-page .container {
+    max-width: 90vw;
+}
 .monitor-controls {
     display: flex;
     align-items: center;
@@ -286,7 +289,7 @@ esp-web-install-button:defined { display: block; }
     font-family: 'Fira Code', 'Consolas', monospace;
     font-size: 0.8rem;
     white-space: pre-wrap;
-    max-height: 400px;
+    height: 70vh;
     overflow-y: auto;
     line-height: 1.4;
 }
