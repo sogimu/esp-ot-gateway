@@ -4,6 +4,50 @@ const disconnectBtn = document.getElementById('disconnect-btn');
 const monitorStatus = document.getElementById('monitor-status');
 const serialOutput = document.getElementById('serial-output');
 
+// ANSI to HTML color mapping (ESP-IDF log levels)
+const ANSI_COLORS = {
+    '0': 'color:inherit;font-weight:normal;font-style:normal',
+    '1': 'font-weight:bold',
+    '30': 'color:#000',
+    '31': 'color:#f44',
+    '32': 'color:#4f4',
+    '33': 'color:#ff4',
+    '34': 'color:#44f',
+    '35': 'color:#f4f',
+    '36': 'color:#4ff',
+    '37': 'color:#fff',
+};
+
+function ansiToHtml(text) {
+    let result = '';
+    let i = 0;
+    const len = text.length;
+    while (i < len) {
+        if (text[i] === '\x1b' && text[i+1] === '[') {
+            const end = text.indexOf('m', i);
+            if (end !== -1) {
+                const code = text.slice(i+2, end);
+                i = end + 1;
+                if (code === '0' || code === '') {
+                    result += '</span>';
+                } else {
+                    const style = ANSI_COLORS[code] || '';
+                    result += `<span style="${style}">`;
+                }
+                continue;
+            }
+        }
+        // Escape HTML
+        if (text[i] === '<') result += '&lt;';
+        else if (text[i] === '>') result += '&gt;';
+        else if (text[i] === '&') result += '&amp;';
+        else result += text[i];
+        i++;
+    }
+    result += '</span>'.repeat((result.match(/<span/g)||[]).length - (result.match(/<\/span>/g)||[]).length);
+    return result;
+}
+
 let port = null;
 let reader = null;
 let readLoop = null;
@@ -34,9 +78,7 @@ async function connect() {
             buffer = lines.pop(); // incomplete line
 
             for (const line of lines) {
-                // Strip ANSI escape codes (color, cursor, etc.)
-                const clean = line.replace(/\x1b\[[0-9;]*m/g, '');
-                serialOutput.textContent += clean + '\n';
+                serialOutput.innerHTML += ansiToHtml(line) + '\n';
             }
             serialOutput.scrollTop = serialOutput.scrollHeight;
         }
