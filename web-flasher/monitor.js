@@ -64,9 +64,11 @@ async function disconnect() {
 async function resetDevice() {
     if (!port) return;
     try {
-        await port.setSignals({ dataTerminalReady: false, requestToSend: true });
+        // Pull RTS low → EN low → chip in reset
+        await port.setSignals({ requestToSend: false });
         await new Promise(r => setTimeout(r, 100));
-        await port.setSignals({ dataTerminalReady: true, requestToSend: false });
+        // RTS high → EN high → chip boots
+        await port.setSignals({ requestToSend: true });
         monitorStatus.textContent = 'Сброс…';
         setTimeout(() => { monitorStatus.textContent = 'Подключено 115200'; }, 500);
     } catch (err) {
