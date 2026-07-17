@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Монитор порта — ESP-OT-Gateway</title>
+    <link rel="stylesheet" href="style.css">
+    <script type="module" src="monitor.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>&#x1F4E1; Монитор порта</h1>
+            <p class="subtitle">Просмотр логов с ESP32 через USB</p>
+            <p><a href="index.html" class="back-link">← Назад к инструментам</a></p>
+        </header>
+
+        <main>
+            <section class="step">
+                <h2>1. Подключите ESP32 по USB</h2>
+                <p>Устройство должно быть уже прошито и работать. Монитор показывает всё, что ESP32 отправляет в Serial на скорости 115200.</p>
+            </section>
+
+            <section class="step">
+                <h2>2. Управление</h2>
+                <div class="monitor-controls">
+                    <button id="connect-btn" class="serial-btn">Подключиться</button>
+                    <button id="disconnect-btn" class="serial-btn secondary" style="display:none">Отключиться</button>
+                    <span id="monitor-status" class="monitor-status"></span>
+                </div>
+            </section>
+
+            <section class="step">
+                <h2>3. Логи</h2>
+                <pre id="serial-output" class="serial-output">Нажмите «Подключиться» и выберите USB-порт ESP32…</pre>
+            </section>
+        </main>
+
+        <footer>
+            <p>
+                <a href="https://github.com/sogimu/esp-ot-gateway" target="_blank">GitHub</a>
+                &middot;
+                GPL v3.0
+            </p>
+        </footer>
+    </div>
+</body>
+</html>

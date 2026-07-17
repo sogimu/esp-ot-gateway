@@ -3,88 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP-OT-Gateway — Web Flasher</title>
+    <title>ESP-OT-Gateway</title>
     <link rel="stylesheet" href="style.css">
-    <script type="module" src="app.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
             <h1>&#x1F525; ESP-OT-Gateway</h1>
-            <p class="subtitle">Прошивка вашего OpenTherm-шлюза</p>
+            <p class="subtitle">Инструменты для вашего OpenTherm-шлюза</p>
         </header>
 
-        <main>
-            <!-- Шаг 1: Подключение -->
-            <section class="step">
-                <h2>1. Подключите ESP32 по USB</h2>
-                <p>Просто подключите ESP32 USB-кабелем к компьютеру. ESP Web Tools сам переведёт устройство в режим прошивки.</p>
-            </section>
+        <main class="tools-grid">
+            <a href="flasher.html" class="tool-card">
+                <span class="tool-icon">&#x26A1;</span>
+                <span class="tool-title">Прошивка</span>
+                <span class="tool-desc">Прошить свежую версию прошивки на ESP32 через USB</span>
+            </a>
 
-            <!-- Шаг 2: Выбор версии -->
-            <section class="step">
-                <h2>2. Выберите версию прошивки</h2>
-                <div class="version-row">
-                    <select id="version-select" disabled>
-                        <option>Загрузка списка версий…</option>
-                    </select>
-                    <span id="version-loading" class="loading"></span>
-                </div>
-                <p class="hint">Прошивки собираются автоматически из тегированных релизов. <a id="release-notes" href="#" target="_blank">Подробнее на GitHub →</a></p>
-                <div id="release-body" class="release-body"></div>
-            </section>
-
-            <!-- Шаг 3: Прошивка -->
-            <section class="step">
-                <h2>3. Прошейте устройство</h2>
-                <div id="button-container">
-                    <button class="flash-btn" disabled id="flash-placeholder">Загрузка списка версий…</button>
-                </div>
-
-                <div id="flash-progress" class="progress-section" style="display:none">
-                    <progress id="progress-bar" value="0" max="100"></progress>
-                    <span id="progress-text">Подготовка…</span>
-                </div>
-
-                <div id="flash-status" class="status-message"></div>
-
-                <details class="troubleshooting">
-                    <summary>Не получается? Проверьте</summary>
-                    <img src="esp32-devkitc-functional-overview.webp" alt="Плата ESP32-DevKitC: USB, кнопки BOOT и EN" class="board-img">
-
-                    <p>Самое частое — <strong>кабель</strong>. Многие USB-кабели предназначены только для зарядки и не передают данные. Определить такой кабель просто: подключите через него телефон к компьютеру. Если телефон не появляется как устройство — кабель зарядный, не подходит. Возьмите другой, желательно от телефона или жёсткого диска.</p>
-
-                    <p><strong>Плата не определяется компьютером.</strong> Windows часто требует установки драйвера для USB-преобразователя на плате ESP32. Скачайте и установите драйвер для CP210x или CH340 (зависит от модели платы). После установки переподключите плату. Linux и macOS определяют плату автоматически — драйверы не нужны.</p>
-
-                    <p><strong>Плата видна, но прошивка не начинается.</strong> Автосброс мог не сработать. Переведите ESP32 в режим прошивки вручную — это просто:</p>
-                    <ol>
-                        <li>Зажмите и удерживайте <strong>BOOT</strong></li>
-                        <li>Коротко нажмите <strong>EN</strong> и отпустите</li>
-                        <li>Отпустите <strong>BOOT</strong></li>
-                    </ol>
-                    <p>Повторите попытку прошивки.</p>
-
-                    <p><strong>Браузер не показывает плату.</strong> WebSerial работает только в Google Chrome, Edge или Opera. Firefox и Safari не поддерживаются. Если у вас Chromium на Linux — откройте <code>chrome://flags/#enable-experimental-web-platform-features</code> и включите флаг, затем перезапустите браузер.</p>
-                </details>
-            </section>
-
-            <!-- Шаг 4: После прошивки -->
-            <section class="step">
-                <h2>4. Настройте WiFi</h2>
-                <p>После перезагрузки ESP32 создаст точку доступа:</p>
-                <code>ot-gateway-setup-XXXXXX</code>
-                <p>Подключитесь к ней с телефона или ноутбука — страница настройки откроется автоматически.</p>
-                <p class="docs-link">
-                    <a href="https://github.com/sogimu/esp-ot-gateway/blob/master/docs/wifi-setup.md" target="_blank">Инструкция по настройке WiFi →</a>
-                </p>
-            </section>
+            <a href="monitor.html" class="tool-card">
+                <span class="tool-icon">&#x1F4E1;</span>
+                <span class="tool-title">Монитор порта</span>
+                <span class="tool-desc">Просмотр логов с ESP32 через USB</span>
+            </a>
         </main>
 
         <footer>
             <p>
                 <a href="https://github.com/sogimu/esp-ot-gateway" target="_blank">GitHub</a>
                 &middot;
-                Прошивка под лицензией GPL v3.0
+                GPL v3.0
             </p>
         </footer>
     </div>

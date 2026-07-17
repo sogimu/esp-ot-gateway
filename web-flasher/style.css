@@ -212,3 +212,81 @@ esp-web-install-button {
     display: block;
 }
 esp-web-install-button:defined { display: block; }
+
+/* Landing page tool cards */
+.tools-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.tool-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 2rem 1rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color 0.2s, transform 0.1s;
+}
+.tool-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+.tool-icon { font-size: 2.5rem; }
+.tool-title { font-size: 1.2rem; font-weight: bold; }
+.tool-desc {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* Back link */
+.back-link {
+    font-size: 0.85rem;
+    color: var(--accent);
+    text-decoration: none;
+}
+.back-link:hover { text-decoration: underline; }
+
+/* Serial monitor */
+.monitor-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.serial-btn {
+    padding: 0.5rem 1.25rem;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 0.95rem;
+    cursor: pointer;
+    background: var(--cta);
+    color: white;
+}
+.serial-btn.secondary {
+    background: var(--border);
+    color: var(--text);
+}
+.serial-btn:hover { opacity: 0.85; }
+.monitor-status {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.serial-output {
+    margin-top: 0.5rem;
+    padding: 0.75rem;
+    background: #0a0a14;
+    color: #0f0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    max-height: 400px;
+    overflow-y: auto;
+    line-height: 1.4;
+}
