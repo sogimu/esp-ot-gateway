@@ -1,7 +1,6 @@
 // esp-ot-gateway Serial Monitor
 const connectBtn = document.getElementById('connect-btn');
 const disconnectBtn = document.getElementById('disconnect-btn');
-const resetBtn = document.getElementById('reset-btn');
 const monitorStatus = document.getElementById('monitor-status');
 const serialOutput = document.getElementById('serial-output');
 
@@ -16,7 +15,6 @@ async function connect() {
 
         connectBtn.style.display = 'none';
         disconnectBtn.style.display = 'inline-block';
-        resetBtn.style.display = 'inline-block';
         monitorStatus.textContent = 'Подключено 115200';
 
         serialOutput.textContent = '';
@@ -61,27 +59,11 @@ async function disconnect() {
     reset();
 }
 
-async function resetDevice() {
-    if (!port) return;
-    try {
-        // esptool-style reset: RTS+DTR sequence
-        await port.setSignals({ requestToSend: true, dataTerminalReady: false });
-        await new Promise(r => setTimeout(r, 200));
-        await port.setSignals({ requestToSend: false, dataTerminalReady: true });
-        monitorStatus.textContent = 'Сброс…';
-        setTimeout(() => { monitorStatus.textContent = 'Подключено 115200'; }, 1000);
-    } catch (err) {
-        monitorStatus.textContent = 'Ошибка: ' + err.message;
-    }
-}
-
 function reset() {
     connectBtn.style.display = 'inline-block';
     disconnectBtn.style.display = 'none';
-    resetBtn.style.display = 'none';
     monitorStatus.textContent = 'Отключено';
 }
 
 connectBtn.addEventListener('click', connect);
 disconnectBtn.addEventListener('click', disconnect);
-resetBtn.addEventListener('click', resetDevice);
