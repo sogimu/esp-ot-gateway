@@ -75,7 +75,7 @@ Wiring: OT TX → GPIO 4, OT RX → GPIO 16, fail-safe relay → GPIO 23 (closes
 
 1. **Flash the firmware**
 
-   **The easiest way — [Web Flasher](https://sogimu.github.io/esp-ot-gateway)** (Chrome + USB cable required). Open the page, select firmware version, connect your ESP32, and click "Flash". No tools to install.
+   **The easiest way — [Web Flasher](https://sogimu.github.io/esp-ot-gateway)** (Chrome + USB cable required). Open the page, select firmware version, connect your ESP32, and click "Flash". A serial monitor for viewing logs is also available. No tools to install.
 
    *For developers — build from source:*
 
