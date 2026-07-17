@@ -31,7 +31,10 @@ function ansiToHtml(text) {
                 if (code === '0' || code === '') {
                     result += '</span>';
                 } else {
-                    const style = ANSI_COLORS[code] || '';
+                    // Handle compound codes like "0;32" — take last segment
+                    const parts = code.split(';');
+                    const colorCode = parts[parts.length - 1];
+                    const style = ANSI_COLORS[colorCode] || '';
                     result += `<span style="${style}">`;
                 }
                 continue;

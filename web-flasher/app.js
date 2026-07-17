@@ -21,7 +21,7 @@ function createButton(tag) {
         installButton = null;
     }
 
-    const manifestUrl = `${location.pathname}firmware/${tag}/manifest.json`;
+    const manifestUrl = `firmware/${tag}/manifest.json`;
 
     installButton = document.createElement('esp-web-install-button');
     installButton.setAttribute('manifest', manifestUrl);
