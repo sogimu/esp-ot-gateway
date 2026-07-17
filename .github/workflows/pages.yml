@@ -29,6 +29,31 @@ jobs:
             find "$DST" -name '*.bin' -not -path "$DST/*.bin" -exec mv {} "$DST/" \; 2>/dev/null || true
             find "$DST" -type d -empty -delete 2>/dev/null || true
           done
+          # Generate manifest.json for each version
+          for tag in $RELEASES; do
+            DST="web-flasher/firmware/$tag"
+            if [ -f "$DST/bootloader.bin" ]; then
+              echo "Generating manifest for $tag..."
+              cat > "$DST/manifest.json" << MANIFESTEOF
+{
+  "name": "ESP OpenTherm Gateway",
+  "version": "$tag",
+  "home_url": "https://github.com/sogimu/esp-ot-gateway",
+  "builds": [{
+    "chipFamily": "ESP32",
+    "flashMode": "dio",
+    "flashSize": "2MB",
+    "flashFreq": "80m",
+    "parts": [
+      { "path": "firmware/$tag/bootloader.bin", "offset": 4096 },
+      { "path": "firmware/$tag/partition-table.bin", "offset": 32768 },
+      { "path": "firmware/$tag/esp-ot-gateway.bin", "offset": 65536 }
+    ]
+  }]
+}
+MANIFESTEOF
+            fi
+          done
           echo "Firmware downloads complete:"
           find web-flasher/firmware -type f | sort
         env:
