@@ -10,6 +10,7 @@ const progressText = document.getElementById('progress-text');
 const progressSection = document.getElementById('flash-progress');
 const statusMsg = document.getElementById('flash-status');
 const versionLoading = document.getElementById('version-loading');
+const releaseNotes = document.getElementById('release-notes');
 
 let installButton = null;
 
@@ -56,6 +57,7 @@ function createButton(tag) {
 
 async function updateManifest(tag) {
     createButton(tag);
+    releaseNotes.href = `https://github.com/sogimu/esp-ot-gateway/releases/tag/${tag}`;
     statusMsg.textContent = `Ready: ${tag}`;
 }
 
