@@ -64,15 +64,14 @@ async function disconnect() {
 async function resetDevice() {
     if (!port) return;
     try {
-        // Pull RTS low → EN low → chip in reset
-        await port.setSignals({ requestToSend: false });
-        await new Promise(r => setTimeout(r, 100));
-        // RTS high → EN high → chip boots
-        await port.setSignals({ requestToSend: true });
+        // esptool-style reset: RTS+DTR sequence
+        await port.setSignals({ requestToSend: true, dataTerminalReady: false });
+        await new Promise(r => setTimeout(r, 200));
+        await port.setSignals({ requestToSend: false, dataTerminalReady: true });
         monitorStatus.textContent = 'Сброс…';
-        setTimeout(() => { monitorStatus.textContent = 'Подключено 115200'; }, 500);
+        setTimeout(() => { monitorStatus.textContent = 'Подключено 115200'; }, 1000);
     } catch (err) {
-        monitorStatus.textContent = 'Ошибка сброса: ' + err.message;
+        monitorStatus.textContent = 'Ошибка: ' + err.message;
     }
 }
 
