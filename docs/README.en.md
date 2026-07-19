@@ -5,7 +5,11 @@
 **Turn your gas boiler into a smart heating system — for the price of an ESP32.**
 
 [![Tests](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml/badge.svg)](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml)
-[![Coverage](https://img.shields.io/badge/coverage-report-blue)](https://sogimu.github.io/esp-ot-gateway/coverage/)
+[![Coverage](https://sogimu.github.io/esp-ot-gateway/coverage/badge.svg)](https://sogimu.github.io/esp-ot-gateway/coverage/)
+[![Release](https://img.shields.io/github/v/release/sogimu/esp-ot-gateway)](https://github.com/sogimu/esp-ot-gateway/releases)
+[![License](https://img.shields.io/github/license/sogimu/esp-ot-gateway)](../LICENSE)
+[![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.3.2-blue)](https://docs.espressif.com/projects/esp-idf/en/v5.3.2/esp32/)
+[![Stars](https://img.shields.io/github/stars/sogimu/esp-ot-gateway?style=social)](https://github.com/sogimu/esp-ot-gateway/stargazers)
 
 Most gas boilers spend their lives being switched on and off by a dumb relay thermostat: full blast, overshoot, cool down, repeat. Your boiler can do better — it speaks **OpenTherm**, a digital protocol that lets it modulate smoothly, report every temperature it measures, and tell you exactly what it's doing.
 
