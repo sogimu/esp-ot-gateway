@@ -6,6 +6,10 @@
 
 [![Tests](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml/badge.svg)](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml)
 [![Coverage](https://sogimu.github.io/esp-ot-gateway/coverage/badge.svg)](https://sogimu.github.io/esp-ot-gateway/coverage/)
+[![Release](https://img.shields.io/github/v/release/sogimu/esp-ot-gateway)](https://github.com/sogimu/esp-ot-gateway/releases)
+[![License](https://img.shields.io/github/license/sogimu/esp-ot-gateway)](LICENSE)
+[![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.3.2-blue)](https://docs.espressif.com/projects/esp-idf/en/v5.3.2/esp32/)
+[![Stars](https://img.shields.io/github/stars/sogimu/esp-ot-gateway?style=social)](https://github.com/sogimu/esp-ot-gateway/stargazers)
 
 Большинство газовых котлов всю жизнь щёлкает релейный термостат: полная мощность, перегрев, остывание, снова полная мощность. А ведь котёл умеет лучше — он говорит на **OpenTherm**, цифровом протоколе, который позволяет плавно модулировать горелку, отдавать все измеряемые температуры и честно рассказывать, что происходит внутри.
 
