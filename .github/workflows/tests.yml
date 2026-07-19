@@ -63,15 +63,6 @@ jobs:
           name: coverage-report
           path: build/coverage/html
 
-      - name: Deploy to GitHub Pages
-        if: github.ref == 'refs/heads/master'
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: build/coverage/html
-          destination_dir: coverage
-          keep_files: false
-
   firmware-build:
     runs-on: ubuntu-latest
 
@@ -106,3 +97,75 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ github.token }}
+
+  # Single GitHub Pages deployment. Publishes the web flasher at the site root,
+  # the coverage report (incl. badge.svg) under /coverage/, and per-version
+  # firmware binaries + manifests under /firmware/<tag>/. Replaces the old
+  # split setup where the flasher deployed via Actions but coverage was pushed
+  # to an orphaned gh-pages branch (404 on /coverage/).
+  deploy-pages:
+    needs: [test, coverage]
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: site/coverage
+
+      - name: Assemble site (flasher at root + firmware manifests)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p site
+          cp -r web-flasher/. site/
+          mkdir -p site/firmware
+          RELEASES=$(gh release list --limit 50 --json tagName -q '.[].tagName')
+          for tag in $RELEASES; do
+            DST="site/firmware/$tag"
+            mkdir -p "$DST"
+            gh release download "$tag" --pattern '*.bin' --dir "$DST" --clobber || echo "Skipping $tag (no assets)"
+            find "$DST" -name '*.bin' -not -path "$DST/*.bin" -exec mv {} "$DST/" \; 2>/dev/null || true
+            find "$DST" -type d -empty -delete 2>/dev/null || true
+          done
+          gen_manifest() {
+            printf '{\n'
+            printf '  "name": "ESP OpenTherm Gateway",\n'
+            printf '  "version": "%s",\n' "$1"
+            printf '  "home_url": "https://github.com/sogimu/esp-ot-gateway",\n'
+            printf '  "builds": [{\n'
+            printf '    "chipFamily": "ESP32",\n'
+            printf '    "flashMode": "dio",\n'
+            printf '    "flashSize": "2MB",\n'
+            printf '    "flashFreq": "80m",\n'
+            printf '    "parts": [\n'
+            printf '      { "path": "bootloader.bin", "offset": 4096 },\n'
+            printf '      { "path": "partition-table.bin", "offset": 32768 },\n'
+            printf '      { "path": "esp-ot-gateway.bin", "offset": 65536 }\n'
+            printf '    ]\n'
+            printf '  }]\n'
+            printf '}\n'
+          }
+          for tag in $RELEASES; do
+            DST="site/firmware/$tag"
+            if [ -f "$DST/bootloader.bin" ]; then
+              gen_manifest "$tag" > "$DST/manifest.json"
+            fi
+          done
+          echo "=== site tree ==="
+          find site -type f | sort
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

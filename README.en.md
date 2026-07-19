@@ -1,13 +1,13 @@
 # ESP OpenTherm Gateway
 
-**English** | [Русский](../README.md)
+**English** | [Русский](README.md)
 
 **Turn your gas boiler into a smart heating system — for the price of an ESP32.**
 
 [![Tests](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml/badge.svg)](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml)
 [![Coverage](https://sogimu.github.io/esp-ot-gateway/coverage/badge.svg)](https://sogimu.github.io/esp-ot-gateway/coverage/)
 [![Release](https://img.shields.io/github/v/release/sogimu/esp-ot-gateway)](https://github.com/sogimu/esp-ot-gateway/releases)
-[![License](https://img.shields.io/github/license/sogimu/esp-ot-gateway)](../LICENSE)
+[![License](https://img.shields.io/github/license/sogimu/esp-ot-gateway)](LICENSE)
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.3.2-blue)](https://docs.espressif.com/projects/esp-idf/en/v5.3.2/esp32/)
 [![Stars](https://img.shields.io/github/stars/sogimu/esp-ot-gateway?style=social)](https://github.com/sogimu/esp-ot-gateway/stargazers)
 
@@ -31,18 +31,18 @@ Most gas boilers spend their lives being switched on and off by a dumb relay the
 
 | Live boiler diagram | Control: modes & setpoints |
 |---|---|
-| ![Status tab](images/status.webp) | ![Control tab](images/control.webp) |
+| ![Status tab](docs/images/status.webp) | ![Control tab](docs/images/control.webp) |
 
 | Virtual gas meter with reconciliation | MQTT settings |
 |---|---|
-| ![Gas meter tab](images/gas-meter.webp) | ![MQTT tab](images/mqtt.webp) |
+| ![Gas meter tab](docs/images/gas-meter.webp) | ![MQTT tab](docs/images/mqtt.webp) |
 
 <details>
 <summary>More screenshots: event journal, Info, WiFi</summary>
 
-![Journal tab](images/journal.webp)
-![Info tab](images/info.webp)
-![WiFi tab](images/wifi.webp)
+![Journal tab](docs/images/journal.webp)
+![Info tab](docs/images/info.webp)
+![WiFi tab](docs/images/wifi.webp)
 
 </details>
 
@@ -71,7 +71,7 @@ Most gas boilers spend their lives being switched on and off by a dumb relay the
 | *(optional)* 2 × DS18B20 | room temperature sensors for PID control (GPIO 15 / 26) |
 | *(optional)* MQTT broker | e.g. Mosquitto in Home Assistant, for smart-home integration |
 
-Wiring: OT TX → GPIO 4, OT RX → GPIO 16, fail-safe relay → GPIO 23 (closes on boot, opens on power loss — your boiler falls back to its own controls if the ESP32 dies).
+Wiring: OT TX → GPIO 4, OT Rx → GPIO 16, fail-safe relay → GPIO 23 (closes on boot, opens on power loss — your boiler falls back to its own controls if the ESP32 dies).
 
 ---
 
@@ -89,13 +89,13 @@ Wiring: OT TX → GPIO 4, OT RX → GPIO 16, fail-safe relay → GPIO 23 (closes
    bash scripts/build_and_flash.sh /dev/ttyUSB0
    ```
 
-2. **Connect it to WiFi — no code editing needed.** On first boot the device opens a WiFi network **`ot-gateway-setup-XXXXXX`**. Connect with your phone, the setup page opens automatically (or go to `http://192.168.4.1`), pick your home WiFi *or* let the device run its own access point — it works fully offline too. The blinking blue LED just means "no WiFi connection yet" — it settles once the device is online ([details](wifi-setup.en.md)).
+2. **Connect it to WiFi — no code editing needed.** On first boot the device opens a WiFi network **`ot-gateway-setup-XXXXXX`**. Connect with your phone, the setup page opens automatically (or go to `http://192.168.4.1`), pick your home WiFi *or* let the device run its own access point — it works fully offline too. The blinking blue LED just means "no WiFi connection yet" — it settles once the device is online ([details](docs/wifi-setup.en.md)).
 
 3. **Open the dashboard** at `http://<device-ip>` — and you're looking at your boiler's live state: flame, modulation, supply/return temperatures, 3-way valve position.
 
 4. *(optional)* **Connect Home Assistant:** dashboard → **MQTT tab** → enter your broker's address, login and password → Save. The gateway announces itself via MQTT autodiscovery and your boiler shows up in HA as a ready-made device.
 
-Detailed WiFi setup, troubleshooting and factory reset: **[WiFi Setup Guide](wifi-setup.en.md)**.
+Detailed WiFi setup, troubleshooting and factory reset: **[WiFi Setup Guide](docs/wifi-setup.en.md)**.
 
 ---
 
@@ -117,7 +117,7 @@ Everything is also available over plain MQTT topics (JSON), so Node-RED, Zigbee2
 
 The MQTT client was built for 24/7 embedded reliability: zero-allocation implementation, keepalive watchdog, automatic reconnection with backoff, discovery re-published on every reconnect. Username/password auth supported; all intervals configurable from the web UI and persisted across reboots.
 
-Full topic reference: **[mqtt.en.md](mqtt.en.md)**.
+Full topic reference: **[mqtt.en.md](docs/mqtt.en.md)**.
 
 ---
 
@@ -144,10 +144,10 @@ Under the friendly UI is a codebase built to hexagonal-architecture discipline:
 - **Domain / application / infrastructure separation** — the heating logic has zero ESP-IDF dependencies and runs on the host
 - **400+ unit tests, 1000+ assertions** — run under sanitizers in CI, with a public coverage report
 - **Crash diagnostics** — reset-reason logging, core dump to flash, offline backtrace decoding via `decode_crash.sh`
-- **REST API** — every dashboard action is a JSON endpoint (`/api/status`, `/api/control`, `/api/stats`, `/api/schedule`, `/api/mqtt/*`, …); `curl` examples in [api.en.md](api.en.md)
+- **REST API** — every dashboard action is a JSON endpoint (`/api/status`, `/api/control`, `/api/stats`, `/api/schedule`, `/api/mqtt/*`, …); `curl` examples in [api.en.md](docs/api.en.md)
 - **Hardened networking** — infinite WiFi reconnect with exponential backoff, heap-fragmentation countermeasures, recovery ladder for 24/7 uptime
 
-Build requirements: ESP-IDF v5.3.x. See **[Building & Debugging](build.en.md)**.
+Build requirements: ESP-IDF v5.3.x. See **[Building & Debugging](docs/build.en.md)**.
 
 ---
 
@@ -169,8 +169,8 @@ Actively developed and running in production on the author's own heating system 
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0](../LICENSE) — free, copyleft software: you may use, study, modify and redistribute the firmware, including commercially, provided derivative works stay under GPL-3.0 and their source is made available to recipients.
+This project is licensed under the [GNU General Public License v3.0](LICENSE) — free, copyleft software: you may use, study, modify and redistribute the firmware, including commercially, provided derivative works stay under GPL-3.0 and their source is made available to recipients.
 
-By submitting a contribution (pull request) you agree it is accepted under the same GPL-3.0 terms (see [CONTRIBUTING.en.md](CONTRIBUTING.en.md)).
+By submitting a contribution (pull request) you agree it is accepted under the same GPL-3.0 terms (see [CONTRIBUTING.en.md](docs/CONTRIBUTING.en.md)).
 
-See [LICENSING.en.md](LICENSING.en.md) for details and FAQ.
+See [LICENSING.en.md](docs/LICENSING.en.md) for details and FAQ.

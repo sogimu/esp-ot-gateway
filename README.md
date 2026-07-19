@@ -1,6 +1,6 @@
 # ESP OpenTherm Gateway
 
-[English](docs/README.en.md) | **Русский**
+[English](README.en.md) | **Русский**
 
 **Превратите газовый котёл в умную систему отопления — по цене одного ESP32.**
 
