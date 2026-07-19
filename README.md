@@ -5,7 +5,7 @@
 **Превратите газовый котёл в умную систему отопления — по цене одного ESP32.**
 
 [![Tests](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml/badge.svg)](https://github.com/sogimu/esp-ot-gateway/actions/workflows/tests.yml)
-[![Coverage](https://img.shields.io/badge/coverage-report-blue)](https://sogimu.github.io/esp-ot-gateway/coverage/)
+[![Coverage](https://sogimu.github.io/esp-ot-gateway/coverage/badge.svg)](https://sogimu.github.io/esp-ot-gateway/coverage/)
 
 Большинство газовых котлов всю жизнь щёлкает релейный термостат: полная мощность, перегрев, остывание, снова полная мощность. А ведь котёл умеет лучше — он говорит на **OpenTherm**, цифровом протоколе, который позволяет плавно модулировать горелку, отдавать все измеряемые температуры и честно рассказывать, что происходит внутри.
 

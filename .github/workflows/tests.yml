@@ -53,6 +53,10 @@ jobs:
         working-directory: build
         run: cmake --build . --target coverage
 
+      - name: Generate coverage badge
+        working-directory: build
+        run: python3 ../scripts/coverage_badge.py coverage/coverage.info coverage/html
+
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
