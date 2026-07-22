@@ -31,6 +31,7 @@ idf_component_register(
         "infrastructure/driven/nvs_config_store.cpp"
         "infrastructure/driving/main_poller_task_adapter.cpp"
         "infrastructure/driving/ota_interactor.cpp"
+        "infrastructure/driving/ota_controller.cpp"
         "infrastructure/freertos/shared_mutex.c"
         "application/use_cases/main_poller_interactor.cpp"
         "application/use_cases/boiler_poll_interactor.cpp"

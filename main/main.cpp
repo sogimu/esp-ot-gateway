@@ -36,10 +36,7 @@
 #include "infrastructure/driving/mqtt_interactor.h"
 
 // ── OTA ──────────────────────────────────────────────────
-#include "infrastructure/driven/ota_validity_adapter.h"
-#include "infrastructure/driven/esp_ota_adapter.h"
-#include "infrastructure/driven/ota_version_index_adapter.h"
-#include "infrastructure/driving/ota_interactor.h"
+#include "infrastructure/driving/ota_controller.h"
 
 // ── Use cases ────────────────────────────────────────────
 #include "application/use_cases/main_poller_interactor.h"
@@ -55,49 +52,6 @@
 #include "application/services/gas_flow_estimator.h"
 #include "application/services/dhw_predict_service.h"
 
-// ── OTA flush-stats: сброс накопленной статистики в NVS перед перезагрузкой
-// в новый слот. Вызывается OtaInteractor после успешного download() и ДО
-// esp_restart() (см. download_task). В этот момент текущий (работающий) образ
-// валиден — NVS НЕ заморожен (заморозка действует только в PENDING_VERIFY
-// после ребута в новый слот). Логика идентична периодическому save каждые 10 мин.
-struct OtaFlushCtx {
-    NvsConfigStore*          nvs;
-    HeatingStateAdapter*     state;
-    BurnCycleService*        burn_cycles;
-    ModulationStatsService*  mod_stats;
-    GasFlowService*          gas_flow;
-    GasCorrectionInteractor* gas_corr;
-    SntpTimeAdapter*         time;
-    uint32_t*                total_uptime_base_sec;
-};
-
-static void ota_flush_stats_cb(void* ctxv)
-{
-    auto* c = static_cast<OtaFlushCtx*>(ctxv);
-    ESP_LOGI("main", "OTA: сброс статистики в NVS перед перезагрузкой в новый слот");
-
-    const uint32_t bs = c->burn_cycles->burner_seconds();
-    c->nvs->save_burn_stats(bs,
-                            c->burn_cycles->total_pause_seconds(),
-                            c->burn_cycles->cycle_count(),
-                            c->burn_cycles->inter_session_pause_sec(),
-                            c->burn_cycles->inter_session_cnt(),
-                            c->burn_cycles->modulation_pause_sec(),
-                            c->burn_cycles->modulation_cnt());
-
-    NvsHistBlob hist_blob;
-    memset(&hist_blob, 0, sizeof(hist_blob));
-    hist_blob.samples = c->mod_stats->samples();
-    for (int i = 0; i < HIST_BINS; i++) {
-        hist_blob.hist[i] = c->mod_stats->hist_ptr()[i];
-    }
-    c->nvs->save_stats(*c->state, bs, c->gas_flow->integral_m3(),
-                       &hist_blob, nullptr, nullptr, nullptr);
-    c->nvs->save_total_uptime(*c->total_uptime_base_sec +
-                              (uint32_t)(c->time->monotonic_us() / 1000000));
-    c->nvs->save_meter(*c->state, &c->gas_corr->meter_blob());
-}
-
 extern "C" void app_main(void)
 {
     // ── Phase 0: Pre-scheduler boot ──────────────────────
@@ -110,26 +64,21 @@ extern "C" void app_main(void)
     NvsConfigStore nvs;
     nvs.init();
 
-    // OTA validity: конструктор читает состояние загруженной партиции
-    // (ESP_OTA_IMG_PENDING_VERIFY либо валидна) и логирует её метку.
-    // Создаём рано — is_pending_global() должен работать для NVS-заморозки (D9/D10).
-    OtaValidityAdapter ota_validity;
+    // OTA-контроллер: владеет адаптерами валидности, загрузки, версий
+    // и интерактором. Конструктор создаёт OtaValidityAdapter (нужен для
+    // is_pending_global — NVS-заморозка D9/D10) и логирует состояние партиции.
+    OtaController ota_ctrl;
 
     CrashDiagnosticsAdapter crash_diag(ca_log);
     crash_diag.start();
 
     // Признак краха предыдущей загрузки: если свежезалитая прошивка стартовала
-    // после краха, arm() немедленно откатит её, не дожидаясь 90-сек дедлайна.
-    ota_validity.set_crash_flag(crash_diag.last_boot_had_crash());
+    // после краша, arm() немедленно откатит её, не дожидаясь 90-сек дедлайна.
+    ota_ctrl.set_crash_flag(crash_diag.last_boot_had_crash());
 
     if (crash_diag.last_boot_had_crash()) {
         ca_log.event(ILogger::SYSTEM, "Предыдущая загрузка: КРАШ");
     }
-
-    ESP_LOGI("main", "OTA: загружена партиция в состоянии %s",
-             ota_validity.is_pending()
-                 ? "PENDING_VERIFY (требуется подтверждение в течение 90 с)"
-                 : "VALID (подтверждения не требуется)");
 
     ca_log.event(ILogger::SYSTEM, "Система запущена");
 
@@ -317,57 +266,22 @@ extern "C" void app_main(void)
     http.set_mqtt(&mqtt);
     http.start();
 
-    // ── OTA: интерактор + взведение валидности ───────────────────
-    // HTTP-сервер поднят → здоровье уже есть, и heartbeat() на первой же
-    // итерации отметит свежезалитую прошивку валидной (mark_app_valid).
-    EspOtaAdapter          esp_ota;
-    OtaVersionIndexAdapter ota_versions;
-
-    // Контекст для сброса статистики в NVS перед перезагрузкой в новый слот.
-    OtaFlushCtx ota_flush_ctx{
-        &nvs, &ca_state, &burn_cycles, &mod_stats,
-        &gas_flow, &gas_corr, &ca_time, &total_uptime_base_sec
-    };
-
-    // FirmwareOtaInteractor: конкретный OtaInteractor для реальной прошивки.
-    // Реализует два чисто-виртуальных шва: запуск FreeRTOS-задачи загрузки
-    // (launch_download_task) и перезагрузку в новый слот (reboot_into_new_slot).
-    // Часы — esp_timer_get_time()/1000 (монотонное время в мс).
-    class FirmwareOtaInteractor : public OtaInteractor {
-    public:
-        using OtaInteractor::OtaInteractor;
-    protected:
-        bool launch_download_task() override {
-            constexpr uint32_t STACK = 12 * 1024;
-            constexpr UBaseType_t PRIO = 3;   // ниже задачи опроса котла (main_poll=4)
-            return xTaskCreate(trampoline, "ota_dl", STACK, this, PRIO, nullptr) == pdPASS;
-        }
-        void reboot_into_new_slot() override {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            esp_restart();
-        }
-    private:
-        static void trampoline(void* arg) {
-            static_cast<FirmwareOtaInteractor*>(arg)->run_download();
-        }
-    };
-    FirmwareOtaInteractor ota(ota_validity, esp_ota, ota_versions,
-                              []() { return esp_timer_get_time() / 1000; });
-    ota.set_flush_stats_callback(ota_flush_stats_cb, &ota_flush_ctx);
-
-    ota_validity.set_http_server_up(true);  // HTTP поднят — критерий здоровья выполнен
-    ota_validity.arm();                      // взвести дедлайн 90 с (при краше — немедленный откат)
-    http.set_ota(&ota);                      // связать HTTP-хендлеры OTA (/api/ota/*) с интерактором
+    // ── OTA: старт подсистемы (адаптеры + интерактор + валидация) ──
+    // start() создаёт FirmwareOtaInteractor, регистрирует flush-stats,
+    // взводит валидацию и возвращает IOtaManager для HTTP-хендлеров.
+    IOtaManager* ota_mgr = ota_ctrl.start({
+        .nvs = &nvs, .state = &ca_state, .burn_cycles = &burn_cycles,
+        .mod_stats = &mod_stats, .gas_flow = &gas_flow, .gas_corr = &gas_corr,
+        .time = &ca_time, .total_uptime_base_sec = &total_uptime_base_sec
+    });
+    http.set_ota(ota_mgr);
 
     // ── Idle: CPU stats every 60s, periodic NVS save every 10 min ──
     static const char* TAG = "main";
     int save_tick = 0;
     while (1) {
-        // OTA: подтверждение/откат свежезалитой прошивки + опрос прогресса загрузки.
-        // В начале итерации — чтобы PENDING_VERIFY разрешился максимально быстро
-        // (mark_app_valid на первом же здоровом тике, HTTP уже поднят).
-        ota_validity.heartbeat();
-        ota.poll();
+        // OTA: heartbeat (подтверждение/откат) + опрос прогресса загрузки.
+        ota_ctrl.tick();
 
         vTaskDelay(pdMS_TO_TICKS(15000));  // keep 15s until fragmentation is fixed
         save_tick++;
@@ -444,7 +358,7 @@ extern "C" void app_main(void)
         // тик), первый save≈150 c — не пересекаются; заморозка даёт гарантию на
         // нештатных путях (медленный HTTP, краш-диагностика).
         if (save_tick >= 10) {
-            if (ota_validity.is_pending()) {
+            if (ota_ctrl.is_pending()) {
                 ESP_LOGW(TAG, "Периодический NVS-save пропущен: образ на проверке (PENDING_VERIFY)");
             } else {
                 save_tick = 0;
