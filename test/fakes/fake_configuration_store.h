@@ -1,17 +1,17 @@
 #pragma once
 
-#include "application/ports/driven/iconfiguration_store.h"
+#include "application/ports/driven/itime_settings_store.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "nvs_config_store.h"  // NvsMeterBlob
 #include <cstring>
 
 /// Fake configuration store — in-memory, for unit testing.
-class FakeConfigurationStore : public IConfigurationStore {
+class FakeConfigurationStore : public ITimeSettingsStore {
 public:
     FakeConfigurationStore() { clear(); }
 
     void clear() {
-        save_config_called_ = 0;
+        save_time_settings_called_ = 0;
         save_predict_called_ = 0;
         std::memset(saved_rates_, 0, sizeof(saved_rates_));
         saved_idx_ = 0;
@@ -44,10 +44,10 @@ public:
         std::memset(&saved_meter_blob_, 0, sizeof(saved_meter_blob_));
     }
 
-    void load_all(class IHeatingStateStore&) {}
+    void load_time_settings(class IHeatingStateStore&) {}
 
-    void save_config(const class IHeatingStateStore&) {
-        save_config_called_++;
+    void save_time_settings(const class IHeatingStateStore&) {
+        save_time_settings_called_++;
     }
 
     // save_stats/load_stats — regular methods (no longer in IConfigurationStore,
@@ -172,7 +172,7 @@ public:
     bool save_integral_called_ = false;
 
     // ── Call tracking ──────────────────────────────────
-    int save_config_called_ = 0;
+    int save_time_settings_called_ = 0;
     int save_predict_called_ = 0;
     float saved_rates_[3] = {};
     int saved_idx_ = 0;

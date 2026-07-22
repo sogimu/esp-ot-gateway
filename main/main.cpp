@@ -15,7 +15,8 @@
 #include "infrastructure/driven/boiler_opentherm_adapter.h"
 #include "infrastructure/driven/temperature_sensor_adapter.h"
 #include "infrastructure/driven/web_presenter_adapter.h"
-#include "infrastructure/driven/nvs_config_store.h"
+#include "infrastructure/driven/nvs_config_store.h"  // blob types (NvsHistBlob, etc.)
+#include "infrastructure/driven/time_settings_nvs_store.h"
 #include "infrastructure/driven/boiler_nvs_store.h"
 #include "infrastructure/driven/gas_correction_nvs_store.h"
 #include "infrastructure/driven/predict_nvs_store.h"
@@ -66,11 +67,9 @@ extern "C" void app_main(void)
     // ── Phase 1: Foundation ──────────────────────────────
     EventLogAdapter ca_log;
 
-    // NVS-хранилища сгруппированы вместе: config (настройки + статистика),
-    // wifi (учётные данные), mqtt (параметры брокера). Конструируются здесь,
-    // инициализируются каждый в своей фазе.
+    // NVS-хранилища сгруппированы в одной структуре.
     struct {
-        NvsConfigStore        config;
+        TimeSettingsNvsStore  time;
         WifiNvsStore          wifi;
         MqttNvsStore          mqtt;
         BoilerNvsStore        boiler;
@@ -79,7 +78,7 @@ extern "C" void app_main(void)
         BurnStatsNvsStore     burn_stats;
         HeatingStatsNvsStore  heating_stats;
     } stores;
-    stores.config.init();
+    stores.time.init();
     stores.gas.init(stores.boiler);
 
     // OTA-контроллер: владеет адаптерами валидности, загрузки, версий
@@ -119,7 +118,7 @@ extern "C" void app_main(void)
     ca_web.set_log_reader(&ca_log);   // IEventLogReader (lock/unlock/to_json)
     ca_web.set_time_source(&ca_time);
 
-    stores.config.load_all(ca_state);   // restore time settings (tz_offset, sntp)
+    stores.time.load_time_settings(ca_state);
     stores.boiler.load_boiler_config(ca_state);  // restore boiler config (CH/DHW/PID/calib)
 
     // ── Phase 3: Network ─────────────────────────────────
@@ -152,7 +151,7 @@ extern "C" void app_main(void)
     SensorsPollInteractor sensors_poll(ca_sensors, ca_state);
     PidPollInteractor     pid_poll(ca_state, ca_boiler, ca_time, ca_log);
 
-    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.config, stores.boiler, ca_log, ca_time);
+    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time);
     sys_cfg.set_boiler_poll(&boiler_poll);
     sys_cfg.set_pid_poll(&pid_poll);
 
@@ -274,7 +273,7 @@ extern "C" void app_main(void)
     // start() создаёт FirmwareOtaInteractor, регистрирует flush-stats,
     // взводит валидацию и возвращает IOtaManager для HTTP-хендлеров.
     IOtaManager* ota_mgr = ota_ctrl.start({
-        .nvs = &stores.config, .heating_stats = &stores.heating_stats, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
+        .heating_stats = &stores.heating_stats, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
         .mod_stats = &mod_stats, .gas_flow = &gas_flow, .gas_corr = &gas_corr,
         .time = &ca_time, .total_uptime_base_sec = &total_uptime_base_sec
     });
@@ -354,7 +353,7 @@ extern "C" void app_main(void)
         //
         // ЗАМОРОЗКА NVS (D9): во время PENDING_VERIFY (до mark_valid) блобы не
         // пишем. Дублирующая защита — основные блобы дополнительно блокируются в
-        // самих save_* методах NvsConfigStore через OtaValidityAdapter::is_pending_global().
+        // самих save_* методах HeatingStatsNvsStore через OtaValidityAdapter::is_pending_global().
         // Если свежезалитая прошивка откатится, данные предыдущей валидной версии
         // останутся нетронутыми. save_tick НЕ сбрасываем во время заморозки, чтобы
         // первый после mark_valid save сработал ближайшей же итерацией (быстрое

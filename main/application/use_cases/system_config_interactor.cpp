@@ -8,7 +8,7 @@
 #include "domain/value_objects/ch_mode.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/iboiler_hardware.h"
-#include "application/ports/driven/iconfiguration_store.h"
+#include "application/ports/driven/itime_settings_store.h"
 #include "application/ports/driven/iboiler_config_store.h"
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
@@ -16,7 +16,7 @@
 #include <cstdarg>
 
 SystemConfigInteractor::SystemConfigInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
-                                                 IConfigurationStore& config, IBoilerConfigStore& boiler_cfg,
+                                                 ITimeSettingsStore& config, IBoilerConfigStore& boiler_cfg,
                                                  ILogger& log, ITimeSource& time)
     : state_(state), boiler_(boiler), config_(config), boiler_cfg_(boiler_cfg), log_(log), time_(time)
 {
@@ -33,7 +33,7 @@ void SystemConfigInteractor::save_and_log(const char* msg, ...)
     // modifying state mid-read (tearing multi-field config)
     state_.lock_shared();
     log_.event(ILogger::USER, "%s", buf);
-    config_.save_config(state_);              // time settings (tz_offset, sntp)
+    config_.save_time_settings(state_);       // time settings (tz_offset, sntp)
     boiler_cfg_.save_boiler_config(state_);   // boiler config (CH/DHW/PID/calib)
     state_.unlock_shared();
 }

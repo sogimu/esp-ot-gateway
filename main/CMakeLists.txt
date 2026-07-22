@@ -33,7 +33,7 @@ idf_component_register(
         "infrastructure/driven/esp_ota_adapter.cpp"
         "infrastructure/driven/ota_version_index_adapter.cpp"
         "infrastructure/driven/ota_validity_adapter.cpp"
-        "infrastructure/driven/nvs_config_store.cpp"
+        "infrastructure/driven/time_settings_nvs_store.cpp"
         "infrastructure/driving/main_poller_task_adapter.cpp"
         "infrastructure/driving/ota_interactor.cpp"
         "infrastructure/driving/ota_controller.cpp"

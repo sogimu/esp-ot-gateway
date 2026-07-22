@@ -54,7 +54,7 @@ GasCorrectionInteractor gas(state, gas_store, log);
     // State must have the value
     REQUIRE(state.get_gas_meter_base() == Approx(1234.567f));
     // save_meter must have been called (not save_config)
-    REQUIRE(config.save_config_called_ == 0);
+    REQUIRE(config.save_time_settings_called_ == 0);
 }
 
 TEST_CASE("GasMeter: load_meter restores gas_meter_base to state", "[gas][regression]") {

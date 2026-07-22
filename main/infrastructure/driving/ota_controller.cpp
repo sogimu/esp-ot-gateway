@@ -5,7 +5,6 @@
 #include "infrastructure/driven/ota_version_index_adapter.h"
 #include "infrastructure/driving/ota_interactor.h"
 
-#include "infrastructure/driven/nvs_config_store.h"
 #include "infrastructure/driven/heating_stats_nvs_store.h"
 #include "infrastructure/driven/heating_state_adapter.h"
 #include "application/services/burn_cycle_service.h"

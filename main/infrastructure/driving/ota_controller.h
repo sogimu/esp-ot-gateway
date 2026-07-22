@@ -23,7 +23,6 @@ class SntpTimeAdapter;
 class OtaController {
 public:
     struct Deps {
-        NvsConfigStore*          nvs;
         HeatingStatsNvsStore*   heating_stats;
         HeatingStateAdapter*     state;
         BurnCycleService*        burn_cycle_service;

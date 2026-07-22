@@ -1,6 +1,5 @@
 #pragma once
 
-#include "application/ports/driven/iconfiguration_store.h"
 #include <cstdint>
 #include <cstddef>
 
@@ -61,15 +60,3 @@ struct __attribute__((packed)) NvsPredictBlob { float rates[3]; int32_t idx, cou
 static_assert(sizeof(NvsPredictBlob) == 3 * 4 + 4 + 4, "NvsPredictBlob size mismatch");
 
 // ── CA NVS adapter (standalone, no MVC dependencies) ──────────
-
-class NvsConfigStore : public IConfigurationStore {
-public:
-    void init();   // nvs_flash_init
-
-    void load_all(IHeatingStateStore& state) override;
-    void save_config(const IHeatingStateStore& state) override;
-
-    bool save_eff(const IHeatingStateStore& state);
-    bool load_eff(IHeatingStateStore& state);
-
-};

@@ -43,7 +43,7 @@ TEST_CASE("Timezone: set_timezone(7) persists +7 to state and config store", "[t
     sys.set_timezone(7);
 
     REQUIRE(state.get_tz_offset() == 7);
-    REQUIRE(config.save_config_called_ > 0);
+    REQUIRE(config.save_time_settings_called_ > 0);
 }
 
 
