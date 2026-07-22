@@ -8,6 +8,7 @@
 class IHeatingStateStore;
 class IBoilerHardware;
 class IConfigurationStore;
+class IBoilerConfigStore;
 class ILogger;
 class ITimeSource;
 class BoilerPollInteractor;
@@ -20,8 +21,8 @@ class GasFlowService;
 class SystemConfigInteractor : public IConfigureSystem, public IConfigurePid, public IFaultReset, public IResetStatistics {
 public:
     SystemConfigInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
-                           IConfigurationStore& config, ILogger& log,
-                           ITimeSource& time);
+                           IConfigurationStore& config, IBoilerConfigStore& boiler_cfg,
+                           ILogger& log, ITimeSource& time);
 
     void set_boiler_poll(BoilerPollInteractor* bp) { boiler_poll_ = bp; }
     void set_pid_poll(PidPollInteractor* pp)   { pid_poll_ = pp; }
@@ -59,6 +60,7 @@ private:
     IHeatingStateStore&  state_;
     IBoilerHardware&     boiler_;
     IConfigurationStore& config_;
+    IBoilerConfigStore&  boiler_cfg_;
     ILogger&             log_;
     ITimeSource&         time_;
     BoilerPollInteractor* boiler_poll_ = nullptr;

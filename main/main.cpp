@@ -16,6 +16,7 @@
 #include "infrastructure/driven/temperature_sensor_adapter.h"
 #include "infrastructure/driven/web_presenter_adapter.h"
 #include "infrastructure/driven/nvs_config_store.h"
+#include "infrastructure/driven/boiler_nvs_store.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
@@ -68,6 +69,7 @@ extern "C" void app_main(void)
         NvsConfigStore config;
         WifiNvsStore   wifi;
         MqttNvsStore   mqtt;
+        BoilerNvsStore boiler;
     } stores;
     stores.config.init();
 
@@ -108,8 +110,9 @@ extern "C" void app_main(void)
     ca_web.set_log_reader(&ca_log);   // IEventLogReader (lock/unlock/to_json)
     ca_web.set_time_source(&ca_time);
 
-    stores.config.load_all(ca_state);  // restore persisted config into state
-    stores.config.load_meter(ca_state); // restore gas meter base reading
+    stores.config.load_all(ca_state);   // restore time settings (tz_offset, sntp)
+    stores.boiler.load_boiler_config(ca_state);  // restore boiler config (CH/DHW/PID/calib)
+    stores.config.load_meter(ca_state);  // restore gas meter base reading
 
     // ── Phase 3: Network ─────────────────────────────────
     stores.wifi.init();
@@ -141,7 +144,7 @@ extern "C" void app_main(void)
     SensorsPollInteractor sensors_poll(ca_sensors, ca_state);
     PidPollInteractor     pid_poll(ca_state, ca_boiler, ca_time, ca_log);
 
-    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.config, ca_log, ca_time);
+    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.config, stores.boiler, ca_log, ca_time);
     sys_cfg.set_boiler_poll(&boiler_poll);
     sys_cfg.set_pid_poll(&pid_poll);
 
