@@ -148,6 +148,23 @@ void SntpTimeAdapter::start()
     }
 }
 
+void SntpTimeAdapter::configure(int tz_offset, bool has_internet)
+{
+    set_timezone(tz_offset);
+    if (has_internet) {
+        start();
+        if (is_synced()) {
+            save_time_offset();
+        }
+    } else {
+        if (restore_time_offset()) {
+            ESP_LOGI(TAG, "SNTP пропущен (нет STA) — время из NVS");
+        } else {
+            ESP_LOGW(TAG, "SNTP пропущен, ручное время не задано");
+        }
+    }
+}
+
 void SntpTimeAdapter::set_timezone(int tz)
 {
     tz_offset_ = tz;

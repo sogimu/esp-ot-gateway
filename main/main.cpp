@@ -130,21 +130,7 @@ extern "C" void app_main(void)
 
     // SNTP + manual time
     ca_time.set_logger(&ca_log);
-    if (wifi_mode == IWifiManager::Mode::STA) {
-        // Full SNTP sync (STA mode has internet)
-        ca_time.start();
-        ca_time.set_timezone(ca_state.get_tz_offset());
-        if (ca_time.is_synced()) {
-            ca_time.save_time_offset();  // сохранить смещение в NVS для будущих загрузок
-        }
-    } else {
-        // No internet — try restoring manual time offset from NVS
-        if (ca_time.restore_time_offset()) {
-            ESP_LOGI("main", "SNTP пропущен (нет STA) — время из NVS");
-        } else {
-            ESP_LOGW("main", "SNTP пропущен, ручное время не задано");
-        }
-    }
+    ca_time.configure(ca_state.get_tz_offset(), wifi_mode == IWifiManager::Mode::STA);
 
     // ── Phase 4: Use cases ───────────────────────────────
     BoilerPollInteractor  boiler_poll(ca_boiler, ca_state, ca_log, ca_time);

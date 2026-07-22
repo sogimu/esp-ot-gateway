@@ -11,6 +11,7 @@ public:
     ~SntpTimeAdapter();
 
     void start();
+    void configure(int tz_offset, bool has_internet);
     void set_timezone(int tz_offset) override;
     int tz_offset() const override { return tz_offset_; }
     void set_servers(const char* srv0, const char* srv1);
