@@ -144,7 +144,7 @@ extern "C" void app_main(void)
     GasCorrectionInteractor gas_corr(ca_state, stores.gas, ca_log);
 
     // ── Phase 5: Application services ────────────────────
-    ModulationStatsService mod_stats(ca_state);
+    ModulationStatsService mod_stats(ca_state, stores.heating_stats);
     BurnCycleService       burn_cycle_service(ca_state, ca_time, stores.burn_stats);
     GasFlowService         gas_flow(ca_state, ca_time);
     sys_cfg.set_burn_cycles(&burn_cycle_service);
@@ -161,34 +161,11 @@ extern "C" void app_main(void)
     // Restore saved burner stats from NVS
     burn_cycle_service.load_from_store();
 
-    // Restore modulation histogram from NVS
+    // Restore modulation histogram + integral from NVS
     {
-        static NvsHistBlob hist_blob;
-        memset(&hist_blob, 0, sizeof(hist_blob));
-        float saved_integ_m3 = 0;
-        uint32_t saved_burner_sec_hist = 0;
-        if (stores.heating_stats.load_stats(saved_burner_sec_hist, saved_integ_m3,
-                           &hist_blob, nullptr, nullptr, nullptr)) {
-            // Migration: under the new bounded scheme the histogram is halved
-            // whenever samples reaches DECAY_THRESHOLD, so a live count can
-            // never reach it. A restored blob at/above the threshold is
-            // old-format cumulative data (unbounded, not flame-gated, idle-time
-            // flooded bin 0) — discard it for a clean slate instead of letting
-            // months of skewed history slowly decay away.
-            if (hist_blob.samples >= ModulationStatsService::DECAY_THRESHOLD) {
-                ESP_LOGW("main", "NVS: старая накопительная гистограмма (samples=%" PRIu32
-                                 ") отброшена — статистика модуляции начнётся заново",
-                         hist_blob.samples);
-            } else {
-                *mod_stats.samples_ptr() = hist_blob.samples;
-                for (int i = 0; i < HIST_BINS; i++)
-                    mod_stats.hist_ptr()[i] = hist_blob.hist[i];
-                ESP_LOGI("main", "NVS: восстановлена гистограмма (samples=%" PRIu32 ")",
-                         hist_blob.samples);
-            }
-            gas_flow.set_integral(saved_integ_m3);
-            ESP_LOGI("main", "NVS: integral_m3=%.3f", (double)saved_integ_m3);
-        }
+        float saved_im3 = 0;
+        mod_stats.load_from_store(&saved_im3);
+        gas_flow.set_integral(saved_im3);
     }
 
     // Restore total uptime (cumulative across reboots)
@@ -354,10 +331,7 @@ extern "C" void app_main(void)
                 uint32_t bs = burn_cycle_service.burner_seconds();
                 burn_cycle_service.save_to_store();
                 static NvsHistBlob hist_blob;
-                hist_blob.samples = mod_stats.samples();
-                for (int i = 0; i < HIST_BINS; i++) {
-                    hist_blob.hist[i] = mod_stats.hist_ptr()[i];
-                }
+                mod_stats.fill_histogram(hist_blob);
                 stores.heating_stats.save_stats(ca_state, bs, gas_flow.integral_m3(),
                                &hist_blob, nullptr, nullptr, nullptr);
                 stores.heating_stats.save_total_uptime(total_uptime_base_sec +

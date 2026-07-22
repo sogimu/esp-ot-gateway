@@ -4,6 +4,7 @@
 #include "application/ports/driving/ipollable.h"
 
 class IHeatingStateStore;
+class IHeatingStatsStore;
 
 /// Tracks modulation histogram (100 bins, 1% resolution) — heap-allocated to
 /// avoid stack overflow.
@@ -34,7 +35,7 @@ public:
     /// operation — recent enough to react to changes, wide enough to be stable.
     static constexpr uint32_t DECAY_THRESHOLD = 50000;
 
-    ModulationStatsService(IHeatingStateStore& state);
+    ModulationStatsService(IHeatingStateStore& state, IHeatingStatsStore& store);
     ~ModulationStatsService();
 
     void poll() override;
@@ -49,11 +50,12 @@ public:
     float p75() const;
     float p90() const;
     float p99() const;
-    uint32_t* samples_ptr() { return &samples_; }
-    uint32_t* hist_ptr() { return hist_; }
+    void load_from_store(float* integ_m3_out = nullptr);
+    void fill_histogram(struct NvsHistBlob& blob) const;
 
 private:
-    IHeatingStateStore& state_;
+    IHeatingStateStore&  state_;
+    IHeatingStatsStore&  store_;
     uint32_t* hist_; // malloc'd
     uint32_t samples_ = 0;
     float percentile(float p) const;

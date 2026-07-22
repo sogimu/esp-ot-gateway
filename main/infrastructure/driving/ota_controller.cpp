@@ -69,10 +69,7 @@ void flush_stats_cb(void* ctxv)
 
     static NvsHistBlob hist_blob;
     memset(&hist_blob, 0, sizeof(hist_blob));
-    hist_blob.samples = d.mod_stats->samples();
-    for (int i = 0; i < HIST_BINS; i++) {
-        hist_blob.hist[i] = d.mod_stats->hist_ptr()[i];
-    }
+    d.mod_stats->fill_histogram(hist_blob);
     d.heating_stats->save_stats(*d.state, bs, d.gas_flow->integral_m3(),
                       &hist_blob, nullptr, nullptr, nullptr);
     d.heating_stats->save_total_uptime(*d.total_uptime_base_sec +

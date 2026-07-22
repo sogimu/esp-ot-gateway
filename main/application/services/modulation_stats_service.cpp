@@ -1,11 +1,14 @@
 #include "application/services/modulation_stats_service.h"
 #include "application/ports/driven/iheating_state_store.h"
+#include "application/ports/driven/iheating_stats_store.h"
+#include "infrastructure/driven/nvs_config_store.h"  // NvsHistBlob, HIST_BINS
+#include "esp_log.h"
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 
-ModulationStatsService::ModulationStatsService(IHeatingStateStore& state)
-    : state_(state)
+ModulationStatsService::ModulationStatsService(IHeatingStateStore& state, IHeatingStatsStore& store)
+    : state_(state), store_(store)
 {
     hist_ = static_cast<uint32_t*>(malloc(BINS * sizeof(uint32_t)));
     if (hist_) std::memset(hist_, 0, BINS * sizeof(uint32_t));
@@ -82,3 +85,36 @@ float ModulationStatsService::p50() const { return percentile(0.50f); }
 float ModulationStatsService::p75() const { return percentile(0.75f); }
 float ModulationStatsService::p90() const { return percentile(0.90f); }
 float ModulationStatsService::p99() const { return percentile(0.99f); }
+
+
+// ── NVS persistence ────────────────────────────────────────────
+
+void ModulationStatsService::load_from_store(float* integ_m3_out)
+{
+    NvsHistBlob hist_blob;
+    memset(&hist_blob, 0, sizeof(hist_blob));
+    float saved_integ_m3 = 0;
+    uint32_t saved_burner_sec = 0;
+    if (store_.load_stats(saved_burner_sec, saved_integ_m3,
+                          &hist_blob, nullptr, nullptr, nullptr)) {
+        if (hist_blob.samples >= DECAY_THRESHOLD) {
+            ESP_LOGW("mod_svc", "NVS: старая накопительная гистограмма (samples=%" PRIu32
+                     ") отброшена — статистика модуляции начнётся заново",
+                     hist_blob.samples);
+        } else {
+            samples_ = hist_blob.samples;
+            for (int i = 0; i < BINS; i++)
+                hist_[i] = hist_blob.hist[i];
+            ESP_LOGI("mod_svc", "NVS: восстановлена гистограмма (samples=%" PRIu32 ")",
+                     hist_blob.samples);
+        }
+        if (integ_m3_out) *integ_m3_out = saved_integ_m3;
+    }
+}
+
+void ModulationStatsService::fill_histogram(NvsHistBlob& blob) const
+{
+    blob.samples = samples_;
+    for (int i = 0; i < BINS; i++)
+        blob.hist[i] = hist_[i];
+}
