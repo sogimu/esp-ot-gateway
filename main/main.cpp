@@ -61,8 +61,15 @@ extern "C" void app_main(void)
     // ── Phase 1: Foundation ──────────────────────────────
     EventLogAdapter ca_log;
 
-    NvsConfigStore nvs;
-    nvs.init();
+    // NVS-хранилища сгруппированы вместе: config (настройки + статистика),
+    // wifi (учётные данные), mqtt (параметры брокера). Конструируются здесь,
+    // инициализируются каждый в своей фазе.
+    struct {
+        NvsConfigStore config;
+        WifiNvsStore   wifi;
+        MqttNvsStore   mqtt;
+    } stores;
+    stores.config.init();
 
     // OTA-контроллер: владеет адаптерами валидности, загрузки, версий
     // и интерактором. Конструктор создаёт OtaValidityAdapter (нужен для
@@ -101,15 +108,14 @@ extern "C" void app_main(void)
     ca_web.set_log_reader(&ca_log);   // IEventLogReader (lock/unlock/to_json)
     ca_web.set_time_source(&ca_time);
 
-    nvs.load_all(ca_state);  // restore persisted config into state
-    nvs.load_meter(ca_state); // restore gas meter base reading
+    stores.config.load_all(ca_state);  // restore persisted config into state
+    stores.config.load_meter(ca_state); // restore gas meter base reading
 
     // ── Phase 3: Network ─────────────────────────────────
-    WifiNvsStore     wifi_nvs;
-    wifi_nvs.init();
+    stores.wifi.init();
 
     Esp32WifiAdapter   wifi_hw;
-    WifiApStaAdapter   wifi(wifi_hw, wifi_nvs);
+    WifiApStaAdapter   wifi(wifi_hw, stores.wifi);
     auto wifi_mode = wifi.boot();
 
     // SNTP + manual time
@@ -135,20 +141,20 @@ extern "C" void app_main(void)
     SensorsPollInteractor sensors_poll(ca_sensors, ca_state);
     PidPollInteractor     pid_poll(ca_state, ca_boiler, ca_time, ca_log);
 
-    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, nvs, ca_log, ca_time);
+    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.config, ca_log, ca_time);
     sys_cfg.set_boiler_poll(&boiler_poll);
     sys_cfg.set_pid_poll(&pid_poll);
 
-    GasCorrectionInteractor gas_corr(ca_state, nvs, ca_log);
+    GasCorrectionInteractor gas_corr(ca_state, stores.config, ca_log);
 
     // ── Phase 5: Application services ────────────────────
     ModulationStatsService mod_stats(ca_state);
-    BurnCycleService       burn_cycles(ca_state, ca_time);
+    BurnCycleService       burn_cycle_service(ca_state, ca_time);
     GasFlowService         gas_flow(ca_state, ca_time);
-    sys_cfg.set_burn_cycles(&burn_cycles);
+    sys_cfg.set_burn_cycle_service(&burn_cycle_service);
     sys_cfg.set_mod_stats(&mod_stats);
     sys_cfg.set_gas_flow_reset(&gas_flow);
-    DHWPredictService      dhw_predict(ca_state, nvs, ca_time);
+    DHWPredictService      dhw_predict(ca_state, stores.config, ca_time);
     dhw_predict.load_history();
 
     // Wire gas correction interactor to gas flow service and restore correction log
@@ -160,13 +166,13 @@ extern "C" void app_main(void)
     {
         uint32_t bs = 0, tps = 0, cc = 0, ips = 0, ic = 0, mps = 0, mc = 0;
         if (nvs.load_burn_stats(bs, tps, cc, ips, ic, mps, mc)) {
-            *burn_cycles.burner_sec_ptr()      = bs;
-            *burn_cycles.total_pause_sec_ptr() = tps;
-            *burn_cycles.cycle_cnt_ptr()       = cc;
-            *burn_cycles.inter_pause_sec_ptr() = ips;
-            *burn_cycles.inter_cnt_ptr()       = ic;
-            *burn_cycles.mod_pause_sec_ptr()   = mps;
-            *burn_cycles.mod_cnt_ptr()         = mc;
+            *burn_cycle_service.burner_sec_ptr()      = bs;
+            *burn_cycle_service.total_pause_sec_ptr() = tps;
+            *burn_cycle_service.cycle_cnt_ptr()       = cc;
+            *burn_cycle_service.inter_pause_sec_ptr() = ips;
+            *burn_cycle_service.inter_cnt_ptr()       = ic;
+            *burn_cycle_service.mod_pause_sec_ptr()   = mps;
+            *burn_cycle_service.mod_cnt_ptr()         = mc;
             ESP_LOGI("main", "NVS: восстановлена burn-статистика (burner_sec=%" PRIu32 ")", bs);
         }
     }
@@ -203,20 +209,19 @@ extern "C" void app_main(void)
 
     // Restore total uptime (cumulative across reboots)
     uint32_t total_uptime_base_sec = 0;
-    nvs.load_total_uptime(total_uptime_base_sec);
+    stores.config.load_total_uptime(total_uptime_base_sec);
     ca_web.set_total_uptime_base(total_uptime_base_sec);
 
     ca_web.set_mod_stats(&mod_stats);
-    ca_web.set_burn_cycles(&burn_cycles);
+    ca_web.set_burn_cycle_service(&burn_cycle_service);
     ca_web.set_gas_flow(&gas_flow);
     ca_web.set_gas_correction(&gas_corr);
 
     // ── MQTT interactor ──────────────────────────────────
-    MqttNvsStore       mqtt_nvs;
-    mqtt_nvs.init();
+    stores.mqtt.init();
 
     MqttInteractor mqtt(ca_mqtt, ca_mqtt_queue,
-                        mqtt_nvs,      // IMqttConfigStore
+                        stores.mqtt,   // IMqttConfigStore
                         ca_state,
                         sys_cfg,       // IConfigureSystem
                         ca_log,
@@ -241,7 +246,7 @@ extern "C" void app_main(void)
     main_poller.add(&sensors_poll);
     main_poller.add(&pid_poll);
     main_poller.add(&mod_stats);
-    main_poller.add(&burn_cycles);
+    main_poller.add(&burn_cycle_service);
     main_poller.add(&gas_flow);
     main_poller.add(&dhw_predict);
     main_poller.add(&mqtt);       // MQTT: публикация после обновления состояния
@@ -270,7 +275,7 @@ extern "C" void app_main(void)
     // start() создаёт FirmwareOtaInteractor, регистрирует flush-stats,
     // взводит валидацию и возвращает IOtaManager для HTTP-хендлеров.
     IOtaManager* ota_mgr = ota_ctrl.start({
-        .nvs = &nvs, .state = &ca_state, .burn_cycles = &burn_cycles,
+        .nvs = &stores.config, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
         .mod_stats = &mod_stats, .gas_flow = &gas_flow, .gas_corr = &gas_corr,
         .time = &ca_time, .total_uptime_base_sec = &total_uptime_base_sec
     });
@@ -362,24 +367,24 @@ extern "C" void app_main(void)
                 ESP_LOGW(TAG, "Периодический NVS-save пропущен: образ на проверке (PENDING_VERIFY)");
             } else {
                 save_tick = 0;
-                uint32_t bs = burn_cycles.burner_seconds();
-                nvs.save_burn_stats(bs,
-                                    burn_cycles.total_pause_seconds(),
-                                    burn_cycles.cycle_count(),
-                                    burn_cycles.inter_session_pause_sec(),
-                                    burn_cycles.inter_session_cnt(),
-                                    burn_cycles.modulation_pause_sec(),
-                                    burn_cycles.modulation_cnt());
+                uint32_t bs = burn_cycle_service.burner_seconds();
+                stores.config.save_burn_stats(bs,
+                                    burn_cycle_service.total_pause_seconds(),
+                                    burn_cycle_service.cycle_count(),
+                                    burn_cycle_service.inter_session_pause_sec(),
+                                    burn_cycle_service.inter_session_cnt(),
+                                    burn_cycle_service.modulation_pause_sec(),
+                                    burn_cycle_service.modulation_cnt());
                 static NvsHistBlob hist_blob;
                 hist_blob.samples = mod_stats.samples();
                 for (int i = 0; i < HIST_BINS; i++) {
                     hist_blob.hist[i] = mod_stats.hist_ptr()[i];
                 }
-                nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
+                stores.config.save_stats(ca_state, bs, gas_flow.integral_m3(),
                                &hist_blob, nullptr, nullptr, nullptr);
-                nvs.save_total_uptime(total_uptime_base_sec +
+                stores.config.save_total_uptime(total_uptime_base_sec +
                                       (uint32_t)(ca_time.monotonic_us() / 1000000));
-                nvs.save_meter(ca_state, &gas_corr.meter_blob());
+                stores.config.save_meter(ca_state, &gas_corr.meter_blob());
             }
         }
     }
