@@ -1,3 +1,4 @@
+#include "application/ports/driven/iburn_stats_store.h"
 /// Tests for reset statistics use cases — verify actual data reset via SystemConfigInteractor.
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
@@ -33,6 +34,11 @@ struct ResetTestLogger : public ILogger {
 
 // ═══ reset_cycle_stats ═══
 
+struct FakeBurnStatsStore : IBurnStatsStore {
+    bool load_burn_stats(uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&) override { return false; }
+    void save_burn_stats(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) override {}
+};
+
 TEST_CASE("ResetStats: reset_cycle_stats clears burner data", "[reset][cycle]")
 {
     FakeHeatingStateStore state;
@@ -41,7 +47,8 @@ TEST_CASE("ResetStats: reset_cycle_stats clears burner data", "[reset][cycle]")
     FakeTimeSource time;
     ResetTestLogger log;
 
-    BurnCycleService burn_cycles(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService burn_cycles(state, time, burn_store);
     state.set_flame(true);
     time.advance_ms(100);
     burn_cycles.poll();
@@ -71,7 +78,8 @@ TEST_CASE("ResetStats: reset_cycle_stats on empty data is safe", "[reset][cycle]
     FakeTimeSource time;
     ResetTestLogger log;
 
-    BurnCycleService burn_cycles(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService burn_cycles(state, time, burn_store);
     REQUIRE(burn_cycles.cycle_count() == 0);
 
     FakeBoilerConfigStore boiler_cfg;

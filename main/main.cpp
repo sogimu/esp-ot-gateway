@@ -158,7 +158,7 @@ extern "C" void app_main(void)
 
     // ── Phase 5: Application services ────────────────────
     ModulationStatsService mod_stats(ca_state);
-    BurnCycleService       burn_cycle_service(ca_state, ca_time);
+    BurnCycleService       burn_cycle_service(ca_state, ca_time, stores.burn_stats);
     GasFlowService         gas_flow(ca_state, ca_time);
     sys_cfg.set_burn_cycles(&burn_cycle_service);
     sys_cfg.set_mod_stats(&mod_stats);
@@ -172,19 +172,7 @@ extern "C" void app_main(void)
     gas_corr.init();
 
     // Restore saved burner stats from NVS
-    {
-        uint32_t bs = 0, tps = 0, cc = 0, ips = 0, ic = 0, mps = 0, mc = 0;
-        if (stores.burn_stats.load_burn_stats(bs, tps, cc, ips, ic, mps, mc)) {
-            *burn_cycle_service.burner_sec_ptr()      = bs;
-            *burn_cycle_service.total_pause_sec_ptr() = tps;
-            *burn_cycle_service.cycle_cnt_ptr()       = cc;
-            *burn_cycle_service.inter_pause_sec_ptr() = ips;
-            *burn_cycle_service.inter_cnt_ptr()       = ic;
-            *burn_cycle_service.mod_pause_sec_ptr()   = mps;
-            *burn_cycle_service.mod_cnt_ptr()         = mc;
-            ESP_LOGI("main", "NVS: восстановлена burn-статистика (burner_sec=%" PRIu32 ")", bs);
-        }
-    }
+    burn_cycle_service.load_from_store();
 
     // Restore modulation histogram from NVS
     {
@@ -284,7 +272,7 @@ extern "C" void app_main(void)
     // start() создаёт FirmwareOtaInteractor, регистрирует flush-stats,
     // взводит валидацию и возвращает IOtaManager для HTTP-хендлеров.
     IOtaManager* ota_mgr = ota_ctrl.start({
-        .nvs = &stores.config, .burn_stats = &stores.burn_stats, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
+        .nvs = &stores.config, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
         .mod_stats = &mod_stats, .gas_flow = &gas_flow, .gas_corr = &gas_corr,
         .time = &ca_time, .total_uptime_base_sec = &total_uptime_base_sec
     });
@@ -377,13 +365,7 @@ extern "C" void app_main(void)
             } else {
                 save_tick = 0;
                 uint32_t bs = burn_cycle_service.burner_seconds();
-                stores.burn_stats.save_burn_stats(bs,
-                                    burn_cycle_service.total_pause_seconds(),
-                                    burn_cycle_service.cycle_count(),
-                                    burn_cycle_service.inter_session_pause_sec(),
-                                    burn_cycle_service.inter_session_cnt(),
-                                    burn_cycle_service.modulation_pause_sec(),
-                                    burn_cycle_service.modulation_cnt());
+                burn_cycle_service.save_to_store();
                 static NvsHistBlob hist_blob;
                 hist_blob.samples = mod_stats.samples();
                 for (int i = 0; i < HIST_BINS; i++) {

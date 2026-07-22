@@ -1,3 +1,4 @@
+#include "application/ports/driven/iburn_stats_store.h"
 /// Edge-case tests for BurnCycleService.
 
 #include <catch2/catch_test_macros.hpp>
@@ -8,11 +9,17 @@
 
 using Catch::Approx;
 
+struct FakeBurnStatsStore : IBurnStatsStore {
+    bool load_burn_stats(uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&) override { return false; }
+    void save_burn_stats(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) override {}
+};
+
 TEST_CASE("BurnCycleService: cycle count remains 0 with no transitions", "[burn_cycle]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService svc(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService svc(state, time, burn_store);
 
     for (int i = 0; i < 10; i++) {
         time.advance_ms(1100);
@@ -26,7 +33,8 @@ TEST_CASE("BurnCycleService: reset clears all counters", "[burn_cycle]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService svc(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService svc(state, time, burn_store);
 
     state.set_flame(true);
     svc.poll();
@@ -50,7 +58,8 @@ TEST_CASE("BurnCycleService: avg_burn_sec with one cycle", "[burn_cycle]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService svc(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService svc(state, time, burn_store);
 
     state.set_flame(true);
     svc.poll();
@@ -67,7 +76,8 @@ TEST_CASE("BurnCycleService: avg_burn_sec is zero with no cycles", "[burn_cycle]
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService svc(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService svc(state, time, burn_store);
 
     CHECK(svc.burner_hours() == 0.0f);
     CHECK(svc.avg_burn_sec() == 0.0f);
@@ -80,7 +90,8 @@ TEST_CASE("BurnCycleService: reset zeros out everything", "[burn_cycle]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService svc(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService svc(state, time, burn_store);
 
     state.set_flame(true);
     svc.poll();
@@ -102,7 +113,8 @@ TEST_CASE("BurnCycleService: modulation vs inter-session pause classification", 
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService svc(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService svc(state, time, burn_store);
 
     // Burn 1
     state.set_flame(true);

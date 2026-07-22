@@ -1,3 +1,4 @@
+#include "application/ports/driven/iburn_stats_store.h"
 #include "application/ports/driven/igas_correction_store.h"
 #include "application/ports/driven/igas_correction_store.h"
 /// Integration tests for gas flow estimation, correction, and JSON rendering.
@@ -60,6 +61,11 @@ struct FakeGasStore : IGasCorrectionStore {
     void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
 };
 
+struct FakeBurnStatsStore : IBurnStatsStore {
+    bool load_burn_stats(uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&) override { return false; }
+    void save_burn_stats(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) override {}
+};
+
 TEST_CASE("no corrections gives zero error pct", "[integration][gas]")
 {
     // Without calling add_meter_correction, gas_error_pct must be 0.
@@ -74,7 +80,8 @@ GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
-    BurnCycleService burn_cycles(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService burn_cycles(state, time, burn_store);
 
     WebPresenterAdapter presenter;
     presenter.set_state(&state);
@@ -109,7 +116,8 @@ GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
-    BurnCycleService burn_cycles(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService burn_cycles(state, time, burn_store);
 
     // Set base reading and integral
     state.set_gas_meter_base(1000.0f);
@@ -152,7 +160,8 @@ GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
-    BurnCycleService burn_cycles(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService burn_cycles(state, time, burn_store);
 
     // Correction 1: base=100, integral=50 → estimated=150, actual=200, diff=50
     state.set_gas_meter_base(100.0f);
@@ -201,7 +210,8 @@ GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
-    BurnCycleService burn_cycles(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService burn_cycles(state, time, burn_store);
 
     state.set_gas_meter_base(100.0f);
     state.set_k_calib(1.0f);
@@ -278,7 +288,8 @@ GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
-    BurnCycleService burn_cycles(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService burn_cycles(state, time, burn_store);
 
     // Set boiler model values
     state.set_gas_temp_offset(-5.0f);

@@ -1,3 +1,4 @@
+#include "application/ports/driven/iburn_stats_store.h"
 /// Tests for BurnCycleService burn/pause duration rounding.
 /// Regression: integer division truncated (lost up to 0.999s per cycle).
 
@@ -9,10 +10,16 @@
 
 using Catch::Approx;
 
+struct FakeBurnStatsStore : IBurnStatsStore {
+    bool load_burn_stats(uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&) override { return false; }
+    void save_burn_stats(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) override {}
+};
+
 TEST_CASE("BurnCycle: burn duration 1.5s rounds to 2s", "[burn]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(true);
     bcs.poll();
@@ -28,7 +35,8 @@ TEST_CASE("BurnCycle: burn duration 1.5s rounds to 2s", "[burn]") {
 TEST_CASE("BurnCycle: burn duration 0.4s rounds to 0s", "[burn]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(true);
     bcs.poll();
@@ -43,7 +51,8 @@ TEST_CASE("BurnCycle: burn duration 0.4s rounds to 0s", "[burn]") {
 TEST_CASE("BurnCycle: three 0.6s burns accumulate to 3s with rounding", "[burn]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     for (int c = 0; c < 3; c++) {
         state.set_flame(true);
@@ -63,7 +72,8 @@ TEST_CASE("BurnCycle: three 0.6s burns accumulate to 3s with rounding", "[burn]"
 TEST_CASE("BurnCycle: 3600s burn equals exactly 1.0 burner hours", "[burn]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(true);
     bcs.poll();
@@ -79,7 +89,8 @@ TEST_CASE("BurnCycle: 3600s burn equals exactly 1.0 burner hours", "[burn]") {
 TEST_CASE("BurnCycle: first cycle burner_sec is not double-counted", "[burn]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(true);
     bcs.poll();

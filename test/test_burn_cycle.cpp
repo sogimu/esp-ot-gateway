@@ -1,3 +1,4 @@
+#include "application/ports/driven/iburn_stats_store.h"
 /// Tests for BurnCycleService: flame edge detection, cycle tracking, averages.
 
 #include <catch2/catch_test_macros.hpp>
@@ -8,10 +9,16 @@
 
 using Catch::Approx;
 
+struct FakeBurnStatsStore : IBurnStatsStore {
+    bool load_burn_stats(uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&) override { return false; }
+    void save_burn_stats(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) override {}
+};
+
 TEST_CASE("BurnCycle: initial state is empty", "[burn][app]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     REQUIRE(bcs.cycle_count() == 0);
     REQUIRE(bcs.burner_seconds() == 0);
@@ -23,7 +30,8 @@ TEST_CASE("BurnCycle: initial state is empty", "[burn][app]") {
 TEST_CASE("BurnCycle: detects flame on→off edge", "[burn][app]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(false);
     bcs.poll();
@@ -45,7 +53,8 @@ TEST_CASE("BurnCycle: detects flame on→off edge", "[burn][app]") {
 TEST_CASE("BurnCycle: accumulates burner seconds on flame-off edge", "[burn][app]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(true);
     bcs.poll();
@@ -64,7 +73,8 @@ TEST_CASE("BurnCycle: accumulates burner seconds on flame-off edge", "[burn][app
 TEST_CASE("BurnCycle: no cycles counted when flame stays off", "[burn][app]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(false);
 
@@ -79,7 +89,8 @@ TEST_CASE("BurnCycle: no cycles counted when flame stays off", "[burn][app]") {
 TEST_CASE("BurnCycle: multiple complete burn cycles", "[burn][app]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     for (int c = 0; c < 3; c++) {
         state.set_flame(true);
@@ -99,7 +110,8 @@ TEST_CASE("BurnCycle: multiple complete burn cycles", "[burn][app]") {
 TEST_CASE("BurnCycle: average burn computed from cumulative counters", "[burn][app]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     // Two cycles: 30s and 60s
     state.set_flame(true);
@@ -128,7 +140,8 @@ TEST_CASE("BurnCycle: average burn computed from cumulative counters", "[burn][a
 TEST_CASE("BurnCycle: burner_hours converts seconds to hours", "[burn][app]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(true);
     bcs.poll();
@@ -144,7 +157,8 @@ TEST_CASE("BurnCycle: burner_hours converts seconds to hours", "[burn][app]") {
 TEST_CASE("BurnCycle: pause classification by 10min threshold", "[burn][app]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    BurnCycleService bcs(state, time);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService bcs(state, time, burn_store);
 
     // First burn
     state.set_flame(true);

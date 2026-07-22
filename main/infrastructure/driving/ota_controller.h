@@ -23,7 +23,6 @@ class OtaController {
 public:
     struct Deps {
         NvsConfigStore*          nvs;
-        class BurnStatsNvsStore* burn_stats;
         HeatingStateAdapter*     state;
         BurnCycleService*        burn_cycle_service;
         ModulationStatsService*  mod_stats;
