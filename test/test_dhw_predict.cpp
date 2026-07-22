@@ -1,3 +1,4 @@
+#include "application/ports/driven/ipredict_store.h"
 /// Tests for DHWPredictService (application/services/dhw_predict_service.h)
 /// Covers: session lifecycle (start/update/finish), edge detection,
 ///         prediction computation, history persistence.
@@ -14,12 +15,25 @@ using Catch::Approx;
 
 // ── Construction & Initialization ───────────────────────────
 
+// FakePredictStore delegates to FakeConfigurationStore for predict methods
+struct FakePredictStore : IPredictStore {
+    FakeConfigurationStore* cfg = nullptr;
+    bool load_predict(float r[3], int& idx, int& cnt) override {
+        return cfg ? cfg->load_predict(r, idx, cnt) : false;
+    }
+    void save_predict(const float r[3], int idx, int cnt) override {
+        if (cfg) cfg->save_predict(r, idx, cnt);
+    }
+};
+
 TEST_CASE("DHWPredict: default state after construction", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     // No prediction active initially
     REQUIRE(state.get_dhw_pred_active() == false);
@@ -30,9 +44,11 @@ TEST_CASE("DHWPredict: default state after construction", "[dhw_pred][app]") {
 TEST_CASE("DHWPredict: load_history when NVS returns nothing", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
     svc.load_history(); // config returns false → uses defaults
 
     // Should not crash or set anything unexpected
@@ -42,13 +58,15 @@ TEST_CASE("DHWPredict: load_history when NVS returns nothing", "[dhw_pred][app]"
 TEST_CASE("DHWPredict: load_history restores saved rates", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
 
     // Pre-populate NVS with history
     float saved_rates[3] = {0.04f, 0.05f, 0.06f};
     config.set_predict_history(saved_rates, 2, 3);
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
     svc.load_history();
 
     // Should not crash — verified via no prediction yet
@@ -60,10 +78,12 @@ TEST_CASE("DHWPredict: load_history restores saved rates", "[dhw_pred][app]") {
 TEST_CASE("DHWPredict: session starts when flame+dwh_active both become true", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
     time.set_us(1000000); // 1 second
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     // Set DHW initial temperature
     state.set_dhw_temp(45.0f);
@@ -87,10 +107,12 @@ TEST_CASE("DHWPredict: session starts when flame+dwh_active both become true", "
 TEST_CASE("DHWPredict: prediction appears after 2+ cycles of heating", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
     time.set_us(1000000);
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     state.set_dhw_temp(45.0f);
     state.set_dhw_setpoint(55.0f);
@@ -127,10 +149,12 @@ TEST_CASE("DHWPredict: prediction appears after 2+ cycles of heating", "[dhw_pre
 TEST_CASE("DHWPredict: session ends when flame goes off", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
     time.set_us(1000000);
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     // Start a heating session
     state.set_dhw_temp(45.0f);
@@ -161,10 +185,12 @@ TEST_CASE("DHWPredict: session ends when flame goes off", "[dhw_pred][app]") {
 TEST_CASE("DHWPredict: persist history on session finish", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
     time.set_us(1000000);
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     // Start session
     state.set_dhw_temp(40.0f);
@@ -194,9 +220,11 @@ TEST_CASE("DHWPredict: persist history on session finish", "[dhw_pred][app]") {
 TEST_CASE("DHWPredict: no session when only flame but no dhw_active", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     // CH heating: flame=1 but dhw_active=0
     state.set_flame(true);
@@ -215,9 +243,11 @@ TEST_CASE("DHWPredict: no session when only flame but no dhw_active", "[dhw_pred
 TEST_CASE("DHWPredict: no session when dhw_active but no flame", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     // DHW pump running but flame off (pre-purge or post-purge)
     state.set_flame(false);
@@ -235,10 +265,12 @@ TEST_CASE("DHWPredict: no session when dhw_active but no flame", "[dhw_pred][app
 TEST_CASE("DHWPredict: prediction gives reasonable remaining time", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
     time.set_us(1000000);
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     state.set_dhw_temp(50.0f);
     state.set_dhw_setpoint(55.0f);
@@ -267,10 +299,12 @@ TEST_CASE("DHWPredict: prediction gives reasonable remaining time", "[dhw_pred][
 TEST_CASE("DHWPredict: prediction handles temperature near setpoint", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
     time.set_us(1000000);
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     state.set_dhw_temp(54.8f); // very close to setpoint
     state.set_dhw_setpoint(55.0f);
@@ -294,10 +328,12 @@ TEST_CASE("DHWPredict: prediction handles temperature near setpoint", "[dhw_pred
 TEST_CASE("DHWPredict: handles rapid temperature changes gracefully", "[dhw_pred][app]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakePredictStore pred_store;
     FakeTimeSource time;
     time.set_us(1000000);
 
-    DHWPredictService svc(state, config, time);
+        pred_store.cfg = &config;
+    DHWPredictService svc(state, pred_store, time);
 
     state.set_dhw_temp(40.0f);
     state.set_dhw_setpoint(55.0f);

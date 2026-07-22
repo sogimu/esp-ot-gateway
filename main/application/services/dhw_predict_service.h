@@ -5,7 +5,7 @@
 #include "domain/services/kalman2d.h"
 
 class IHeatingStateStore;
-class IConfigurationStore;
+class IPredictStore;
 class ITimeSource;
 
 /// DHW heating time prediction using Kalman2D filter.
@@ -16,7 +16,7 @@ class ITimeSource;
 /// Reads from state_ (lock_shared), writes prediction to state_ (lock_exclusive).
 class DHWPredictService : public IPollable {
 public:
-    DHWPredictService(IHeatingStateStore& state, IConfigurationStore& config, ITimeSource& time);
+    DHWPredictService(IHeatingStateStore& state, IPredictStore& store, ITimeSource& time);
 
     void poll() override;
 
@@ -25,7 +25,7 @@ public:
 
 private:
     IHeatingStateStore&  state_;
-    IConfigurationStore& config_;
+    IPredictStore&       store_;
     ITimeSource&         time_;
 
     // Kalman filter state

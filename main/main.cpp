@@ -18,6 +18,7 @@
 #include "infrastructure/driven/nvs_config_store.h"
 #include "infrastructure/driven/boiler_nvs_store.h"
 #include "infrastructure/driven/gas_correction_nvs_store.h"
+#include "infrastructure/driven/predict_nvs_store.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
@@ -72,6 +73,7 @@ extern "C" void app_main(void)
         MqttNvsStore          mqtt;
         BoilerNvsStore        boiler;
         GasCorrectionNvsStore gas;
+        PredictNvsStore       predict;
     } stores;
     stores.config.init();
     stores.gas.init(stores.boiler);
@@ -159,7 +161,7 @@ extern "C" void app_main(void)
     sys_cfg.set_burn_cycles(&burn_cycle_service);
     sys_cfg.set_mod_stats(&mod_stats);
     sys_cfg.set_gas_flow_reset(&gas_flow);
-    DHWPredictService      dhw_predict(ca_state, stores.config, ca_time);
+    DHWPredictService      dhw_predict(ca_state, stores.predict, ca_time);
     dhw_predict.load_history();
 
     // Wire gas correction interactor to gas flow service and restore correction log

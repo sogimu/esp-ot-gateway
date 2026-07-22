@@ -138,14 +138,14 @@ public:
         else std::memset(&load_meter_blob_, 0, sizeof(load_meter_blob_));
     }
 
-    void save_predict(const float rates[3], int idx, int count) override {
+    void save_predict(const float rates[3], int idx, int count) {
         save_predict_called_++;
         std::memcpy(saved_rates_, rates, 3 * sizeof(float));
         saved_idx_ = idx;
         saved_count_ = count;
     }
 
-    bool load_predict(float rates[3], int& idx, int& count) override {
+    bool load_predict(float rates[3], int& idx, int& count) {
         if (!predict_returns_) return false;
         std::memcpy(rates, predict_rates_, 3 * sizeof(float));
         idx = predict_idx_;

@@ -281,39 +281,6 @@ void NvsConfigStore::save_integral(float value)
     nvs_commit(n); nvs_close(n);
 }
 
-
-// ── "predict" namespace ──────────────────────────────────────
-
-bool NvsConfigStore::load_predict(float r[3], int& idx, int& cnt)
-{
-    nvs_handle_t n;
-    if (nvs_open("predict", NVS_READONLY, &n) != ESP_OK) return false;
-    // D10: двухшаговый запрос размера — чтение только при точном совпадении.
-    NvsPredictBlob b; memset(&b, 0, sizeof(b));
-    size_t sz = 0;
-    if (nvs_get_blob(n, "dhw_hist", nullptr, &sz) == ESP_OK && sz == sizeof(b)) {
-        if (nvs_get_blob(n, "dhw_hist", &b, &sz) == ESP_OK) {
-            memcpy(r, b.rates, 3*sizeof(float)); idx=(int)b.idx; cnt=(int)b.count;
-        }
-    }
-    nvs_close(n); return true;
-}
-
-void NvsConfigStore::save_predict(const float r[3], int idx, int cnt)
-{
-    // D9: во время PENDING_VERIFY блоб predict/dhw_hist не пишем.
-    if (nvs_write_frozen_during_verify()) return;
-
-    nvs_handle_t n;
-    if (nvs_open("predict", NVS_READWRITE, &n) != ESP_OK) return;
-    NvsPredictBlob b;
-    memcpy(b.rates, r, 3*sizeof(float)); b.idx=(int32_t)idx; b.count=(int32_t)cnt;
-    nvs_set_blob(n, "dhw_hist", &b, sizeof(b));
-    nvs_commit(n); nvs_close(n);
-}
-
-// ── Burner stats persistence (stats namespace) ──
-
 bool NvsConfigStore::load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
                                         uint32_t& inter_pause_sec, uint32_t& inter_cnt,
                                         uint32_t& mod_pause_sec, uint32_t& mod_cnt)

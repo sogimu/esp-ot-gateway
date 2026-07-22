@@ -73,8 +73,6 @@ public:
     bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override;
     void save_meter(const IHeatingStateStore&, const void* blob = nullptr) override;
     bool load_meter(IHeatingStateStore&, void* blob = nullptr) override;
-    void save_predict(const float[3], int, int) override;
-    bool load_predict(float[3], int&, int&) override;
 
     void save_total_uptime(uint32_t total_uptime_sec) override;
     bool load_total_uptime(uint32_t& total_uptime_sec) override;

@@ -29,8 +29,6 @@ public:
     virtual bool load_meter(class IHeatingStateStore& state, void* blob = nullptr) = 0;
 
     /// Save/load DHW prediction history.
-    virtual void save_predict(const float rates[3], int idx, int count) = 0;
-    virtual bool load_predict(float rates[3], int& idx, int& count) = 0;
 
     /// Save/load cumulative burner statistics (survive reboot).
     virtual void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
