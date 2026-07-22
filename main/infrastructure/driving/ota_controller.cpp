@@ -6,6 +6,7 @@
 #include "infrastructure/driving/ota_interactor.h"
 
 #include "infrastructure/driven/nvs_config_store.h"
+#include "infrastructure/driven/heating_stats_nvs_store.h"
 #include "infrastructure/driven/heating_state_adapter.h"
 #include "application/services/burn_cycle_service.h"
 #include "application/services/modulation_stats_service.h"
@@ -73,11 +74,11 @@ void flush_stats_cb(void* ctxv)
     for (int i = 0; i < HIST_BINS; i++) {
         hist_blob.hist[i] = d.mod_stats->hist_ptr()[i];
     }
-    d.nvs->save_stats(*d.state, bs, d.gas_flow->integral_m3(),
+    d.heating_stats->save_stats(*d.state, bs, d.gas_flow->integral_m3(),
                       &hist_blob, nullptr, nullptr, nullptr);
-    d.nvs->save_total_uptime(*d.total_uptime_base_sec +
+    d.heating_stats->save_total_uptime(*d.total_uptime_base_sec +
                              (uint32_t)(d.time->monotonic_us() / 1000000));
-    d.nvs->save_meter(*d.state, &d.gas_corr->meter_blob());
+    d.heating_stats->save_meter(*d.state, &d.gas_corr->meter_blob());
 }
 
 }  // namespace

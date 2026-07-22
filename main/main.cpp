@@ -20,6 +20,7 @@
 #include "infrastructure/driven/gas_correction_nvs_store.h"
 #include "infrastructure/driven/predict_nvs_store.h"
 #include "infrastructure/driven/burn_stats_nvs_store.h"
+#include "infrastructure/driven/heating_stats_nvs_store.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
@@ -76,6 +77,7 @@ extern "C" void app_main(void)
         GasCorrectionNvsStore gas;
         PredictNvsStore       predict;
         BurnStatsNvsStore     burn_stats;
+        HeatingStatsNvsStore  heating_stats;
     } stores;
     stores.config.init();
     stores.gas.init(stores.boiler);
@@ -180,7 +182,7 @@ extern "C" void app_main(void)
         memset(&hist_blob, 0, sizeof(hist_blob));
         float saved_integ_m3 = 0;
         uint32_t saved_burner_sec_hist = 0;
-        if (stores.config.load_stats(saved_burner_sec_hist, saved_integ_m3,
+        if (stores.heating_stats.load_stats(saved_burner_sec_hist, saved_integ_m3,
                            &hist_blob, nullptr, nullptr, nullptr)) {
             // Migration: under the new bounded scheme the histogram is halved
             // whenever samples reaches DECAY_THRESHOLD, so a live count can
@@ -206,7 +208,7 @@ extern "C" void app_main(void)
 
     // Restore total uptime (cumulative across reboots)
     uint32_t total_uptime_base_sec = 0;
-    stores.config.load_total_uptime(total_uptime_base_sec);
+    stores.heating_stats.load_total_uptime(total_uptime_base_sec);
     ca_web.set_total_uptime_base(total_uptime_base_sec);
 
     ca_web.set_mod_stats(&mod_stats);
@@ -272,7 +274,7 @@ extern "C" void app_main(void)
     // start() создаёт FirmwareOtaInteractor, регистрирует flush-stats,
     // взводит валидацию и возвращает IOtaManager для HTTP-хендлеров.
     IOtaManager* ota_mgr = ota_ctrl.start({
-        .nvs = &stores.config, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
+        .nvs = &stores.config, .heating_stats = &stores.heating_stats, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
         .mod_stats = &mod_stats, .gas_flow = &gas_flow, .gas_corr = &gas_corr,
         .time = &ca_time, .total_uptime_base_sec = &total_uptime_base_sec
     });
@@ -371,9 +373,9 @@ extern "C" void app_main(void)
                 for (int i = 0; i < HIST_BINS; i++) {
                     hist_blob.hist[i] = mod_stats.hist_ptr()[i];
                 }
-                stores.config.save_stats(ca_state, bs, gas_flow.integral_m3(),
+                stores.heating_stats.save_stats(ca_state, bs, gas_flow.integral_m3(),
                                &hist_blob, nullptr, nullptr, nullptr);
-                stores.config.save_total_uptime(total_uptime_base_sec +
+                stores.heating_stats.save_total_uptime(total_uptime_base_sec +
                                       (uint32_t)(ca_time.monotonic_us() / 1000000));
                 stores.gas.save_meter(ca_state, &gas_corr.meter_blob());
             }

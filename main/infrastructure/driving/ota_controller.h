@@ -6,6 +6,7 @@
 #include "application/ports/driving/iota_manager.h"  // IOtaManager
 
 class NvsConfigStore;
+class HeatingStatsNvsStore;
 class HeatingStateAdapter;
 class BurnCycleService;
 class ModulationStatsService;
@@ -23,6 +24,7 @@ class OtaController {
 public:
     struct Deps {
         NvsConfigStore*          nvs;
+        HeatingStatsNvsStore*   heating_stats;
         HeatingStateAdapter*     state;
         BurnCycleService*        burn_cycle_service;
         ModulationStatsService*  mod_stats;
