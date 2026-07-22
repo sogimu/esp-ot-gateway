@@ -24,7 +24,7 @@ public:
     struct Deps {
         NvsConfigStore*          nvs;
         HeatingStateAdapter*     state;
-        BurnCycleService*        burn_cycles;
+        BurnCycleService*        burn_cycle_service;
         ModulationStatsService*  mod_stats;
         GasFlowService*          gas_flow;
         GasCorrectionInteractor* gas_corr;

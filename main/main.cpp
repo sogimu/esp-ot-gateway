@@ -151,7 +151,7 @@ extern "C" void app_main(void)
     ModulationStatsService mod_stats(ca_state);
     BurnCycleService       burn_cycle_service(ca_state, ca_time);
     GasFlowService         gas_flow(ca_state, ca_time);
-    sys_cfg.set_burn_cycle_service(&burn_cycle_service);
+    sys_cfg.set_burn_cycles(&burn_cycle_service);
     sys_cfg.set_mod_stats(&mod_stats);
     sys_cfg.set_gas_flow_reset(&gas_flow);
     DHWPredictService      dhw_predict(ca_state, stores.config, ca_time);
@@ -165,7 +165,7 @@ extern "C" void app_main(void)
     // Restore saved burner stats from NVS
     {
         uint32_t bs = 0, tps = 0, cc = 0, ips = 0, ic = 0, mps = 0, mc = 0;
-        if (nvs.load_burn_stats(bs, tps, cc, ips, ic, mps, mc)) {
+        if (stores.config.load_burn_stats(bs, tps, cc, ips, ic, mps, mc)) {
             *burn_cycle_service.burner_sec_ptr()      = bs;
             *burn_cycle_service.total_pause_sec_ptr() = tps;
             *burn_cycle_service.cycle_cnt_ptr()       = cc;
@@ -183,7 +183,7 @@ extern "C" void app_main(void)
         memset(&hist_blob, 0, sizeof(hist_blob));
         float saved_integ_m3 = 0;
         uint32_t saved_burner_sec_hist = 0;
-        if (nvs.load_stats(saved_burner_sec_hist, saved_integ_m3,
+        if (stores.config.load_stats(saved_burner_sec_hist, saved_integ_m3,
                            &hist_blob, nullptr, nullptr, nullptr)) {
             // Migration: under the new bounded scheme the histogram is halved
             // whenever samples reaches DECAY_THRESHOLD, so a live count can
@@ -213,7 +213,7 @@ extern "C" void app_main(void)
     ca_web.set_total_uptime_base(total_uptime_base_sec);
 
     ca_web.set_mod_stats(&mod_stats);
-    ca_web.set_burn_cycle_service(&burn_cycle_service);
+    ca_web.set_burn_cycles(&burn_cycle_service);
     ca_web.set_gas_flow(&gas_flow);
     ca_web.set_gas_correction(&gas_corr);
 

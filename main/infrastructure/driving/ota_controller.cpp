@@ -64,14 +64,14 @@ void flush_stats_cb(void* ctxv)
     const auto& d = c->deps;
     ESP_LOGI(TAG, "сброс статистики в NVS перед перезагрузкой в новый слот");
 
-    const uint32_t bs = d.burn_cycles->burner_seconds();
+    const uint32_t bs = d.burn_cycle_service->burner_seconds();
     d.nvs->save_burn_stats(bs,
-                           d.burn_cycles->total_pause_seconds(),
-                           d.burn_cycles->cycle_count(),
-                           d.burn_cycles->inter_session_pause_sec(),
-                           d.burn_cycles->inter_session_cnt(),
-                           d.burn_cycles->modulation_pause_sec(),
-                           d.burn_cycles->modulation_cnt());
+                           d.burn_cycle_service->total_pause_seconds(),
+                           d.burn_cycle_service->cycle_count(),
+                           d.burn_cycle_service->inter_session_pause_sec(),
+                           d.burn_cycle_service->inter_session_cnt(),
+                           d.burn_cycle_service->modulation_pause_sec(),
+                           d.burn_cycle_service->modulation_cnt());
 
     static NvsHistBlob hist_blob;
     memset(&hist_blob, 0, sizeof(hist_blob));
