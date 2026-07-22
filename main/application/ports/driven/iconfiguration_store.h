@@ -28,16 +28,6 @@ public:
     /// Load meter correction log. Pass optional blob (NvsMeterBlob*) to restore full log.
     virtual bool load_meter(class IHeatingStateStore& state, void* blob = nullptr) = 0;
 
-    /// Save/load DHW prediction history.
-
-    /// Save/load cumulative burner statistics (survive reboot).
-    virtual void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
-                                 uint32_t inter_pause_sec, uint32_t inter_cnt,
-                                 uint32_t mod_pause_sec, uint32_t mod_cnt) = 0;
-    virtual bool load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
-                                 uint32_t& inter_pause_sec, uint32_t& inter_cnt,
-                                 uint32_t& mod_pause_sec, uint32_t& mod_cnt) = 0;
-
     /// Save/load total controller uptime across reboots.
     virtual void save_total_uptime(uint32_t total_uptime_sec) = 0;
     virtual bool load_total_uptime(uint32_t& total_uptime_sec) = 0;

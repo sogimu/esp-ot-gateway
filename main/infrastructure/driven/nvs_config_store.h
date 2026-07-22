@@ -82,10 +82,4 @@ public:
     bool save_eff(const IHeatingStateStore& state);
     bool load_eff(IHeatingStateStore& state);
 
-    void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
-                         uint32_t inter_pause_sec, uint32_t inter_cnt,
-                         uint32_t mod_pause_sec, uint32_t mod_cnt) override;
-    bool load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
-                         uint32_t& inter_pause_sec, uint32_t& inter_cnt,
-                         uint32_t& mod_pause_sec, uint32_t& mod_cnt) override;
 };

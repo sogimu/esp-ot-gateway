@@ -6,6 +6,7 @@
 #include "infrastructure/driving/ota_interactor.h"
 
 #include "infrastructure/driven/nvs_config_store.h"
+#include "infrastructure/driven/burn_stats_nvs_store.h"
 #include "infrastructure/driven/heating_state_adapter.h"
 #include "application/services/burn_cycle_service.h"
 #include "application/services/modulation_stats_service.h"
@@ -65,7 +66,7 @@ void flush_stats_cb(void* ctxv)
     ESP_LOGI(TAG, "сброс статистики в NVS перед перезагрузкой в новый слот");
 
     const uint32_t bs = d.burn_cycle_service->burner_seconds();
-    d.nvs->save_burn_stats(bs,
+    d.burn_stats->save_burn_stats(bs,
                            d.burn_cycle_service->total_pause_seconds(),
                            d.burn_cycle_service->cycle_count(),
                            d.burn_cycle_service->inter_session_pause_sec(),

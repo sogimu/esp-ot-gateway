@@ -19,6 +19,7 @@
 #include "infrastructure/driven/boiler_nvs_store.h"
 #include "infrastructure/driven/gas_correction_nvs_store.h"
 #include "infrastructure/driven/predict_nvs_store.h"
+#include "infrastructure/driven/burn_stats_nvs_store.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
@@ -74,6 +75,7 @@ extern "C" void app_main(void)
         BoilerNvsStore        boiler;
         GasCorrectionNvsStore gas;
         PredictNvsStore       predict;
+        BurnStatsNvsStore     burn_stats;
     } stores;
     stores.config.init();
     stores.gas.init(stores.boiler);
@@ -172,7 +174,7 @@ extern "C" void app_main(void)
     // Restore saved burner stats from NVS
     {
         uint32_t bs = 0, tps = 0, cc = 0, ips = 0, ic = 0, mps = 0, mc = 0;
-        if (stores.config.load_burn_stats(bs, tps, cc, ips, ic, mps, mc)) {
+        if (stores.burn_stats.load_burn_stats(bs, tps, cc, ips, ic, mps, mc)) {
             *burn_cycle_service.burner_sec_ptr()      = bs;
             *burn_cycle_service.total_pause_sec_ptr() = tps;
             *burn_cycle_service.cycle_cnt_ptr()       = cc;
@@ -282,7 +284,7 @@ extern "C" void app_main(void)
     // start() создаёт FirmwareOtaInteractor, регистрирует flush-stats,
     // взводит валидацию и возвращает IOtaManager для HTTP-хендлеров.
     IOtaManager* ota_mgr = ota_ctrl.start({
-        .nvs = &stores.config, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
+        .nvs = &stores.config, .burn_stats = &stores.burn_stats, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
         .mod_stats = &mod_stats, .gas_flow = &gas_flow, .gas_corr = &gas_corr,
         .time = &ca_time, .total_uptime_base_sec = &total_uptime_base_sec
     });
@@ -375,7 +377,7 @@ extern "C" void app_main(void)
             } else {
                 save_tick = 0;
                 uint32_t bs = burn_cycle_service.burner_seconds();
-                stores.config.save_burn_stats(bs,
+                stores.burn_stats.save_burn_stats(bs,
                                     burn_cycle_service.total_pause_seconds(),
                                     burn_cycle_service.cycle_count(),
                                     burn_cycle_service.inter_session_pause_sec(),
