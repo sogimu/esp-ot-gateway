@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esp_http_server.h"
+#include "application/ports/driving/iota_manager.h"
 
 class WebPresenterAdapter;
 class IConfigureSystem;
@@ -26,6 +27,7 @@ public:
     void set_wifi(IWifiManager* w)              { wifi_ = w; }
     void set_time_adapter(SntpTimeAdapter* t)   { time_ = t; }
     void set_mqtt(IMqttConfigurator* m)         { mqtt_ = m; }
+    void set_ota(IOtaManager* o)                { ota_ = o; }
 
 private:
     httpd_handle_t server_ = nullptr;
@@ -37,6 +39,7 @@ private:
     IWifiManager*        wifi_     = nullptr;
     SntpTimeAdapter*     time_     = nullptr;
     IMqttConfigurator*   mqtt_     = nullptr;
+    IOtaManager*         ota_      = nullptr;
     static HttpControllerAdapter* s_self;
 
     static esp_err_t handler_root(httpd_req_t* req);
@@ -60,4 +63,8 @@ private:
     static esp_err_t handler_ping(httpd_req_t* req);
     static esp_err_t handler_mqtt_status(httpd_req_t* req);
     static esp_err_t handler_mqtt_settings(httpd_req_t* req);
+    static esp_err_t handler_ota_status(httpd_req_t* req);
+    static esp_err_t handler_ota_versions(httpd_req_t* req);
+    static esp_err_t handler_ota_start(httpd_req_t* req);
+    static esp_err_t handler_ota_rollback(httpd_req_t* req);
 };

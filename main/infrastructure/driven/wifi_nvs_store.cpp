@@ -8,6 +8,23 @@
 const char* WifiNvsStore::TAG   = "wifi_nvs";
 const char* WifiNvsStore::NVS_NS = "config";
 
+// D10: двухшаговое чтение строкового блоба. Сначала запрос размера через
+// nvs_get_blob с NULL, затем чтение только если размер помещается в буфер.
+// Возвращает ESP_OK только при успехе; гарантирует null-терминатор. Блоб чужого
+// (большего) размера → buf[0]='\0' (дефолт).
+static esp_err_t wifi_load_str_blob(nvs_handle_t h, const char* key,
+                                     char* buf, size_t buf_sz)
+{
+    buf[0] = '\0';
+    size_t sz = 0;
+    esp_err_t r = nvs_get_blob(h, key, nullptr, &sz);
+    if (r != ESP_OK) return r;
+    if (sz > buf_sz) return ESP_ERR_NVS_INVALID_LENGTH;
+    r = nvs_get_blob(h, key, buf, &sz);
+    buf[buf_sz - 1] = '\0';
+    return r;
+}
+
 void WifiNvsStore::init()
 {
     nvs_flash_init();
@@ -40,38 +57,33 @@ bool WifiNvsStore::load(int& mode,
     mode = raw_mode;
     ESP_LOGI(TAG, "Загружен wifi_mode=%d", mode);
 
-    // Load SSID (blob with null terminator)
-    size_t len = ssid_sz;
-    err = nvs_get_blob(handle, "wifi_ssid", sta_ssid, &len);
+    // D10: Load SSID/пароли через двухшаговый запрос размера (wifi_load_str_blob).
+    // Чужой (больший) размер → пустая строка (дефолт); null-терминатор гарантирован.
+    err = wifi_load_str_blob(handle, "wifi_ssid", sta_ssid, ssid_sz);
     if (err != ESP_OK && mode == 1) {
         ESP_LOGW(TAG, "Режим STA но SSID отсутствует — сброс в first boot");
         nvs_close(handle);
         mode = 0;
         return false;
     }
-    sta_ssid[len < ssid_sz ? len : ssid_sz - 1] = '\0';
 
     // Load STA password
-    len = pass_sz;
-    err = nvs_get_blob(handle, "wifi_pass", sta_pass, &len);
+    err = wifi_load_str_blob(handle, "wifi_pass", sta_pass, pass_sz);
     if (err != ESP_OK && mode == 1) {
         ESP_LOGW(TAG, "Режим STA но пароль отсутствует — сброс в first boot");
         nvs_close(handle);
         mode = 0;
         return false;
     }
-    sta_pass[len < pass_sz ? len : pass_sz - 1] = '\0';
 
     // Load AP password
-    len = ap_sz;
-    err = nvs_get_blob(handle, "ap_pass", ap_pass, &len);
+    err = wifi_load_str_blob(handle, "ap_pass", ap_pass, ap_sz);
     if (err != ESP_OK && mode == 2) {
         ESP_LOGW(TAG, "Режим AP но пароль отсутствует — сброс в first boot");
         nvs_close(handle);
         mode = 0;
         return false;
     }
-    ap_pass[len < ap_sz ? len : ap_sz - 1] = '\0';
 
     nvs_close(handle);
 

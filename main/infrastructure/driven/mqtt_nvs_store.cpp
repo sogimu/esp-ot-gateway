@@ -4,6 +4,23 @@
 #include "nvs_flash.h"
 #include <cstring>
 
+// D10: двухшаговое чтение строкового блоба. Сначала запрос размера через
+// nvs_get_blob с NULL, затем чтение только если размер помещается в буфер.
+// Возвращает ESP_OK только при успехе; гарантирует null-терминатор. Блоб чужого
+// (большего) размера → буфер нетронут (вызывающий оставляет дефолты).
+static esp_err_t mqtt_load_str_blob(nvs_handle_t h, const char* key,
+                                     char* buf, size_t buf_sz)
+{
+    buf[0] = '\0';
+    size_t sz = 0;
+    esp_err_t r = nvs_get_blob(h, key, nullptr, &sz);
+    if (r != ESP_OK) return r;
+    if (sz > buf_sz) return ESP_ERR_NVS_INVALID_LENGTH;
+    r = nvs_get_blob(h, key, buf, &sz);
+    buf[buf_sz - 1] = '\0';
+    return r;
+}
+
 void MqttNvsStore::init()
 {
     nvs_flash_init();
@@ -41,32 +58,18 @@ bool MqttNvsStore::load_mqtt_config(char* host, size_t host_size,
     nvs_handle_t h;
     if (nvs_open("config", NVS_READONLY, &h) != ESP_OK) return false;
 
-    size_t sz;
     uint8_t u8;
 
-    sz = host_size;
-    if (nvs_get_blob(h, "mqtt_host", host, &sz) == ESP_OK) {
-        host[sz < host_size ? sz : host_size - 1] = '\0';
-    }
+    // D10: двухшаговый запрос размера для каждого строкового блоба.
+    mqtt_load_str_blob(h, "mqtt_host", host, host_size);
 
     if (nvs_get_u16(h, "mqtt_port", &port) != ESP_OK) {
         // оставить значение по умолчанию
     }
 
-    sz = user_size;
-    if (nvs_get_blob(h, "mqtt_user", user, &sz) == ESP_OK) {
-        user[sz < user_size ? sz : user_size - 1] = '\0';
-    }
-
-    sz = pass_size;
-    if (nvs_get_blob(h, "mqtt_pass", pass, &sz) == ESP_OK) {
-        pass[sz < pass_size ? sz : pass_size - 1] = '\0';
-    }
-
-    sz = prefix_size;
-    if (nvs_get_blob(h, "mqtt_pref", prefix, &sz) == ESP_OK) {
-        prefix[sz < prefix_size ? sz : prefix_size - 1] = '\0';
-    }
+    mqtt_load_str_blob(h, "mqtt_user", user, user_size);
+    mqtt_load_str_blob(h, "mqtt_pass", pass, pass_size);
+    mqtt_load_str_blob(h, "mqtt_pref", prefix, prefix_size);
 
     if (nvs_get_u8(h, "mqtt_en", &u8) == ESP_OK)
         enabled = (u8 != 0);

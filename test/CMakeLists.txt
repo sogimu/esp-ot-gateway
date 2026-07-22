@@ -107,6 +107,9 @@ set(TEST_SRCS
 
     # Fault codes (OEM + ASF flag decoding, JSON rendering)
     test_fault_codes.cpp
+
+    # OTA interactor — конечный автомат, кэширование версий, блокировка
+    test_ota_interactor.cpp
 )
 
 # ── Stubs (replace ESP-IDF-dependent implementations) ──────
@@ -134,6 +137,8 @@ set(APP_SRCS
     # MQTT interactor (testable on host — no ESP-IDF deps)
     ${MAIN_DIR}/infrastructure/driving/mqtt_interactor.cpp
     ${MAIN_DIR}/infrastructure/driven/web_presenter_adapter.cpp
+    # OTA interactor — тестируется на хосте (HW-free, зависит от driven-портов)
+    ${MAIN_DIR}/infrastructure/driving/ota_interactor.cpp
 )
 
 # ── Test executable ───────────────────────────────────────
