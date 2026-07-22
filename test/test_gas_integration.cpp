@@ -1,3 +1,5 @@
+#include "application/ports/driven/igas_correction_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 /// Integration tests for gas flow estimation, correction, and JSON rendering.
 /// Verifies that WebPresenterAdapter::render_stats() produces correct JSON
 /// with gas_error_pct, gas_error_monthly_pct, and gas_meter_total fields.
@@ -44,6 +46,20 @@ static bool json_has_key(const char* json, const char* key) {
 // No corrections — all errors should be zero
 // ══════════════════════════════════════════════════════════════════════
 
+struct FakeGasStore : IGasCorrectionStore {
+    FakeConfigurationStore* cfg = nullptr;
+    int boiler_config_saved_ = 0;
+
+    bool load_meter(IHeatingStateStore& s, void* blob) override {
+        return cfg ? cfg->load_meter(s, blob) : false;
+    }
+    void save_meter(const IHeatingStateStore& s, const void* blob) override {
+        if (cfg) cfg->save_meter(s, blob);
+    }
+    void save_integral(float v) override { if (cfg) cfg->save_integral(v); }
+    void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
+};
+
 TEST_CASE("no corrections gives zero error pct", "[integration][gas]")
 {
     // Without calling add_meter_correction, gas_error_pct must be 0.
@@ -52,8 +68,10 @@ TEST_CASE("no corrections gives zero error pct", "[integration][gas]")
     FakeTimeSource time;
     GasFlowService gas_flow(state, time);
     FakeConfigurationStore config;
-    GasIntTestLogger log;
-    GasCorrectionInteractor gas_corr(state, config, log);
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasIntTestLogger log;
+    GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
     BurnCycleService burn_cycles(state, time);
@@ -85,8 +103,10 @@ TEST_CASE("gas_meter_total equals base + integral", "[integration][gas]")
     FakeTimeSource time;
     GasFlowService gas_flow(state, time);
     FakeConfigurationStore config;
-    GasIntTestLogger log;
-    GasCorrectionInteractor gas_corr(state, config, log);
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasIntTestLogger log;
+    GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
     BurnCycleService burn_cycles(state, time);
@@ -126,8 +146,10 @@ TEST_CASE("JSON stats contains gas_error_pct with 2 corrections", "[integration]
     FakeTimeSource time;
     GasFlowService gas_flow(state, time);
     FakeConfigurationStore config;
-    GasIntTestLogger log;
-    GasCorrectionInteractor gas_corr(state, config, log);
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasIntTestLogger log;
+    GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
     BurnCycleService burn_cycles(state, time);
@@ -173,8 +195,10 @@ TEST_CASE("gas_error_pct with real error scenario", "[integration][gas][json]")
     FakeTimeSource time;
     GasFlowService gas_flow(state, time);
     FakeConfigurationStore config;
-    GasIntTestLogger log;
-    GasCorrectionInteractor gas_corr(state, config, log);
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasIntTestLogger log;
+    GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
     BurnCycleService burn_cycles(state, time);
@@ -248,8 +272,10 @@ TEST_CASE("render_stats contains gas_temp_offset and model fields", "[integratio
     FakeTimeSource time;
     GasFlowService gas_flow(state, time);
     FakeConfigurationStore config;
-    GasIntTestLogger log;
-    GasCorrectionInteractor gas_corr(state, config, log);
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasIntTestLogger log;
+    GasCorrectionInteractor gas_corr(state, gas_store, log);
 
     ModulationStatsService mod_stats(state);
     BurnCycleService burn_cycles(state, time);

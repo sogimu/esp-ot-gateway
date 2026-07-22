@@ -225,7 +225,8 @@ void NvsConfigStore::save_stats(const IHeatingStateStore&,
     nvs_commit(n); nvs_close(n);
 }
 
-// ── "meter" namespace ────────────────────────────────────────
+
+// ── "meter" namespace (also in GasCorrectionNvsStore) ────────────────
 
 bool NvsConfigStore::load_meter(IHeatingStateStore& s, void* blob)
 {
@@ -234,76 +235,52 @@ bool NvsConfigStore::load_meter(IHeatingStateStore& s, void* blob)
     NvsMeterBlob b;
     memset(&b, 0, sizeof(b));
     bool ok = false;
-
-    // D10: двухшаговый запрос размера. Сначала узнаём размер блоба data, затем
-    // ветвим: текущий формат (sizeof(NvsMeterBlob)) или legacy 32-записей.
-    // Чужой/неизвестный размер → дефолты (ok=false), без memcpy размера с диска.
     size_t sz = 0;
     if (nvs_get_blob(n, "data", nullptr, &sz) == ESP_OK) {
         if (sz == sizeof(b)) {
-            // Текущий on-disk формат — читаем напрямую.
-            nvs_get_blob(n, "data", &b, &sz);
-            ok = true;
+            nvs_get_blob(n, "data", &b, &sz); ok = true;
         } else {
-            // Legacy struct matching the old on-disk format with 32 entries
-            // (CORRECTION_LOG_SIZE было 32 раньше). Проверяем размер точно.
-            struct NvsMeterBlob32 {
-                float base_reading, last_correction_actual, integral_at_last_correction;
-                int32_t corrections_head, corrections_count;
-                NvsCorrLogEntry corrections[32];
-            } old;
+            struct NvsMeterBlob32 { float br,lca,ilc; int32_t ch,cc; NvsCorrLogEntry c[32]; } old;
             if (sz == sizeof(old)) {
                 memset(&old, 0, sizeof(old));
                 nvs_get_blob(n, "data", &old, &sz);
-                b.base_reading = old.base_reading;
-                b.last_correction_actual = old.last_correction_actual;
-                b.integral_at_last_correction = old.integral_at_last_correction;
-                int keep = old.corrections_count < 10 ? old.corrections_count : 10;
-                b.corrections_count = keep;
+                b.base_reading = old.br; b.last_correction_actual = old.lca; b.integral_at_last_correction = old.ilc;
+                int keep = old.cc < 10 ? old.cc : 10; b.corrections_count = keep;
                 if (keep > 0) {
-                    int old_head = old.corrections_head;
-                    // Copy newest `keep` entries in order (oldest first)
-                    for (int i = 0; i < keep; i++) {
-                        int src = (old_head - keep + i + 32) % 32;
-                        b.corrections[i] = old.corrections[src];
-                    }
+                    int oh = old.ch;
+                    for (int i = 0; i < keep; i++) { int src = (oh - keep + i + 32) % 32; b.corrections[i] = old.c[src]; }
                     b.corrections_head = keep % 10;
                 }
                 ok = true;
             }
-            // иначе: неизвестный размер — ok остаётся false, дефолты
         }
     }
-
     nvs_close(n);
-    if (ok) {
-        s.lock_exclusive();
-        s.set_gas_meter_base(b.base_reading);
-        s.unlock_exclusive();
-        if (blob) memcpy(blob, &b, sizeof(NvsMeterBlob));
-    }
+    if (ok) { s.lock_exclusive(); s.set_gas_meter_base(b.base_reading); s.unlock_exclusive(); if (blob) memcpy(blob, &b, sizeof(NvsMeterBlob)); }
     return ok;
 }
 
 void NvsConfigStore::save_meter(const IHeatingStateStore& s, const void* blob)
 {
-    // D9: во время PENDING_VERIFY блоб meter/data не пишем.
     if (nvs_write_frozen_during_verify()) return;
-
     nvs_handle_t n;
     if (nvs_open("meter", NVS_READWRITE, &n) != ESP_OK) return;
     NvsMeterBlob b;
-    if (blob) {
-        memcpy(&b, blob, sizeof(NvsMeterBlob));
-        // Ensure base_reading in blob matches state (state is authoritative)
-        b.base_reading = s.get_gas_meter_base();
-    } else {
-        memset(&b, 0, sizeof(b));
-        b.base_reading = s.get_gas_meter_base();
-    }
+    if (blob) { memcpy(&b, blob, sizeof(NvsMeterBlob)); b.base_reading = s.get_gas_meter_base(); }
+    else { memset(&b, 0, sizeof(b)); b.base_reading = s.get_gas_meter_base(); }
     nvs_set_blob(n, "data", &b, sizeof(b));
     nvs_commit(n); nvs_close(n);
 }
+
+void NvsConfigStore::save_integral(float value)
+{
+    if (nvs_write_frozen_during_verify()) return;
+    nvs_handle_t n;
+    if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
+    nvs_set_blob(n, "integ_m3", &value, sizeof(value));
+    nvs_commit(n); nvs_close(n);
+}
+
 
 // ── "predict" namespace ──────────────────────────────────────
 
@@ -395,17 +372,6 @@ void NvsConfigStore::save_total_uptime(uint32_t total_uptime_sec)
     nvs_close(n);
 }
 
-void NvsConfigStore::save_integral(float value)
-{
-    // D9: во время PENDING_VERIFY блоб integ_m3 не пишем.
-    if (nvs_write_frozen_during_verify()) return;
-
-    nvs_handle_t n;
-    if (nvs_open("stats", NVS_READWRITE, &n) != ESP_OK) return;
-    nvs_set_blob(n, "integ_m3", &value, sizeof(value));
-    nvs_commit(n);
-    nvs_close(n);
-}
 
 // ── Efficiency blob (stats namespace, "eff" key) ──────────────
 

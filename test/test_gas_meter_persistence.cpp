@@ -1,3 +1,4 @@
+#include "application/ports/driven/igas_correction_store.h"
 /// Tests for gas meter base reading persistence.
 /// Regression: save_meter/load_meter were never called, gas_meter_base
 /// reset to 0 on every reboot.
@@ -26,11 +27,27 @@ struct FakeLogger : public ILogger {
     int event_count_ = 0;
 };
 
+struct FakeGasStore : IGasCorrectionStore {
+    FakeConfigurationStore* cfg = nullptr;
+    int boiler_config_saved_ = 0;
+
+    bool load_meter(IHeatingStateStore& s, void* blob) override {
+        return cfg ? cfg->load_meter(s, blob) : false;
+    }
+    void save_meter(const IHeatingStateStore& s, const void* blob) override {
+        if (cfg) cfg->save_meter(s, blob);
+    }
+    void save_integral(float v) override { if (cfg) cfg->save_integral(v); }
+    void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
+};
+
 TEST_CASE("GasMeter: set_gas_meter_base saves to meter namespace", "[gas][regression]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     FakeLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     gas.set_gas_meter_base(1234.567f);
 
@@ -60,8 +77,10 @@ TEST_CASE("GasMeter: load_meter restores gas_meter_base to state", "[gas][regres
 TEST_CASE("GasMeter: set_gas_meter_base rejects negative values", "[gas][regression]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     FakeLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     gas.set_gas_meter_base(-100.0f);
     REQUIRE(state.get_gas_meter_base() == Approx(0.0f));
@@ -70,8 +89,10 @@ TEST_CASE("GasMeter: set_gas_meter_base rejects negative values", "[gas][regress
 TEST_CASE("GasMeter: set_gas_meter_base with zero is accepted", "[gas][regression]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     FakeLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     state.set_gas_meter_base(100.0f);
     gas.set_gas_meter_base(0.0f);
@@ -89,6 +110,8 @@ TEST_CASE("GasFlow: save_stats stores integral_m3 via config store", "[gas][regr
     FakeTimeSource time;
     GasFlowService gfs(state, time);
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
 
     // Accumulate some gas (simulated by set_integral)
     gfs.set_integral(5.678f);

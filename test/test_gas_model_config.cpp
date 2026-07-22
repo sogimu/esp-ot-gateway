@@ -1,3 +1,4 @@
+#include "application/ports/driven/igas_correction_store.h"
 /// Tests for GasFlowService with configurable boiler model parameters:
 ///   - DHW branch in calc_power and efficiency
 ///   - CH power parameters from state (replaces hardcoded PMIN_WARM, etc.)
@@ -11,6 +12,7 @@
 #include "application/services/gas_flow_estimator.h"
 #undef private
 #include "fakes/fake_heating_state_store.h"
+#include "fakes/fake_configuration_store.h"
 #include "fakes/fake_time_source.h"
 
 using Catch::Approx;
@@ -18,6 +20,20 @@ using Catch::Approx;
 // ═══════════════════════════════════════════════════════════════
 // DHW: calc_power
 // ═══════════════════════════════════════════════════════════════
+
+struct FakeGasStore : IGasCorrectionStore {
+    FakeConfigurationStore* cfg = nullptr;
+    int boiler_config_saved_ = 0;
+
+    bool load_meter(IHeatingStateStore& s, void* blob) override {
+        return cfg ? cfg->load_meter(s, blob) : false;
+    }
+    void save_meter(const IHeatingStateStore& s, const void* blob) override {
+        if (cfg) cfg->save_meter(s, blob);
+    }
+    void save_integral(float v) override { if (cfg) cfg->save_integral(v); }
+    void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
+};
 
 TEST_CASE("calc_power uses dhw params when dhw_active", "[gas_model][dhw]")
 {

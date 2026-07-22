@@ -17,6 +17,7 @@
 #include "infrastructure/driven/web_presenter_adapter.h"
 #include "infrastructure/driven/nvs_config_store.h"
 #include "infrastructure/driven/boiler_nvs_store.h"
+#include "infrastructure/driven/gas_correction_nvs_store.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
@@ -66,12 +67,14 @@ extern "C" void app_main(void)
     // wifi (учётные данные), mqtt (параметры брокера). Конструируются здесь,
     // инициализируются каждый в своей фазе.
     struct {
-        NvsConfigStore config;
-        WifiNvsStore   wifi;
-        MqttNvsStore   mqtt;
-        BoilerNvsStore boiler;
+        NvsConfigStore        config;
+        WifiNvsStore          wifi;
+        MqttNvsStore          mqtt;
+        BoilerNvsStore        boiler;
+        GasCorrectionNvsStore gas;
     } stores;
     stores.config.init();
+    stores.gas.init(stores.boiler);
 
     // OTA-контроллер: владеет адаптерами валидности, загрузки, версий
     // и интерактором. Конструктор создаёт OtaValidityAdapter (нужен для
@@ -112,7 +115,6 @@ extern "C" void app_main(void)
 
     stores.config.load_all(ca_state);   // restore time settings (tz_offset, sntp)
     stores.boiler.load_boiler_config(ca_state);  // restore boiler config (CH/DHW/PID/calib)
-    stores.config.load_meter(ca_state);  // restore gas meter base reading
 
     // ── Phase 3: Network ─────────────────────────────────
     stores.wifi.init();
@@ -148,7 +150,7 @@ extern "C" void app_main(void)
     sys_cfg.set_boiler_poll(&boiler_poll);
     sys_cfg.set_pid_poll(&pid_poll);
 
-    GasCorrectionInteractor gas_corr(ca_state, stores.config, ca_log);
+    GasCorrectionInteractor gas_corr(ca_state, stores.gas, ca_log);
 
     // ── Phase 5: Application services ────────────────────
     ModulationStatsService mod_stats(ca_state);
@@ -387,7 +389,7 @@ extern "C" void app_main(void)
                                &hist_blob, nullptr, nullptr, nullptr);
                 stores.config.save_total_uptime(total_uptime_base_sec +
                                       (uint32_t)(ca_time.monotonic_us() / 1000000));
-                stores.config.save_meter(ca_state, &gas_corr.meter_blob());
+                stores.gas.save_meter(ca_state, &gas_corr.meter_blob());
             }
         }
     }

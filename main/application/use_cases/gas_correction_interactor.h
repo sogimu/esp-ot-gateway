@@ -5,7 +5,7 @@
 #include "domain/services/kalman1d.h"
 
 class IHeatingStateStore;
-class IConfigurationStore;
+class IGasCorrectionStore;
 class ILogger;
 class ITimeSource;
 class GasFlowService;
@@ -14,7 +14,7 @@ class GasFlowService;
 /// Owns the in-memory correction log (NvsMeterBlob) and persists it via IConfigurationStore.
 class GasCorrectionInteractor : public IGasCalibration {
 public:
-    GasCorrectionInteractor(IHeatingStateStore& state, IConfigurationStore& config, ILogger& log);
+    GasCorrectionInteractor(IHeatingStateStore& state, IGasCorrectionStore& store, ILogger& log);
 
     void set_k_calib(float) override;
     void set_p_max(float) override;
@@ -42,8 +42,8 @@ public:
     const NvsMeterBlob& meter_blob() const { return meter_blob_; }
 
 private:
-    IHeatingStateStore&  state_;
-    IConfigurationStore& config_;
+    IHeatingStateStore&   state_;
+    IGasCorrectionStore&  store_;
     ILogger&             log_;
     ITimeSource*         time_ = nullptr;
     GasFlowService*      gas_flow_ = nullptr;

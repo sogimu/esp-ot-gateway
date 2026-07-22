@@ -1,3 +1,4 @@
+#include "application/ports/driven/igas_correction_store.h"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
@@ -13,6 +14,13 @@ using Catch::Approx;
 // ═══════════════════════════════════════════════════════════════
 // GasFlowService — physical model and EMA bugs
 // ═══════════════════════════════════════════════════════════════
+
+struct FakeGasStore : IGasCorrectionStore {
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    void save_integral(float) override {}
+    void save_boiler_config(const IHeatingStateStore&) override {}
+};
 
 TEST_CASE("GasFlowService: static ema_tick shared across instances", "[gas_flow][bug][critical]")
 {

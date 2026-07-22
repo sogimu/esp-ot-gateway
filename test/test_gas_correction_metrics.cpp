@@ -1,3 +1,4 @@
+#include "application/ports/driven/igas_correction_store.h"
 /// Unit tests for domain/value_objects/gas_correction_metrics.h
 /// Covers: compute_correction_metrics() and GasCorrectionMetrics::k_factor()
 /// These are PURE functions (no dependencies) — no mocks needed.
@@ -11,6 +12,13 @@ using Catch::Approx;
 // ═══════════════════════════════════════════════════════════════
 // compute_correction_metrics — базовые сценарии
 // ═══════════════════════════════════════════════════════════════
+
+struct FakeGasStore : IGasCorrectionStore {
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    void save_integral(float) override {}
+    void save_boiler_config(const IHeatingStateStore&) override {}
+};
 
 TEST_CASE("correction metrics: 50% underestimation", "[domain][gas_metrics]")
 {
