@@ -89,7 +89,7 @@ float ModulationStatsService::p99() const { return percentile(0.99f); }
 
 // ── NVS persistence ────────────────────────────────────────────
 
-void ModulationStatsService::load_from_store(float* integ_m3_out)
+float ModulationStatsService::load_from_store()
 {
     NvsHistBlob hist_blob;
     memset(&hist_blob, 0, sizeof(hist_blob));
@@ -108,8 +108,8 @@ void ModulationStatsService::load_from_store(float* integ_m3_out)
             ESP_LOGI("mod_svc", "NVS: восстановлена гистограмма (samples=%" PRIu32 ")",
                      hist_blob.samples);
         }
-        if (integ_m3_out) *integ_m3_out = saved_integ_m3;
     }
+    return saved_integ_m3;
 }
 
 void ModulationStatsService::fill_histogram(NvsHistBlob& blob) const

@@ -99,6 +99,13 @@ bool HeatingStatsNvsStore::load_total_uptime(uint32_t& v)
     return ok;
 }
 
+uint32_t HeatingStatsNvsStore::restore_total_uptime()
+{
+    uint32_t v = 0;
+    load_total_uptime(v);
+    return v;
+}
+
 void HeatingStatsNvsStore::save_total_uptime(uint32_t v)
 {
     nvs_handle_t n;

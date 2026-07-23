@@ -14,6 +14,7 @@ public:
 
     void save_total_uptime(uint32_t total_uptime_sec) override;
     bool load_total_uptime(uint32_t& total_uptime_sec) override;
+    uint32_t restore_total_uptime();  // загрузить или вернуть 0
 
     void save_integral(float value) override;
 

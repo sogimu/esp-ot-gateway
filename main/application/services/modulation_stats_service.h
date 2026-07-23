@@ -50,7 +50,7 @@ public:
     float p75() const;
     float p90() const;
     float p99() const;
-    void load_from_store(float* integ_m3_out = nullptr);
+    float load_from_store();  // returns restored integ_m3 (0 if not found)
     void fill_histogram(struct NvsHistBlob& blob) const;
 
 private:

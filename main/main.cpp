@@ -143,17 +143,10 @@ extern "C" void app_main(void)
     burn_cycle_service.load_from_store();
 
     // Restore modulation histogram + integral from NVS
-    {
-        float saved_im3 = 0;
-        mod_stats.load_from_store(&saved_im3);
-        gas_flow.set_integral(saved_im3);
-    }
-
-    // Restore total uptime (cumulative across reboots)
-    uint32_t total_uptime_base_sec = 0;
-    stores.heating_stats.load_total_uptime(total_uptime_base_sec);
+    gas_flow.set_integral(mod_stats.load_from_store());
 
     // Web presenter — все зависимости готовы
+    uint32_t total_uptime_base_sec = stores.heating_stats.restore_total_uptime();
     WebPresenterAdapter ca_web(ca_state, ca_log, ca_time,
                                mod_stats, burn_cycle_service,
                                gas_flow, gas_corr, total_uptime_base_sec);
