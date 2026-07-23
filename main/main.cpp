@@ -64,11 +64,6 @@ extern "C" void app_main(void)
     ets_printf("=== Gas boiler Baxi duo-tec compact ===\n");
     ets_printf("Clean Architecture\n");
 
-    // ── Phase 1: Foundation ──────────────────────────────
-    SntpTimeAdapter ca_time;
-    ca_time.init();
-
-    EventLogAdapter ca_log(&ca_time);
 
     // NVS-хранилища сгруппированы в одной структуре.
     struct {
@@ -85,6 +80,12 @@ extern "C" void app_main(void)
     stores.gas.init(stores.boiler);
     stores.wifi.init();
 
+    // ── Phase 1: Foundation ──────────────────────────────
+    SntpTimeAdapter ca_time;
+    ca_time.init();
+
+    EventLogAdapter ca_log(&ca_time);
+    
     // OTA-контроллер: владеет адаптерами валидности, загрузки, версий
     // и интерактором. Конструктор создаёт OtaValidityAdapter (нужен для
     // is_pending_global — NVS-заморозка D9/D10) и логирует состояние партиции.
@@ -123,25 +124,22 @@ extern "C" void app_main(void)
     SensorsPollInteractor sensors_poll(ca_sensors, ca_state);
     PidPollInteractor     pid_poll(ca_state, ca_boiler, ca_time, ca_log);
 
-    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time);
-    sys_cfg.set_boiler_poll(&boiler_poll);
-    sys_cfg.set_pid_poll(&pid_poll);
-
-    GasCorrectionInteractor gas_corr(ca_state, stores.gas, ca_log);
-
     // ── Phase 5: Application services ────────────────────
     ModulationStatsService mod_stats(ca_state, stores.heating_stats);
     BurnCycleService       burn_cycle_service(ca_state, ca_time, stores.burn_stats);
     GasFlowService         gas_flow(ca_state, ca_time);
+    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time);
+    sys_cfg.set_boiler_poll(&boiler_poll);
+    sys_cfg.set_pid_poll(&pid_poll);
     sys_cfg.set_burn_cycles(&burn_cycle_service);
     sys_cfg.set_mod_stats(&mod_stats);
     sys_cfg.set_gas_flow_reset(&gas_flow);
     DHWPredictService      dhw_predict(ca_state, stores.predict, ca_time);
     dhw_predict.load_history();
 
-    // Wire gas correction interactor to gas flow service and restore correction log
-    gas_corr.set_gas_flow(&gas_flow);
-    gas_corr.set_time_source(&ca_time);
+    // Gas correction interactor — после gas_flow (нужен для integral_m3)
+    GasCorrectionInteractor gas_corr(ca_state, stores.gas, ca_log,
+                                      &ca_time, &gas_flow);
     gas_corr.init();
 
     // Restore saved burner stats from NVS

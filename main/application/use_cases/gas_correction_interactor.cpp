@@ -9,8 +9,9 @@
 #include <cmath>
 #include <cstring>
 
-GasCorrectionInteractor::GasCorrectionInteractor(IHeatingStateStore& state, IGasCorrectionStore& store, ILogger& log)
-    : state_(state), store_(store), log_(log)
+GasCorrectionInteractor::GasCorrectionInteractor(IHeatingStateStore& state, IGasCorrectionStore& store, ILogger& log,
+                                                   ITimeSource* time, GasFlowService* gas_flow)
+    : state_(state), store_(store), log_(log), time_(time), gas_flow_(gas_flow)
 {
     memset(&meter_blob_, 0, sizeof(meter_blob_));
 }
