@@ -1,3 +1,4 @@
+#include "application/ports/driven/iheating_stats_store.h"
 #include "application/ports/driven/iburn_stats_store.h"
 /// Tests for reset statistics use cases — verify actual data reset via SystemConfigInteractor.
 #include <catch2/catch_test_macros.hpp>
@@ -37,6 +38,16 @@ struct ResetTestLogger : public ILogger {
 struct FakeBurnStatsStore : IBurnStatsStore {
     bool load_burn_stats(uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&, uint32_t&) override { return false; }
     void save_burn_stats(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) override {}
+};
+
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore\&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t\&, float\&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t\&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore\&, const void*) override {}
+    bool load_meter(IHeatingStateStore\&, void*) override { return false; }
 };
 
 TEST_CASE("ResetStats: reset_cycle_stats clears burner data", "[reset][cycle]")
@@ -142,7 +153,8 @@ TEST_CASE("ResetStats: reset_gas_stats clears integral and EMAs", "[reset][gas]"
     FakeTimeSource time;
     ResetTestLogger log;
 
-    GasFlowService gas_flow(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow(state, time, hss);
     gas_flow.set_integral(10.0f);
 
     REQUIRE(gas_flow.integral_m3() > 0);
@@ -163,7 +175,8 @@ TEST_CASE("ResetStats: reset_gas_stats on empty data is safe", "[reset][gas]")
     FakeTimeSource time;
     ResetTestLogger log;
 
-    GasFlowService gas_flow(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow(state, time, hss);
 
     FakeBoilerConfigStore boiler_cfg;
     SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time);

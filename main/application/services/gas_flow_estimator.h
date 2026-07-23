@@ -6,6 +6,7 @@
 
 class IHeatingStateStore;
 class ITimeSource;
+class IHeatingStatsStore;
 
 /// Estimates gas consumption from modulation % and return temperature.
 /// Uses Kalman1D filters on raw inputs, physical model for flow rate,
@@ -14,8 +15,10 @@ class GasFlowService : public IPollable {
 public:
     static constexpr int RING_SIZE = 720; // 2h @ 10s interval
 
-    GasFlowService(IHeatingStateStore& state, ITimeSource& time);
+    GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store);
     ~GasFlowService();
+
+    void load_integral();  // restore integral_m3 from NVS
 
     void poll() override;
     void reset();
@@ -57,8 +60,9 @@ private:
     /// Falls back to gas_calorific_ if outdoor temperature is not yet received (outdoor_temp_valid_ == false).
     float corrected_calorific() const;
     float calc_power(float modulation_pct, float flow_temp, float ret_temp) const;
-    IHeatingStateStore& state_;
-    ITimeSource&        time_;
+    IHeatingStateStore&  state_;
+    ITimeSource&         time_;
+    IHeatingStatsStore&  store_;
 
     Kalman1D kalman_mod_{0, 0.1f, 1.0f};
     Kalman1D kalman_ret_{0, 0.05f, 0.3f};

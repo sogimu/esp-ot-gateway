@@ -1,3 +1,4 @@
+#include "application/ports/driven/ievent_log_reader.h"
 #include "infrastructure/driving/mqtt_interactor.h"
 
 #include "application/ports/driven/imqtt_hardware.h"
@@ -27,10 +28,10 @@ MqttInteractor::MqttInteractor(
     IHeatingStateStore& state,
     IConfigureSystem& cfg_sys,
     ILogger& log, ITimeSource& time,
-    IMqttStateRenderer& renderer)
+    IMqttStateRenderer& renderer, IEventLogReader* log_reader)
     : mqtt_(mqtt), sink_(sink), cfg_store_(cfg_store),
       state_(state), cfg_sys_(cfg_sys),
-      log_(log), time_(time), renderer_(renderer)
+      log_(log), time_(time), renderer_(renderer), log_reader_(log_reader)
 {}
 
 // ── init ─────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ void MqttInteractor::init()
     }
 
     mqtt_.set_event_callback(mqtt_callback, this);
+    if (log_reader_) log_reader_->set_event_callback(journal_callback, this);
     connect_to_broker();
 }
 

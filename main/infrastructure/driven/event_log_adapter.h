@@ -7,11 +7,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 
-/// Callback invoked on every event append. Called OUTSIDE the ring-buffer mutex
-/// — safe for I/O. The message pointer is valid only until the callback returns.
-using EventAppendCallback = void (*)(uint8_t category, const char* message,
-                                      uint32_t time_sec, bool ts_valid, void* ctx);
-
 struct LogEntry {
     uint32_t time_sec;
     uint8_t  category;
@@ -32,7 +27,7 @@ public:
 
     /// Register a callback for live event streaming (MQTT journal).
     /// Called once during init — no locking needed.
-    void set_event_callback(EventAppendCallback cb, void* ctx) {
+    void set_event_callback(EventAppendCallback cb, void* ctx) override {
         cb_ = cb; cb_ctx_ = ctx;
     }
 

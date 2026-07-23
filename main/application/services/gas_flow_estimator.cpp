@@ -1,13 +1,14 @@
 #include "application/services/gas_flow_estimator.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/itime_source.h"
+#include "application/ports/driven/iheating_stats_store.h"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
-GasFlowService::GasFlowService(IHeatingStateStore& state, ITimeSource& time)
-    : state_(state), time_(time)
+GasFlowService::GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store)
+    : state_(state), time_(time), store_(store)
 {
     ring_ = static_cast<Sample*>(malloc(RING_SIZE * sizeof(Sample)));
     if (ring_) std::memset(ring_, 0, RING_SIZE * sizeof(Sample));
@@ -16,6 +17,13 @@ GasFlowService::GasFlowService(IHeatingStateStore& state, ITimeSource& time)
 GasFlowService::~GasFlowService()
 {
     free(ring_);
+}
+
+void GasFlowService::load_integral()
+{
+    uint32_t bs=0; float im3=0;
+    if (store_.load_stats(bs, im3, nullptr, nullptr, nullptr, nullptr))
+        integral_m3_ = im3;
 }
 
 float GasFlowService::efficiency_continuous(float t_ret) const

@@ -18,10 +18,13 @@
 
 const char* SntpTimeAdapter::TAG = "sntp";
 
-SntpTimeAdapter::SntpTimeAdapter()
+SntpTimeAdapter::SntpTimeAdapter(int tz_offset, bool has_internet, ILogger* log)
+    : tz_offset_(tz_offset), logger_(log)
 {
     strncpy(srv0_, "pool.ntp.org", sizeof(srv0_) - 1);
     strncpy(srv1_, "time.google.com", sizeof(srv1_) - 1);
+    init();
+    configure(tz_offset, has_internet);
 }
 
 SntpTimeAdapter::~SntpTimeAdapter()

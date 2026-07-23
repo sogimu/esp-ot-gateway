@@ -7,20 +7,16 @@ class ILogger;
 /// Standalone ITimeSource — NTP-synced wall clock via lwip SNTP.
 class SntpTimeAdapter : public ITimeSource {
 public:
-    SntpTimeAdapter();
+    SntpTimeAdapter(int tz_offset, bool has_internet, ILogger* log = nullptr);
     ~SntpTimeAdapter();
 
-    void start();
-    void configure(int tz_offset, bool has_internet);
     void set_timezone(int tz_offset) override;
     int tz_offset() const override { return tz_offset_; }
     void set_servers(const char* srv0, const char* srv1);
-    void set_logger(ILogger* log) { logger_ = log; }
 
     time_point now() const override;
     uint64_t monotonic_us() const override;
 
-    void init();   // nvs_flash_init
 
     /// Manual time setting (for AP mode without SNTP).
     /// @param epoch_sec  Unix timestamp to set.
@@ -39,6 +35,10 @@ public:
     bool has_valid_time() const { return boot_offset_us_.count() != 0; }
 
 private:
+    void init();   // nvs_flash_init
+    void start();
+    void configure(int tz_offset, bool has_internet);
+
     int  tz_offset_ = 3;
     char srv0_[64] = {};
     char srv1_[64] = {};

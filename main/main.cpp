@@ -81,10 +81,7 @@ extern "C" void app_main(void)
     stores.wifi.init();
 
     // ── Phase 1: Foundation ──────────────────────────────
-    SntpTimeAdapter ca_time;
-    ca_time.init();
-
-    EventLogAdapter ca_log(&ca_time);
+    EventLogAdapter ca_log;
     
     // OTA-контроллер: владеет адаптерами валидности, загрузки, версий
     // и интерактором. Конструктор создаёт OtaValidityAdapter (нужен для
@@ -104,8 +101,6 @@ extern "C" void app_main(void)
     OtHardwareAdapter        ca_ot_hw;
     BoilerOpenThermAdapter   ca_boiler(ca_ot_hw);
     TemperatureSensorAdapter ca_sensors;
-    FreeRtosMqttQueue        ca_mqtt_queue;
-    MqttSocketAdapter        ca_mqtt(ca_mqtt_queue, ca_time);
 
     ca_state.load_settings();
 
@@ -116,8 +111,8 @@ extern "C" void app_main(void)
     auto wifi_mode = wifi.boot();
 
     // SNTP + manual time
-    ca_time.set_logger(&ca_log);
-    ca_time.configure(ca_state.get_tz_offset(), wifi_mode == IWifiManager::Mode::STA);
+    SntpTimeAdapter ca_time(ca_state.get_tz_offset(),
+                             wifi_mode == IWifiManager::Mode::STA, &ca_log);
 
     // ── Phase 4: Use cases ───────────────────────────────
     BoilerPollInteractor  boiler_poll(ca_boiler, ca_state, ca_log, ca_time);
@@ -127,7 +122,7 @@ extern "C" void app_main(void)
     // ── Phase 5: Application services ────────────────────
     ModulationStatsService mod_stats(ca_state, stores.heating_stats);
     BurnCycleService       burn_cycle_service(ca_state, ca_time, stores.burn_stats);
-    GasFlowService         gas_flow(ca_state, ca_time);
+    GasFlowService         gas_flow(ca_state, ca_time, stores.heating_stats);
     SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time,
                                     &boiler_poll, &pid_poll,
                                     &burn_cycle_service, &mod_stats, &gas_flow);
@@ -142,14 +137,16 @@ extern "C" void app_main(void)
     // Restore saved burner stats from NVS
     burn_cycle_service.load_from_store();
 
-    // Restore modulation histogram + integral from NVS
-    gas_flow.set_integral(mod_stats.load_from_store());
+    mod_stats.load_from_store();
+    gas_flow.load_integral();
 
     // Web presenter — все зависимости готовы
     uint32_t total_uptime_base_sec = stores.heating_stats.restore_total_uptime();
     WebPresenterAdapter ca_web(ca_state, ca_log, ca_time,
                                mod_stats, burn_cycle_service,
                                gas_flow, gas_corr, total_uptime_base_sec);
+    FreeRtosMqttQueue        ca_mqtt_queue;
+    MqttSocketAdapter        ca_mqtt(ca_mqtt_queue, ca_time);
     MqttRendererAdapter ca_mqtt_renderer(ca_web);
 
     // ── MQTT interactor ──────────────────────────────────
@@ -161,14 +158,12 @@ extern "C" void app_main(void)
                         sys_cfg,       // IConfigureSystem
                         ca_log,
                         ca_time,
-                        ca_mqtt_renderer);  // IMqttStateRenderer
+                        ca_mqtt_renderer,  // IMqttStateRenderer
+                        &ca_log);          // IEventLogReader (journal callback)
 
     // MQTT инициализируется всегда (если enabled в NVS).
     // Время нужно только для таймстемпов в логах, MQTT работает без него.
     mqtt.init();
-
-    // Wire journal → MQTT: every log entry published live to {prefix}/journal
-    ca_log.set_event_callback(MqttInteractor::journal_callback, &mqtt);
 
     if (!ca_time.has_valid_time()) {
         ESP_LOGW("main", "SNTP: время недостоверно, но MQTT запущен");

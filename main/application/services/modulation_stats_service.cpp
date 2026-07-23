@@ -89,7 +89,7 @@ float ModulationStatsService::p99() const { return percentile(0.99f); }
 
 // ── NVS persistence ────────────────────────────────────────────
 
-float ModulationStatsService::load_from_store()
+void ModulationStatsService::load_from_store()
 {
     NvsHistBlob hist_blob;
     memset(&hist_blob, 0, sizeof(hist_blob));
@@ -109,7 +109,6 @@ float ModulationStatsService::load_from_store()
                      hist_blob.samples);
         }
     }
-    return saved_integ_m3;
 }
 
 void ModulationStatsService::fill_histogram(NvsHistBlob& blob) const

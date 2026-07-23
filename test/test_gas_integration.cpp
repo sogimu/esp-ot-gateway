@@ -1,3 +1,4 @@
+#include "application/ports/driven/iheating_stats_store.h"
 #include "application/ports/driven/iburn_stats_store.h"
 #include "application/ports/driven/igas_correction_store.h"
 #include "application/ports/driven/igas_correction_store.h"
@@ -66,13 +67,24 @@ struct FakeBurnStatsStore : IBurnStatsStore {
     void save_burn_stats(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) override {}
 };
 
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore\&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t\&, float\&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t\&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore\&, const void*) override {}
+    bool load_meter(IHeatingStateStore\&, void*) override { return false; }
+};
+
 TEST_CASE("no corrections gives zero error pct", "[integration][gas]")
 {
     // Without calling add_meter_correction, gas_error_pct must be 0.
 
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService gas_flow(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow(state, time, hss);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -108,7 +120,8 @@ TEST_CASE("gas_meter_total equals base + integral", "[integration][gas]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService gas_flow(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow(state, time, hss);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -152,7 +165,8 @@ TEST_CASE("JSON stats contains gas_error_pct with 2 corrections", "[integration]
     // gas_error_pct = |diff| / actual_consumed * 100
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService gas_flow(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow(state, time, hss);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -202,7 +216,8 @@ TEST_CASE("gas_error_pct with real error scenario", "[integration][gas][json]")
     // error_pct = 1/4*100 = 25%
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService gas_flow(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow(state, time, hss);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -280,7 +295,8 @@ TEST_CASE("render_stats contains gas_temp_offset and model fields", "[integratio
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService gas_flow(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow(state, time, hss);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;

@@ -30,7 +30,8 @@ public:
                    IHeatingStateStore& state,
                    IConfigureSystem& cfg_sys,
                    ILogger& log, ITimeSource& time,
-                   IMqttStateRenderer& renderer);
+                   IMqttStateRenderer& renderer,
+                   class IEventLogReader* log_reader = nullptr);
 
     /// Загрузить настройки MQTT из NVS и подключиться (если enabled).
     void init();
@@ -118,6 +119,7 @@ private:
     ILogger&                  log_;
     ITimeSource&              time_;
     IMqttStateRenderer&       renderer_;
+    IEventLogReader*          log_reader_ = nullptr;
 
     // ── Настройки из NVS ───────────────────────────────
     char     host_[128]   = {};

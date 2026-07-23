@@ -1,3 +1,4 @@
+#include "application/ports/driven/iheating_stats_store.h"
 #include "application/ports/driven/igas_correction_store.h"
 /// Orchestration tests for gas meter correction:
 /// - READ PATH: init() restores correction log from NVS
@@ -50,6 +51,16 @@ struct FakeGasStore : IGasCorrectionStore {
     }
     void save_integral(float v) override { if (cfg) cfg->save_integral(v); }
     void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
+};
+
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore\&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t\&, float\&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t\&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore\&, const void*) override {}
+    bool load_meter(IHeatingStateStore\&, void*) override { return false; }
 };
 
 TEST_CASE("FakeLogger: direct virtual call via ILogger& works", "[debug]") {
@@ -164,7 +175,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f); // so estimated = 100 + 50 = 150
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -232,7 +244,8 @@ GasCorrTestLogger log;
     FakeTimeSource time;
 
     // base=0, integral=0 → actual_consumed=0 → < 0.01 threshold
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     GasCorrectionInteractor gas(state, gas_store, log);
     gas.set_gas_flow(&gas_flow_svc);
 
@@ -254,7 +267,8 @@ GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_gas_meter_base(100.0f);
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.1f);  // integral > 0 but actual_consumed too small
     GasCorrectionInteractor gas(state, gas_store, log);
     gas.set_gas_flow(&gas_flow_svc);
@@ -276,7 +290,8 @@ GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_gas_meter_base(100.0f);
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.002f);  // integral only 4% of actual_consumed
     GasCorrectionInteractor gas(state, gas_store, log);
     gas.set_gas_flow(&gas_flow_svc);
@@ -299,7 +314,8 @@ GasCorrTestLogger log;
 
     state.set_gas_meter_base(100.0f);
     state.set_gas_calorific(9.5f);
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.5f);  // integral = actual (100% of consumption)
     gas_flow_svc.set_k_calib(1.0f);
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -327,7 +343,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(200.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     GasCorrectionInteractor gas(state, gas_store, log);
     gas.set_gas_flow(&gas_flow_svc);
 
@@ -367,7 +384,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     GasCorrectionInteractor gas(state, gas_store, log);
     gas.set_gas_flow(&gas_flow_svc);
 
@@ -427,7 +445,8 @@ GasCorrTestLogger log;
     state.set_k_calib(10.0f); // at upper limit
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(900.0f); // estimated=1000
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -453,7 +472,8 @@ GasCorrTestLogger log;
     state.set_k_calib(0.1f); // at lower limit
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(100.0f); // estimated=200
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -504,7 +524,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(200.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f);
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -544,7 +565,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(300.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(100.0f);
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -645,7 +667,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f); // estimated = 100 + 50 = 150
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -673,7 +696,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(200.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.0f); // нет потребления с момента последней коррекции
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -705,7 +729,8 @@ GasCorrTestLogger log;
     state.set_k_calib(0.85f); // нестандартный K
     state.set_gas_meter_base(300.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(100.0f);
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -772,7 +797,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f);
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -816,7 +842,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, fake_time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, fake_time, hss);
     gas_flow_svc.set_integral(50.0f); // was 50 m³ accumulated
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -846,7 +873,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(200.0f);
 
-    GasFlowService gas_flow_svc(state, fake_time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, fake_time, hss);
     gas_flow_svc.set_integral(10.0f);
 
     GasCorrectionInteractor gas(state, gas_store, log);
@@ -881,7 +909,8 @@ GasCorrTestLogger log;
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(300.0f);
 
-    GasFlowService gas_flow_svc(state, fake_time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, fake_time, hss);
     gas_flow_svc.set_integral(10.0f);
 
     GasCorrectionInteractor gas(state, gas_store, log);
