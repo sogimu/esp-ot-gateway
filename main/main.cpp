@@ -89,13 +89,8 @@ extern "C" void app_main(void)
     CrashDiagnosticsAdapter crash_diag(ca_log);
     crash_diag.start();
 
-    // Признак краха предыдущей загрузки: если свежезалитая прошивка стартовала
-    // после краша, arm() немедленно откатит её, не дожидаясь 90-сек дедлайна.
+    // Связка: признак краха → OTA-валидатор (arm() немедленно откатит при краше)
     ota_ctrl.set_crash_flag(crash_diag.last_boot_had_crash());
-
-    if (crash_diag.last_boot_had_crash()) {
-        ca_log.event(ILogger::SYSTEM, "Предыдущая загрузка: КРАШ");
-    }
 
     ca_log.event(ILogger::SYSTEM, "Система запущена");
 
