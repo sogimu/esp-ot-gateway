@@ -80,6 +80,7 @@ extern "C" void app_main(void)
     } stores;
     stores.time.init();
     stores.gas.init(stores.boiler);
+    stores.wifi.init();
 
     // OTA-контроллер: владеет адаптерами валидности, загрузки, версий
     // и интерактором. Конструктор создаёт OtaValidityAdapter (нужен для
@@ -95,7 +96,7 @@ extern "C" void app_main(void)
     ca_log.event(ILogger::SYSTEM, "Система запущена");
 
     // ── Phase 2: Driven adapters ────────────────────────
-    HeatingStateAdapter      ca_state;
+    HeatingStateAdapter      ca_state(stores.time, stores.boiler);
     SntpTimeAdapter          ca_time;
     ca_time.init();
     OtHardwareAdapter        ca_ot_hw;
@@ -113,11 +114,9 @@ extern "C" void app_main(void)
     ca_web.set_log_reader(&ca_log);   // IEventLogReader (lock/unlock/to_json)
     ca_web.set_time_source(&ca_time);
 
-    stores.time.load_time_settings(ca_state);
-    stores.boiler.load_boiler_config(ca_state);  // restore boiler config (CH/DHW/PID/calib)
+    ca_state.load_settings();
 
     // ── Phase 3: Network ─────────────────────────────────
-    stores.wifi.init();
 
     Esp32WifiAdapter   wifi_hw;
     WifiApStaAdapter   wifi(wifi_hw, stores.wifi);
