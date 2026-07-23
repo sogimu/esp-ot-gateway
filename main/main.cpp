@@ -65,7 +65,10 @@ extern "C" void app_main(void)
     ets_printf("Clean Architecture\n");
 
     // ── Phase 1: Foundation ──────────────────────────────
-    EventLogAdapter ca_log;
+    SntpTimeAdapter ca_time;
+    ca_time.init();
+
+    EventLogAdapter ca_log(&ca_time);
 
     // NVS-хранилища сгруппированы в одной структуре.
     struct {
@@ -97,15 +100,12 @@ extern "C" void app_main(void)
 
     // ── Phase 2: Driven adapters ────────────────────────
     HeatingStateAdapter      ca_state(stores.time, stores.boiler);
-    SntpTimeAdapter          ca_time;
-    ca_time.init();
     OtHardwareAdapter        ca_ot_hw;
     BoilerOpenThermAdapter   ca_boiler(ca_ot_hw);
     TemperatureSensorAdapter ca_sensors;
     FreeRtosMqttQueue        ca_mqtt_queue;
     MqttSocketAdapter        ca_mqtt(ca_mqtt_queue, ca_time);
 
-    ca_log.set_time_source(&ca_time);
     ca_state.load_settings();
 
     // ── Phase 3: Network ─────────────────────────────────

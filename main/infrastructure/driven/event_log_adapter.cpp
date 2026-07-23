@@ -26,7 +26,8 @@ ChronoDate civil_from_seconds(int64_t secs) {
 #include <cstdarg>
 #include <cstdlib>
 
-EventLogAdapter::EventLogAdapter()
+EventLogAdapter::EventLogAdapter(ITimeSource* time)
+    : time_(time)
 {
     ring_ = static_cast<LogEntry*>(malloc(LOG_RING_SIZE * sizeof(LogEntry)));
     if (ring_) std::memset(ring_, 0, LOG_RING_SIZE * sizeof(LogEntry));

@@ -25,12 +25,10 @@ struct LogEntry {
 /// event() is task-context only — no ISR callers, so mutex blocking is safe.
 class EventLogAdapter : public ILogger, public IEventLogReader {
 public:
-    EventLogAdapter();
+    explicit EventLogAdapter(class ITimeSource* time = nullptr);
     ~EventLogAdapter();
 
     void event(Category cat, const char* fmt, ...) override;
-
-    void set_time_source(class ITimeSource* t) { time_ = t; }
 
     /// Register a callback for live event streaming (MQTT journal).
     /// Called once during init — no locking needed.
