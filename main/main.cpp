@@ -102,18 +102,10 @@ extern "C" void app_main(void)
     OtHardwareAdapter        ca_ot_hw;
     BoilerOpenThermAdapter   ca_boiler(ca_ot_hw);
     TemperatureSensorAdapter ca_sensors;
-    WebPresenterAdapter      ca_web;
-
     FreeRtosMqttQueue        ca_mqtt_queue;
     MqttSocketAdapter        ca_mqtt(ca_mqtt_queue, ca_time);
-    MqttRendererAdapter      ca_mqtt_renderer(ca_web);
 
     ca_log.set_time_source(&ca_time);
-
-    ca_web.set_state(&ca_state);
-    ca_web.set_log_reader(&ca_log);   // IEventLogReader (lock/unlock/to_json)
-    ca_web.set_time_source(&ca_time);
-
     ca_state.load_settings();
 
     // ── Phase 3: Network ─────────────────────────────────
@@ -165,12 +157,12 @@ extern "C" void app_main(void)
     // Restore total uptime (cumulative across reboots)
     uint32_t total_uptime_base_sec = 0;
     stores.heating_stats.load_total_uptime(total_uptime_base_sec);
-    ca_web.set_total_uptime_base(total_uptime_base_sec);
 
-    ca_web.set_mod_stats(&mod_stats);
-    ca_web.set_burn_cycles(&burn_cycle_service);
-    ca_web.set_gas_flow(&gas_flow);
-    ca_web.set_gas_correction(&gas_corr);
+    // Web presenter — все зависимости готовы
+    WebPresenterAdapter ca_web(ca_state, ca_log, ca_time,
+                               mod_stats, burn_cycle_service,
+                               gas_flow, gas_corr, total_uptime_base_sec);
+    MqttRendererAdapter ca_mqtt_renderer(ca_web);
 
     // ── MQTT interactor ──────────────────────────────────
     stores.mqtt.init();

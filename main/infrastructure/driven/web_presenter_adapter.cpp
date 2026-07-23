@@ -2,6 +2,7 @@
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
+#include "application/ports/driven/ievent_log_reader.h"
 #include "domain/value_objects/fault_codes.h"
 #include "application/services/modulation_stats_service.h"
 #include "application/services/burn_cycle_service.h"
@@ -42,6 +43,16 @@ ChronoDate civil_from_seconds(int64_t secs) {
             static_cast<int>(sod % 60)};
 }
 } // namespace
+
+WebPresenterAdapter::WebPresenterAdapter(IHeatingStateStore& state, IEventLogReader& log_reader,
+                                         ITimeSource& time,
+                                         ModulationStatsService& mod_stats, BurnCycleService& burn_cycles,
+                                         GasFlowService& gas_flow, GasCorrectionInteractor& gas_corr,
+                                         uint32_t total_uptime_base)
+    : state_(&state), log_reader_(&log_reader),
+      mod_stats_(&mod_stats), burn_cycles_(&burn_cycles),
+      gas_flow_(&gas_flow), gas_corr_(&gas_corr),
+      time_(&time), total_uptime_base_(total_uptime_base) {}
 
 int WebPresenterAdapter::render_status(char* buf, size_t size)
 {

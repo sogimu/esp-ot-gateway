@@ -1,3 +1,4 @@
+#include "application/ports/driven/iheating_stats_store.h"
 #include <catch2/catch_test_macros.hpp>
 #include "application/services/modulation_stats_service.h"
 #include "fakes/fake_heating_state_store.h"
@@ -15,12 +16,22 @@ static void poll_burning(ModulationStatsService& svc, FakeHeatingStateStore& sta
     for (int i = 0; i < times; i++) svc.poll();
 }
 
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
+};
+
 TEST_CASE("ModulationStats: percentile boundary condition", "[mod_stats]")
 {
     // FIXED: percentile() now uses `cum >= target` for correct boundary behavior.
 
     FakeHeatingStateStore state;
-    ModulationStatsService svc(state);
+    FakeHeatingStatsStore hss; ModulationStatsService svc(state, hss);
 
     // 50% at 3.0% modulation, 50% at 7.0%
     poll_burning(svc, state, 3.0f, 50);
@@ -38,7 +49,7 @@ TEST_CASE("ModulationStats: percentile boundary condition", "[mod_stats]")
 TEST_CASE("ModulationStats: percentile with single sample", "[mod_stats]")
 {
     FakeHeatingStateStore state;
-    ModulationStatsService svc(state);
+    FakeHeatingStatsStore hss; ModulationStatsService svc(state, hss);
 
     poll_burning(svc, state, 5.0f, 1);  // bin 5
 
@@ -57,7 +68,7 @@ TEST_CASE("ModulationStats: percentile with single sample", "[mod_stats]")
 TEST_CASE("ModulationStats: percentile clamping", "[mod_stats]")
 {
     FakeHeatingStateStore state;
-    ModulationStatsService svc(state);
+    FakeHeatingStatsStore hss; ModulationStatsService svc(state, hss);
 
     // Modulation at 0%
     poll_burning(svc, state, 0.0f, 1);
@@ -78,7 +89,7 @@ TEST_CASE("ModulationStats: percentile clamping", "[mod_stats]")
 TEST_CASE("ModulationStats: percentile on empty data", "[mod_stats]")
 {
     FakeHeatingStateStore state;
-    ModulationStatsService svc(state);
+    FakeHeatingStatsStore hss; ModulationStatsService svc(state, hss);
 
     REQUIRE(svc.samples() == 0);
 
@@ -92,7 +103,7 @@ TEST_CASE("ModulationStats: percentile on empty data", "[mod_stats]")
 TEST_CASE("ModulationStats: histogram bin edges", "[mod_stats]")
 {
     FakeHeatingStateStore state;
-    ModulationStatsService svc(state);
+    FakeHeatingStatsStore hss; ModulationStatsService svc(state, hss);
 
     // Exact bin boundaries: mod=1.0% → bin=1, mod=0.0% → bin=0
     poll_burning(svc, state, 0.0f, 1);
@@ -109,7 +120,7 @@ TEST_CASE("ModulationStats: monotonic percentiles", "[mod_stats]")
 {
     // Percentiles must be non-decreasing: p1 ≤ p10 ≤ p25 ≤ p50 ≤ p75 ≤ p90 ≤ p99
     FakeHeatingStateStore state;
-    ModulationStatsService svc(state);
+    FakeHeatingStatsStore hss; ModulationStatsService svc(state, hss);
 
     // Random-ish modulation values
     float vals[] = {3.0f, 7.0f, 12.0f, 4.5f, 8.0f, 2.0f, 9.5f, 1.0f,
