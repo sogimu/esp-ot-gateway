@@ -22,13 +22,12 @@ class SystemConfigInteractor : public IConfigureSystem, public IConfigurePid, pu
 public:
     SystemConfigInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                            ITimeSettingsStore& config, IBoilerConfigStore& boiler_cfg,
-                           ILogger& log, ITimeSource& time);
-
-    void set_boiler_poll(BoilerPollInteractor* bp) { boiler_poll_ = bp; }
-    void set_pid_poll(PidPollInteractor* pp)   { pid_poll_ = pp; }
-    void set_burn_cycles(BurnCycleService* b)  { burn_cycles_ = b; }
-    void set_mod_stats(ModulationStatsService* m) { mod_stats_ = m; }
-    void set_gas_flow_reset(GasFlowService* g) { gas_flow_ = g; }
+                           ILogger& log, ITimeSource& time,
+                           BoilerPollInteractor* boiler_poll = nullptr,
+                           PidPollInteractor*   pid_poll = nullptr,
+                           BurnCycleService*    burn_cycles = nullptr,
+                           ModulationStatsService* mod_stats = nullptr,
+                           GasFlowService*      gas_flow = nullptr);
 
     // IConfigureSystem
     void set_ch_mode(CHMode mode) override;

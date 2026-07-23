@@ -17,8 +17,15 @@
 
 SystemConfigInteractor::SystemConfigInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                                                  ITimeSettingsStore& config, IBoilerConfigStore& boiler_cfg,
-                                                 ILogger& log, ITimeSource& time)
-    : state_(state), boiler_(boiler), config_(config), boiler_cfg_(boiler_cfg), log_(log), time_(time)
+                                                 ILogger& log, ITimeSource& time,
+                                                 BoilerPollInteractor* boiler_poll,
+                                                 PidPollInteractor* pid_poll,
+                                                 BurnCycleService* burn_cycles,
+                                                 ModulationStatsService* mod_stats,
+                                                 GasFlowService* gas_flow)
+    : state_(state), boiler_(boiler), config_(config), boiler_cfg_(boiler_cfg), log_(log), time_(time),
+      boiler_poll_(boiler_poll), pid_poll_(pid_poll),
+      burn_cycles_(burn_cycles), mod_stats_(mod_stats), gas_flow_(gas_flow)
 {
 }
 

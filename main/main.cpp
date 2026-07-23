@@ -128,12 +128,9 @@ extern "C" void app_main(void)
     ModulationStatsService mod_stats(ca_state, stores.heating_stats);
     BurnCycleService       burn_cycle_service(ca_state, ca_time, stores.burn_stats);
     GasFlowService         gas_flow(ca_state, ca_time);
-    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time);
-    sys_cfg.set_boiler_poll(&boiler_poll);
-    sys_cfg.set_pid_poll(&pid_poll);
-    sys_cfg.set_burn_cycles(&burn_cycle_service);
-    sys_cfg.set_mod_stats(&mod_stats);
-    sys_cfg.set_gas_flow_reset(&gas_flow);
+    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time,
+                                    &boiler_poll, &pid_poll,
+                                    &burn_cycle_service, &mod_stats, &gas_flow);
     DHWPredictService      dhw_predict(ca_state, stores.predict, ca_time);
     dhw_predict.load_history();
 
