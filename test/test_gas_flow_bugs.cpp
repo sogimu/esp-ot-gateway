@@ -24,13 +24,13 @@ struct FakeGasStore : IGasCorrectionStore {
 };
 
 struct FakeHeatingStatsStore : IHeatingStatsStore {
-    void save_stats(const IHeatingStateStore\&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
-    bool load_stats(uint32_t\&, float\&, void*, void*, void*, void*) override { return false; }
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
     void save_total_uptime(uint32_t) override {}
-    bool load_total_uptime(uint32_t\&) override { return false; }
+    bool load_total_uptime(uint32_t&) override { return false; }
     void save_integral(float) override {}
-    void save_meter(const IHeatingStateStore\&, const void*) override {}
-    bool load_meter(IHeatingStateStore\&, void*) override { return false; }
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
 };
 
 TEST_CASE("GasFlowService: static ema_tick shared across instances", "[gas_flow][bug][critical]")
@@ -41,8 +41,9 @@ TEST_CASE("GasFlowService: static ema_tick shared across instances", "[gas_flow]
 
     FakeHeatingStateStore state1, state2;
     FakeTimeSource time1, time2;
-    GasFlowService svc1(state1, time1);
-    GasFlowService svc2(state2, time2);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc1(state1, time1, hss);
+    GasFlowService svc2(state2, time2, hss);
 
     // Both instances must have valid data to trigger poll
     state1.set_modulation(50.0f);

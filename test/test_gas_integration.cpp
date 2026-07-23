@@ -68,13 +68,13 @@ struct FakeBurnStatsStore : IBurnStatsStore {
 };
 
 struct FakeHeatingStatsStore : IHeatingStatsStore {
-    void save_stats(const IHeatingStateStore\&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
-    bool load_stats(uint32_t\&, float\&, void*, void*, void*, void*) override { return false; }
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
     void save_total_uptime(uint32_t) override {}
-    bool load_total_uptime(uint32_t\&) override { return false; }
+    bool load_total_uptime(uint32_t&) override { return false; }
     void save_integral(float) override {}
-    void save_meter(const IHeatingStateStore\&, const void*) override {}
-    bool load_meter(IHeatingStateStore\&, void*) override { return false; }
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
 };
 
 TEST_CASE("no corrections gives zero error pct", "[integration][gas]")
@@ -91,17 +91,11 @@ TEST_CASE("no corrections gives zero error pct", "[integration][gas]")
 GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
-    ModulationStatsService mod_stats(state);
     FakeBurnStatsStore burn_store;
     BurnCycleService burn_cycles(state, time, burn_store);
 
     WebPresenterAdapter presenter;
     presenter.set_state(&state);
-    presenter.set_mod_stats(&mod_stats);
-    presenter.set_burn_cycles(&burn_cycles);
-    presenter.set_gas_flow(&gas_flow);
-    presenter.set_gas_correction(&gas_corr);
-    presenter.set_time_source(&time);
 
     char buf[4096] = {};
     presenter.render_stats(buf, sizeof(buf));
@@ -128,7 +122,6 @@ TEST_CASE("gas_meter_total equals base + integral", "[integration][gas]")
 GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
-    ModulationStatsService mod_stats(state);
     FakeBurnStatsStore burn_store;
     BurnCycleService burn_cycles(state, time, burn_store);
 
@@ -138,11 +131,6 @@ GasIntTestLogger log;
 
     WebPresenterAdapter presenter;
     presenter.set_state(&state);
-    presenter.set_mod_stats(&mod_stats);
-    presenter.set_burn_cycles(&burn_cycles);
-    presenter.set_gas_flow(&gas_flow);
-    presenter.set_gas_correction(&gas_corr);
-    presenter.set_time_source(&time);
 
     char buf[4096] = {};
     presenter.render_stats(buf, sizeof(buf));
@@ -173,15 +161,12 @@ TEST_CASE("JSON stats contains gas_error_pct with 2 corrections", "[integration]
 GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
-    ModulationStatsService mod_stats(state);
     FakeBurnStatsStore burn_store;
     BurnCycleService burn_cycles(state, time, burn_store);
 
     // Correction 1: base=100, integral=50 → estimated=150, actual=200, diff=50
     state.set_gas_meter_base(100.0f);
     state.set_k_calib(1.0f);
-    gas_corr.set_gas_flow(&gas_flow);
-    gas_corr.set_time_source(&time);
     gas_flow.set_integral(50.0f);
     gas_corr.add_meter_correction(200.0f);
     // Correction 2: 1 day later, integral=100, actual=300
@@ -194,11 +179,6 @@ GasIntTestLogger log;
 
     WebPresenterAdapter presenter;
     presenter.set_state(&state);
-    presenter.set_mod_stats(&mod_stats);
-    presenter.set_burn_cycles(&burn_cycles);
-    presenter.set_gas_flow(&gas_flow);
-    presenter.set_gas_correction(&gas_corr);
-    presenter.set_time_source(&time);
 
     char buf[4096] = {};
     presenter.render_stats(buf, sizeof(buf));
@@ -224,14 +204,11 @@ TEST_CASE("gas_error_pct with real error scenario", "[integration][gas][json]")
 GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
-    ModulationStatsService mod_stats(state);
     FakeBurnStatsStore burn_store;
     BurnCycleService burn_cycles(state, time, burn_store);
 
     state.set_gas_meter_base(100.0f);
     state.set_k_calib(1.0f);
-    gas_corr.set_gas_flow(&gas_flow);
-    gas_corr.set_time_source(&time);
 
     // Correction 1: perfect match (actual = base + integral)
     // integral must be >= 0.001 — correction requires real consumption
@@ -246,11 +223,6 @@ GasIntTestLogger log;
 
     WebPresenterAdapter presenter;
     presenter.set_state(&state);
-    presenter.set_mod_stats(&mod_stats);
-    presenter.set_burn_cycles(&burn_cycles);
-    presenter.set_gas_flow(&gas_flow);
-    presenter.set_gas_correction(&gas_corr);
-    presenter.set_time_source(&time);
 
     char buf[4096] = {};
     presenter.render_stats(buf, sizeof(buf));
@@ -273,7 +245,6 @@ TEST_CASE("render_status contains outside_temp", "[integration][status][json]")
 
     WebPresenterAdapter presenter;
     presenter.set_state(&state);
-    presenter.set_time_source(&time);
 
     // Set a known outdoor temperature
     state.set_outside_temp(-5.2f);
@@ -303,7 +274,6 @@ TEST_CASE("render_stats contains gas_temp_offset and model fields", "[integratio
 GasIntTestLogger log;
     GasCorrectionInteractor gas_corr(state, gas_store, log);
 
-    ModulationStatsService mod_stats(state);
     FakeBurnStatsStore burn_store;
     BurnCycleService burn_cycles(state, time, burn_store);
 
@@ -322,11 +292,6 @@ GasIntTestLogger log;
 
     WebPresenterAdapter presenter;
     presenter.set_state(&state);
-    presenter.set_mod_stats(&mod_stats);
-    presenter.set_burn_cycles(&burn_cycles);
-    presenter.set_gas_flow(&gas_flow);
-    presenter.set_gas_correction(&gas_corr);
-    presenter.set_time_source(&time);
 
     char buf[4096] = {};
     presenter.render_stats(buf, sizeof(buf));

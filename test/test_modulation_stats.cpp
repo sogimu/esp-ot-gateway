@@ -155,7 +155,7 @@ TEST_CASE("ModulationStats: decay bounds the sample count", "[mod][app][decay]")
     REQUIRE(stats.samples() > ModulationStatsService::DECAY_THRESHOLD / 4);
 
     // A single bin can never overflow uint32_t — it is bounded by the threshold.
-    uint32_t* h = stats.hist_ptr();
+    const uint32_t* h = stats.hist();
     REQUIRE(h[42] == stats.samples());  // all mass in bin 42 (42.0%)
 
     // Distribution shape survives decay: every percentile still 42%.

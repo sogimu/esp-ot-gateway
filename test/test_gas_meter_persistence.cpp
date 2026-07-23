@@ -43,13 +43,13 @@ struct FakeGasStore : IGasCorrectionStore {
 };
 
 struct FakeHeatingStatsStore : IHeatingStatsStore {
-    void save_stats(const IHeatingStateStore\&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
-    bool load_stats(uint32_t\&, float\&, void*, void*, void*, void*) override { return false; }
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
     void save_total_uptime(uint32_t) override {}
-    bool load_total_uptime(uint32_t\&) override { return false; }
+    bool load_total_uptime(uint32_t&) override { return false; }
     void save_integral(float) override {}
-    void save_meter(const IHeatingStateStore\&, const void*) override {}
-    bool load_meter(IHeatingStateStore\&, void*) override { return false; }
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
 };
 
 TEST_CASE("GasMeter: set_gas_meter_base saves to meter namespace", "[gas][regression]") {
@@ -139,15 +139,14 @@ TEST_CASE("GasFlow: load_stats restores integral_m3 after simulated reboot", "[g
     // Simulate reboot: save integral, create fresh GasFlowService, restore
     FakeHeatingStateStore state;
     FakeTimeSource time;
+    FakeHeatingStatsStore hss;
 
     // "Before reboot" — accumulate gas
-    FakeHeatingStatsStore hss;
     GasFlowService gfs_before(state, time, hss);
     gfs_before.set_integral(12.345f);
     float saved_integral = gfs_before.integral_m3();
 
     // "After reboot" — fresh service, restore from saved value
-    FakeHeatingStatsStore hss;
     GasFlowService gfs_after(state, time, hss);
     REQUIRE(gfs_after.integral_m3() == Approx(0.0f)); // starts at 0
 

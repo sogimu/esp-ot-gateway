@@ -37,13 +37,13 @@ struct FakeGasStore : IGasCorrectionStore {
 };
 
 struct FakeHeatingStatsStore : IHeatingStatsStore {
-    void save_stats(const IHeatingStateStore\&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
-    bool load_stats(uint32_t\&, float\&, void*, void*, void*, void*) override { return false; }
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
     void save_total_uptime(uint32_t) override {}
-    bool load_total_uptime(uint32_t\&) override { return false; }
+    bool load_total_uptime(uint32_t&) override { return false; }
     void save_integral(float) override {}
-    void save_meter(const IHeatingStateStore\&, const void*) override {}
-    bool load_meter(IHeatingStateStore\&, void*) override { return false; }
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
 };
 
 TEST_CASE("calc_power uses dhw params when dhw_active", "[gas_model][dhw]")

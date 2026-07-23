@@ -54,13 +54,13 @@ struct FakeGasStore : IGasCorrectionStore {
 };
 
 struct FakeHeatingStatsStore : IHeatingStatsStore {
-    void save_stats(const IHeatingStateStore\&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
-    bool load_stats(uint32_t\&, float\&, void*, void*, void*, void*) override { return false; }
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
     void save_total_uptime(uint32_t) override {}
-    bool load_total_uptime(uint32_t\&) override { return false; }
+    bool load_total_uptime(uint32_t&) override { return false; }
     void save_integral(float) override {}
-    void save_meter(const IHeatingStateStore\&, const void*) override {}
-    bool load_meter(IHeatingStateStore\&, void*) override { return false; }
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
 };
 
 TEST_CASE("FakeLogger: direct virtual call via ILogger& works", "[debug]") {
@@ -179,8 +179,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f); // so estimated = 100 + 50 = 150
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // SAVE PATH: user enters reading=155, clicks "Сверить"
     gas.add_meter_correction(155.0f);
@@ -246,8 +246,8 @@ GasCorrTestLogger log;
     // base=0, integral=0 → actual_consumed=0 → < 0.01 threshold
     FakeHeatingStatsStore hss;
     GasFlowService gas_flow_svc(state, time, hss);
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     bool ok = gas.add_meter_correction(0.005f);  // actual_consumed = 0.005 < 0.01
 
@@ -270,8 +270,8 @@ GasCorrTestLogger log;
     FakeHeatingStatsStore hss;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.1f);  // integral > 0 but actual_consumed too small
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     bool ok = gas.add_meter_correction(100.005f);  // actual_consumed = 0.005 < 0.01
 
@@ -293,8 +293,8 @@ GasCorrTestLogger log;
     FakeHeatingStatsStore hss;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.002f);  // integral only 4% of actual_consumed
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     bool ok = gas.add_meter_correction(100.050f);  // actual=0.05, integral=0.002 (< 10%)
 
@@ -318,9 +318,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.5f);  // integral = actual (100% of consumption)
     gas_flow_svc.set_k_calib(1.0f);
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
-    gas.set_time_source(&time);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
     gas.init();
 
     bool ok = gas.add_meter_correction(100.5f);  // actual=0.5, integral=0.5 (100%)
@@ -345,8 +344,8 @@ GasCorrTestLogger log;
 
     FakeHeatingStatsStore hss;
     GasFlowService gas_flow_svc(state, time, hss);
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // Correction 1: integral=100, estimated=300, actual=310, diff=+10
     gas_flow_svc.set_integral(100.0f);
@@ -386,8 +385,8 @@ GasCorrTestLogger log;
 
     FakeHeatingStatsStore hss;
     GasFlowService gas_flow_svc(state, time, hss);
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // Fill up to CORRECTION_LOG_SIZE with distinct readings
     // Start from i=1 — integral must be >= 0.001 for correction to be accepted
@@ -449,8 +448,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(900.0f); // estimated=1000
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // actual reading = 100000 (way above estimate) → k would go >10
     gas.add_meter_correction(100000.0f);
@@ -476,8 +475,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(100.0f); // estimated=200
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // actual = 1 (way below estimate) → k * (1/200) = 0.1*0.005 → <0.1 → clamped to 0.1
     gas.add_meter_correction(1.0f);
@@ -528,8 +527,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f);
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // User presses "Сверить" — correction is saved WITH blob
     gas.add_meter_correction(260.0f);
@@ -569,8 +568,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(100.0f);
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // Two corrections
     gas.add_meter_correction(410.0f);
@@ -671,8 +670,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f); // estimated = 100 + 50 = 150
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // User enters reading=155
     gas.add_meter_correction(155.0f);
@@ -700,8 +699,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.0f); // нет потребления с момента последней коррекции
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     gas.add_meter_correction(200.0f);
 
@@ -733,8 +732,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(100.0f);
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // Добавляем пару коррекций
     gas.add_meter_correction(410.0f);   // base=300, integral=100 → actual=110, integral=100 → OK
@@ -801,9 +800,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f);
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
-    gas.set_time_source(&time);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     gas.add_meter_correction(155.0f);
 
@@ -846,8 +844,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, fake_time, hss);
     gas_flow_svc.set_integral(50.0f); // was 50 m³ accumulated
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // Record correction
     gas.add_meter_correction(160.0f);
@@ -877,9 +875,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, fake_time, hss);
     gas_flow_svc.set_integral(10.0f);
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
-    gas.set_time_source(&fake_time);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     fake_time.set_us(1782000000000000ULL);
     gas.add_meter_correction(210.0f);
@@ -913,9 +910,8 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, fake_time, hss);
     gas_flow_svc.set_integral(10.0f);
 
-    GasCorrectionInteractor gas(state, gas_store, log);
-    gas.set_gas_flow(&gas_flow_svc);
-    gas.set_time_source(&fake_time);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, &gas_flow_svc);
+    // gas_flow now passed via constructor
 
     // Set fake time to a known Unix timestamp (~2026-06-12)
     fake_time.set_us(1782000000000000ULL);

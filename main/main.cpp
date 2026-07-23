@@ -42,7 +42,10 @@
 #include "infrastructure/driving/mqtt_interactor.h"
 
 // ── OTA ──────────────────────────────────────────────────
-#include "infrastructure/driving/ota_controller.h"
+#include "infrastructure/driven/ota_validity_adapter.h"
+#include "infrastructure/driven/esp_ota_adapter.h"
+#include "infrastructure/driven/ota_version_index_adapter.h"
+#include "infrastructure/driving/ota_interactor.h"
 
 // ── Use cases ────────────────────────────────────────────
 #include "application/use_cases/main_poller_interactor.h"
@@ -83,16 +86,14 @@ extern "C" void app_main(void)
     // ── Phase 1: Foundation ──────────────────────────────
     EventLogAdapter ca_log;
     
-    // OTA-контроллер: владеет адаптерами валидности, загрузки, версий
-    // и интерактором. Конструктор создаёт OtaValidityAdapter (нужен для
-    // is_pending_global — NVS-заморозка D9/D10) и логирует состояние партиции.
-    OtaController ota_ctrl;
+    // OTA validity: следит за состоянием партиции (PENDING_VERIFY/VALID).
+    OtaValidityAdapter ota_validity;
 
     CrashDiagnosticsAdapter crash_diag(ca_log);
     crash_diag.start();
 
     // Связка: признак краха → OTA-валидатор (arm() немедленно откатит при краше)
-    ota_ctrl.set_crash_flag(crash_diag.last_boot_had_crash());
+    ota_validity.set_crash_flag(crash_diag.last_boot_had_crash());
 
     ca_log.event(ILogger::SYSTEM, "Система запущена");
 
@@ -195,21 +196,40 @@ extern "C" void app_main(void)
     http.start();
 
     // ── OTA: старт подсистемы (адаптеры + интерактор + валидация) ──
-    // start() создаёт FirmwareOtaInteractor, регистрирует flush-stats,
-    // взводит валидацию и возвращает IOtaManager для HTTP-хендлеров.
-    IOtaManager* ota_mgr = ota_ctrl.start({
-        .heating_stats = &stores.heating_stats, .state = &ca_state, .burn_cycle_service = &burn_cycle_service,
-        .mod_stats = &mod_stats, .gas_flow = &gas_flow, .gas_corr = &gas_corr,
-        .time = &ca_time, .total_uptime_base_sec = &total_uptime_base_sec
-    });
-    http.set_ota(ota_mgr);
+    EspOtaAdapter          ota_downloader;
+    OtaVersionIndexAdapter ota_versions;
+    OtaInteractor ota(ota_validity, ota_downloader, ota_versions,
+                      []() { return esp_timer_get_time() / 1000; },
+                      // spawn: FreeRTOS-задача загрузки (приоритет ниже опроса котла)
+                      [](OtaInteractor* self) -> bool {
+                          return xTaskCreate([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); },
+                                             "ota_dl", 12*1024, self, 3, nullptr) == pdPASS;
+                      },
+                      // reboot: flush-stats + перезагрузка в новый слот
+                      [&]() {
+                          burn_cycle_service.save_to_store();
+                          {
+                              static NvsHistBlob hb; memset(&hb, 0, sizeof(hb));
+                              mod_stats.fill_histogram(hb);
+                              stores.heating_stats.save_stats(ca_state, burn_cycle_service.burner_seconds(),
+                                  gas_flow.integral_m3(), &hb, nullptr, nullptr, nullptr);
+                          }
+                          stores.heating_stats.save_total_uptime(total_uptime_base_sec +
+                              (uint32_t)(ca_time.monotonic_us() / 1000000));
+                          stores.heating_stats.save_meter(ca_state, &gas_corr.meter_blob());
+                          vTaskDelay(pdMS_TO_TICKS(500));
+                          esp_restart();
+                      });
+    ota_validity.set_http_server_up(true);
+    ota_validity.arm();
+    http.set_ota(&ota);
 
     // ── Idle: CPU stats every 60s, periodic NVS save every 10 min ──
     static const char* TAG = "main";
     int save_tick = 0;
     while (1) {
-        // OTA: heartbeat (подтверждение/откат) + опрос прогресса загрузки.
-        ota_ctrl.tick();
+        ota_validity.heartbeat();
+        ota.poll();
 
         vTaskDelay(pdMS_TO_TICKS(15000));  // keep 15s until fragmentation is fixed
         save_tick++;
@@ -286,7 +306,7 @@ extern "C" void app_main(void)
         // тик), первый save≈150 c — не пересекаются; заморозка даёт гарантию на
         // нештатных путях (медленный HTTP, краш-диагностика).
         if (save_tick >= 10) {
-            if (ota_ctrl.is_pending()) {
+            if (ota_validity.is_pending()) {
                 ESP_LOGW(TAG, "Периодический NVS-save пропущен: образ на проверке (PENDING_VERIFY)");
             } else {
                 save_tick = 0;
