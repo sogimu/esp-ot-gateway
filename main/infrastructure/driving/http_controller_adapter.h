@@ -14,20 +14,16 @@ class IMqttConfigurator;
 
 class HttpControllerAdapter {
 public:
-    HttpControllerAdapter();
+    HttpControllerAdapter(WebPresenterAdapter& presenter,
+                          IConfigureSystem& cfg, IConfigurePid& pid,
+                          IGasCalibration& gas, IFaultReset& fault,
+                          IWifiManager& wifi, SntpTimeAdapter& time,
+                          IMqttConfigurator& mqtt);
     ~HttpControllerAdapter();
     void start();
     void stop();
 
-    void set_presenter(WebPresenterAdapter* p)  { presenter_ = p; }
-    void set_config(IConfigureSystem* c)        { cfg_ = c; }
-    void set_pid(IConfigurePid* p)              { pid_ = p; }
-    void set_gas(IGasCalibration* g)            { gas_ = g; }
-    void set_fault(IFaultReset* f)              { fault_ = f; }
-    void set_wifi(IWifiManager* w)              { wifi_ = w; }
-    void set_time_adapter(SntpTimeAdapter* t)   { time_ = t; }
-    void set_mqtt(IMqttConfigurator* m)         { mqtt_ = m; }
-    void set_ota(IOtaManager* o)                { ota_ = o; }
+    void set_ota(IOtaManager* o) { ota_ = o; }  // после http.start()
 
 private:
     httpd_handle_t server_ = nullptr;

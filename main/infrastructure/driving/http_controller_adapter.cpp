@@ -25,7 +25,14 @@ static const char* TAG = "http";
 
 HttpControllerAdapter* HttpControllerAdapter::s_self = nullptr;
 
-HttpControllerAdapter::HttpControllerAdapter()  { s_self = this; }
+HttpControllerAdapter::HttpControllerAdapter(WebPresenterAdapter& presenter,
+                                             IConfigureSystem&  cfg,  IConfigurePid& pid,
+                                             IGasCalibration&  gas,  IFaultReset&   fault,
+                                             IWifiManager&     wifi, SntpTimeAdapter& time,
+                                             IMqttConfigurator& mqtt)
+    : presenter_(&presenter), cfg_(&cfg), pid_(&pid), gas_(&gas), fault_(&fault),
+      wifi_(&wifi), time_(&time), mqtt_(&mqtt)
+{ s_self = this; }
 HttpControllerAdapter::~HttpControllerAdapter() { stop(); s_self = nullptr; }
 
 void HttpControllerAdapter::start()

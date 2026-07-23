@@ -207,15 +207,8 @@ extern "C" void app_main(void)
     ESP_LOGI("main", "Задача опроса запущена (7 IPollable)");
 
     // ── Phase 8: HTTP server ─────────────────────────────
-    HttpControllerAdapter http;
-    http.set_presenter(&ca_web);
-    http.set_config(&sys_cfg);
-    http.set_pid(&sys_cfg);
-    http.set_fault(&sys_cfg);
-    http.set_gas(&gas_corr);
-    http.set_wifi(&wifi);
-    http.set_time_adapter(&ca_time);
-    http.set_mqtt(&mqtt);
+    HttpControllerAdapter http(ca_web, sys_cfg, sys_cfg, gas_corr, sys_cfg,
+                               wifi, ca_time, mqtt);
     http.start();
 
     // ── OTA: старт подсистемы (адаптеры + интерактор + валидация) ──
