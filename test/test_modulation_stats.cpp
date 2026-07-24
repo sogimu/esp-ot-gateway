@@ -1,4 +1,5 @@
 #include "application/ports/driven/iheating_stats_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 /// Tests for ModulationStatsService (application/services/modulation_stats_service.h)
 /// Covers: flame-gated binning, percentile computation, histogram decay, reset.
 
@@ -31,7 +32,8 @@ struct FakeHeatingStatsStore : IHeatingStatsStore {
 
 TEST_CASE("ModulationStats: initial state is empty", "[mod][app]") {
     FakeHeatingStateStore state;
-    FakeHeatingStatsStore hss; ModulationStatsService stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     REQUIRE(stats.samples() == 0);
     REQUIRE(stats.p50() == Approx(0.0f));
@@ -40,7 +42,8 @@ TEST_CASE("ModulationStats: initial state is empty", "[mod][app]") {
 
 TEST_CASE("ModulationStats: flame gate — no sampling while burner off", "[mod][app][flame]") {
     FakeHeatingStateStore state;
-    FakeHeatingStatsStore hss; ModulationStatsService stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // Burner off: modulation reads 0 but must NOT be recorded.
     state.set_flame(false);
@@ -62,7 +65,8 @@ TEST_CASE("ModulationStats: flame gate — no sampling while burner off", "[mod]
 
 TEST_CASE("ModulationStats: single sample", "[mod][app]") {
     FakeHeatingStateStore state;
-    FakeHeatingStatsStore hss; ModulationStatsService stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     poll_burning(stats, state, 45.0f, 1);
 
@@ -73,7 +77,8 @@ TEST_CASE("ModulationStats: single sample", "[mod][app]") {
 
 TEST_CASE("ModulationStats: percentiles with uniform distribution", "[mod][app]") {
     FakeHeatingStateStore state;
-    FakeHeatingStatsStore hss; ModulationStatsService stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // Add 100 samples: 10@0%, 10@10%, ..., 10@90%
     for (int pct = 0; pct <= 90; pct += 10) {
@@ -101,7 +106,8 @@ TEST_CASE("ModulationStats: percentiles with uniform distribution", "[mod][app]"
 
 TEST_CASE("ModulationStats: all same value → all percentiles equal", "[mod][app]") {
     FakeHeatingStateStore state;
-    FakeHeatingStatsStore hss; ModulationStatsService stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     poll_burning(stats, state, 35.0f, 1000);
 
@@ -113,7 +119,8 @@ TEST_CASE("ModulationStats: all same value → all percentiles equal", "[mod][ap
 
 TEST_CASE("ModulationStats: histogram bin clamping", "[mod][app]") {
     FakeHeatingStateStore state;
-    FakeHeatingStatsStore hss; ModulationStatsService stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // Below 0% → clamped to bin 0
     poll_burning(stats, state, -5.0f, 1);
@@ -125,7 +132,8 @@ TEST_CASE("ModulationStats: histogram bin clamping", "[mod][app]") {
 
 TEST_CASE("ModulationStats: p1/p99 in skewed distribution", "[mod][app]") {
     FakeHeatingStateStore state;
-    FakeHeatingStatsStore hss; ModulationStatsService stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // 990 samples at 30%, 10 samples at 90% (skewed right)
     poll_burning(stats, state, 30.0f, 990);
@@ -143,7 +151,8 @@ TEST_CASE("ModulationStats: p1/p99 in skewed distribution", "[mod][app]") {
 
 TEST_CASE("ModulationStats: decay bounds the sample count", "[mod][app][decay]") {
     FakeHeatingStateStore state;
-    FakeHeatingStatsStore hss; ModulationStatsService stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // Feed well past the decay threshold at a single modulation value.
     const uint32_t N = ModulationStatsService::DECAY_THRESHOLD * 3 + 137;
@@ -165,7 +174,8 @@ TEST_CASE("ModulationStats: decay bounds the sample count", "[mod][app][decay]")
 
 TEST_CASE("ModulationStats: decay preserves distribution shape", "[mod][app][decay]") {
     FakeHeatingStateStore state;
-    FakeHeatingStatsStore hss; ModulationStatsService stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
     state.set_flame(true);
 
     // Stationary mix fed round-robin (as real interleaved operation would be),

@@ -1,4 +1,5 @@
 #include "application/ports/driven/iheating_stats_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 #include "application/ports/driven/iburn_stats_store.h"
 /// Tests for reset statistics use cases — verify actual data reset via SystemConfigInteractor.
 #include <catch2/catch_test_macros.hpp>
@@ -72,7 +73,7 @@ TEST_CASE("ResetStats: reset_cycle_stats clears burner data", "[reset][cycle]")
     REQUIRE(burn_cycles.burner_seconds() > 0);
 
     FakeBoilerConfigStore boiler_cfg;
-    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time);
+    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time, nullptr, nullptr, &burn_cycles, nullptr, nullptr);
     sys_cfg.reset_cycle_stats();
 
     REQUIRE(burn_cycles.cycle_count() == 0);
@@ -93,7 +94,7 @@ TEST_CASE("ResetStats: reset_cycle_stats on empty data is safe", "[reset][cycle]
     REQUIRE(burn_cycles.cycle_count() == 0);
 
     FakeBoilerConfigStore boiler_cfg;
-    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time);
+    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time, nullptr, nullptr, &burn_cycles, nullptr, nullptr);
     REQUIRE_NOTHROW(sys_cfg.reset_cycle_stats());
 }
 
@@ -107,7 +108,8 @@ TEST_CASE("ResetStats: reset_modulation_stats clears histogram", "[reset][mod]")
     FakeTimeSource time;
     ResetTestLogger log;
 
-    FakeHeatingStatsStore hss; ModulationStatsService mod_stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService mod_stats(state, hss_mod);
     state.set_flame(true);
     state.set_modulation(50.0f);
     mod_stats.poll();
@@ -117,7 +119,8 @@ TEST_CASE("ResetStats: reset_modulation_stats clears histogram", "[reset][mod]")
     REQUIRE(mod_stats.samples() > 0);
 
     FakeBoilerConfigStore boiler_cfg;
-    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time);
+    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time,
+                                     nullptr, nullptr, nullptr, &mod_stats, nullptr);
     sys_cfg.reset_modulation_stats();
 
     REQUIRE(mod_stats.samples() == 0);
@@ -131,11 +134,12 @@ TEST_CASE("ResetStats: reset_modulation_stats on empty data is safe", "[reset][m
     FakeTimeSource time;
     ResetTestLogger log;
 
-    FakeHeatingStatsStore hss; ModulationStatsService mod_stats(state, hss);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService mod_stats(state, hss_mod);
     REQUIRE(mod_stats.samples() == 0);
 
     FakeBoilerConfigStore boiler_cfg;
-    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time);
+    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time, nullptr, nullptr, nullptr, &mod_stats, nullptr);
     REQUIRE_NOTHROW(sys_cfg.reset_modulation_stats());
 }
 
@@ -156,7 +160,7 @@ TEST_CASE("ResetStats: reset_gas_stats clears integral and EMAs", "[reset][gas]"
     REQUIRE(gas_flow.integral_m3() > 0);
 
     FakeBoilerConfigStore boiler_cfg;
-    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time);
+    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time, nullptr, nullptr, nullptr, nullptr, &gas_flow);
     sys_cfg.reset_gas_stats();
 
     REQUIRE(gas_flow.integral_m3() == Approx(0.0f));
@@ -174,6 +178,6 @@ TEST_CASE("ResetStats: reset_gas_stats on empty data is safe", "[reset][gas]")
     GasFlowService gas_flow(state, time, hss);
 
     FakeBoilerConfigStore boiler_cfg;
-    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time);
+    SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time, nullptr, nullptr, nullptr, nullptr, &gas_flow);
     REQUIRE_NOTHROW(sys_cfg.reset_gas_stats());
 }

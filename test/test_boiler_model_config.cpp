@@ -1,3 +1,4 @@
+#include "application/ports/driven/iheating_stats_store.h"
 #include "application/ports/driven/igas_correction_store.h"
 /// Tests for boiler model config blob sizes, default values, validation and persistence.
 
@@ -27,6 +28,16 @@ struct FakeGasStore : IGasCorrectionStore {
     }
     void save_integral(float v) override { if (cfg) cfg->save_integral(v); }
     void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
+};
+
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
 };
 
 TEST_CASE("NvsCalibBlob size is 32", "[boiler_model]") {

@@ -1,3 +1,4 @@
+#include "application/ports/driven/iheating_stats_store.h"
 #include "application/ports/driven/igas_correction_store.h"
 /// Unit tests for domain/value_objects/gas_correction_metrics.h
 /// Covers: compute_correction_metrics() and GasCorrectionMetrics::k_factor()
@@ -18,6 +19,16 @@ struct FakeGasStore : IGasCorrectionStore {
     void save_meter(const IHeatingStateStore&, const void*) override {}
     void save_integral(float) override {}
     void save_boiler_config(const IHeatingStateStore&) override {}
+};
+
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
 };
 
 TEST_CASE("correction metrics: 50% underestimation", "[domain][gas_metrics]")

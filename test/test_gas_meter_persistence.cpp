@@ -139,9 +139,9 @@ TEST_CASE("GasFlow: load_stats restores integral_m3 after simulated reboot", "[g
     // Simulate reboot: save integral, create fresh GasFlowService, restore
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    FakeHeatingStatsStore hss;
 
     // "Before reboot" — accumulate gas
+    FakeHeatingStatsStore hss;
     GasFlowService gfs_before(state, time, hss);
     gfs_before.set_integral(12.345f);
     float saved_integral = gfs_before.integral_m3();

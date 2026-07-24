@@ -86,14 +86,10 @@ extern "C" void app_main(void)
     // ── Phase 1: Foundation ──────────────────────────────
     EventLogAdapter ca_log;
     
-    // OTA validity: следит за состоянием партиции (PENDING_VERIFY/VALID).
-    OtaValidityAdapter ota_validity;
 
     CrashDiagnosticsAdapter crash_diag(ca_log);
     crash_diag.start();
 
-    // Связка: признак краха → OTA-валидатор (arm() немедленно откатит при краше)
-    ota_validity.set_crash_flag(crash_diag.last_boot_had_crash());
 
     ca_log.event(ILogger::SYSTEM, "Система запущена");
 
@@ -193,36 +189,38 @@ extern "C" void app_main(void)
     // ── Phase 8: HTTP server ─────────────────────────────
     HttpControllerAdapter http(ca_web, sys_cfg, sys_cfg, gas_corr, sys_cfg,
                                wifi, ca_time, mqtt);
-    http.start();
 
     // ── OTA: старт подсистемы (адаптеры + интерактор + валидация) ──
+    // OTA validity: следит за состоянием партиции (PENDING_VERIFY/VALID).
+    OtaValidityAdapter ota_validity;
+    // Связка: признак краха → OTA-валидатор (arm() немедленно откатит при краше)
+    ota_validity.set_crash_flag(crash_diag.last_boot_had_crash());
     EspOtaAdapter          ota_downloader;
     OtaVersionIndexAdapter ota_versions;
+
+    auto ota_now_ms = [&]() { return ca_time.monotonic_us() / 1000; };
+    auto ota_spawn  = [](OtaInteractor* self) -> bool {
+        return xTaskCreate([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); },
+                           "ota_dl", 12*1024, self, 3, nullptr) == pdPASS;
+    };
+    auto ota_reboot = [&]() {
+        burn_cycle_service.save_to_store();
+        static NvsHistBlob hb; memset(&hb, 0, sizeof(hb));
+        mod_stats.fill_histogram(hb);
+        stores.heating_stats.save_stats(ca_state, burn_cycle_service.burner_seconds(),
+            gas_flow.integral_m3(), &hb, nullptr, nullptr, nullptr);
+        stores.heating_stats.save_total_uptime(total_uptime_base_sec +
+            (uint32_t)(ca_time.monotonic_us() / 1000000));
+        stores.heating_stats.save_meter(ca_state, &gas_corr.meter_blob());
+        vTaskDelay(pdMS_TO_TICKS(500));
+        esp_restart();
+    };
     OtaInteractor ota(ota_validity, ota_downloader, ota_versions,
-                      []() { return esp_timer_get_time() / 1000; },
-                      // spawn: FreeRTOS-задача загрузки (приоритет ниже опроса котла)
-                      [](OtaInteractor* self) -> bool {
-                          return xTaskCreate([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); },
-                                             "ota_dl", 12*1024, self, 3, nullptr) == pdPASS;
-                      },
-                      // reboot: flush-stats + перезагрузка в новый слот
-                      [&]() {
-                          burn_cycle_service.save_to_store();
-                          {
-                              static NvsHistBlob hb; memset(&hb, 0, sizeof(hb));
-                              mod_stats.fill_histogram(hb);
-                              stores.heating_stats.save_stats(ca_state, burn_cycle_service.burner_seconds(),
-                                  gas_flow.integral_m3(), &hb, nullptr, nullptr, nullptr);
-                          }
-                          stores.heating_stats.save_total_uptime(total_uptime_base_sec +
-                              (uint32_t)(ca_time.monotonic_us() / 1000000));
-                          stores.heating_stats.save_meter(ca_state, &gas_corr.meter_blob());
-                          vTaskDelay(pdMS_TO_TICKS(500));
-                          esp_restart();
-                      });
+                      ota_now_ms, ota_spawn, ota_reboot);
     ota_validity.set_http_server_up(true);
     ota_validity.arm();
     http.set_ota(&ota);
+    http.start();
 
     // ── Idle: CPU stats every 60s, periodic NVS save every 10 min ──
     static const char* TAG = "main";
