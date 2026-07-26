@@ -425,7 +425,7 @@ int MqttSocketAdapter::read_exact(uint8_t* buf, int len, int timeout_ms) {
 
 void MqttSocketAdapter::process_incoming()
 {
-    static uint8_t buf[BUF_SIZE];  // static — не на стеке main_poller'а
+    static uint8_t buf[BUF_SIZE];  // static — не на стеке control_loop'а
     for (;;) {
         fd_set fds;
         FD_ZERO(&fds);
@@ -438,7 +438,7 @@ void MqttSocketAdapter::process_incoming()
         int total = 0, to_read = 2;
         while (total < to_read && total < BUF_SIZE) {
             FD_ZERO(&fds); FD_SET(sock_, &fds);
-            struct timeval t = {0, 50000};  // 50ms per chunk — не блокирует main_poller
+            struct timeval t = {0, 50000};  // 50ms per chunk — не блокирует control_loop
             if (select(sock_ + 1, &fds, nullptr, nullptr, &t) <= 0) break;
             int n = recv(sock_, buf + total, BUF_SIZE - total, 0);
             if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) continue;

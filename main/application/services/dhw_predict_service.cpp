@@ -171,7 +171,7 @@ void DHWPredictService::push_prediction()
 
 // ── Main poll ──────────────────────────────────────────────────
 
-void DHWPredictService::poll()
+void DHWPredictService::execute()
 {
     state_.lock_shared();
     bool flame      = state_.is_flame_on();

@@ -70,7 +70,7 @@ void MqttInteractor::init()
 
 // ── poll ─────────────────────────────────────────────────────
 
-void MqttInteractor::poll()
+void MqttInteractor::execute()
 {
     if (mqtt_state_ == State::DISABLED) return;
 

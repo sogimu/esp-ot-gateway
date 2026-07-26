@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 
 class IHeatingStateStore;
 class ITimeSource;
@@ -9,11 +9,11 @@ class IBurnStatsStore;
 
 /// Tracks burner cycle statistics with cumulative counters.
 /// Все счётчики NVS-персистентны — инкапсулирует загрузку/сохранение.
-class BurnCycleService : public IPollable {
+class BurnCycleService : public IControlTask {
 public:
     BurnCycleService(IHeatingStateStore& state, ITimeSource& time, IBurnStatsStore& store);
 
-    void poll() override;
+    void execute() override;
     void reset();
 
     // ── Cumulative counters (persisted to NVS) ──────────

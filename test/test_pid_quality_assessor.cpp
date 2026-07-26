@@ -12,7 +12,7 @@ static constexpr int MINUTES = 10;
 static void run_minute(PidQualityAssessor& assessor)
 {
     for (int i = 0; i < POLLS_PER_MINUTE; i++) {
-        assessor.poll();
+        assessor.execute();
     }
 }
 

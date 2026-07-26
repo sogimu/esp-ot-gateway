@@ -68,7 +68,7 @@ bool MqttClientAdapter::connect(const char* uri, const char* user, const char* p
     // via esp_mqtt_client_reconnect() causes resource overlap and heap leak.
     cfg.network.disable_auto_reconnect = false;
     cfg.task.stack_size = 4096;
-    cfg.task.priority   = 7;  // выше main_poller(4), ниже lwip(18)/WiFi(23)
+    cfg.task.priority   = 7;  // выше control_loop(4), ниже lwip(18)/WiFi(23)
     cfg.session.message_retransmit_timeout = 2000;  // retransmit interval
     cfg.outbox.limit = 8192;                        // room for status(~1KB)+stats(~2KB)
 

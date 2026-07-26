@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 
 class IHeatingStateStore;
 class IHeatingStatsStore;
@@ -21,7 +21,7 @@ class IHeatingStatsStore;
 /// Accessors are called from HTTP task (reader). ESP32 word-aligned reads of
 /// uint32_t/float are atomic. hist_[] entries may lag 1-2 poll cycles behind
 /// samples_ counter — acceptable for dashboard display.
-class ModulationStatsService : public IPollable {
+class ModulationStatsService : public IControlTask {
 public:
     static constexpr int BINS = 100;
 
@@ -38,7 +38,7 @@ public:
     ModulationStatsService(IHeatingStateStore& state, IHeatingStatsStore& store);
     ~ModulationStatsService();
 
-    void poll() override;
+    void execute() override;
     void reset();
 
     uint32_t samples() const { return samples_; }

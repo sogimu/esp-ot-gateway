@@ -110,8 +110,8 @@ TEST_CASE("DHW and CH have same flow with same power params", "[gas_model][dhw]"
     svc.set_k_calib(1.0f);
 
     // First poll: CH mode — run many iterations for Kalman convergence
-    svc.poll();
-    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.poll(); }
+    svc.execute();
+    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.execute(); }
     float flow_ch = svc.instant_flow();
     INFO("flow in CH mode: " << flow_ch);
 
@@ -119,8 +119,8 @@ TEST_CASE("DHW and CH have same flow with same power params", "[gas_model][dhw]"
     svc.reset();
     state.set_dhw_active(true);
     state.set_flame(true);
-    svc.poll();
-    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.poll(); }
+    svc.execute();
+    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.execute(); }
     float flow_dhw = svc.instant_flow();
     INFO("flow in DHW mode: " << flow_dhw);
 

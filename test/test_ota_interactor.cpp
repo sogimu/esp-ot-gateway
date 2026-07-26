@@ -136,7 +136,7 @@ TEST_CASE("OtaInteractor: poll — прогресс мапируется", "[ota
     OtaInteractor ota(val, dl, ver, [&]{ return now; },
         [](OtaInteractor*){ return true; }, [](){});
     ota.begin_update("v1");
-    ota.poll();
+    ota.execute();
     REQUIRE(ota.status().progress_pct == 42);
 }
 
@@ -147,7 +147,7 @@ TEST_CASE("OtaInteractor: poll — last_error мапируется", "[ota]") {
     OtaInteractor ota(val, dl, ver, [&]{ return now; },
         [](OtaInteractor*){ return true; }, [](){});
     ota.begin_update("v1");
-    ota.poll();
+    ota.execute();
     REQUIRE(std::strstr(ota.status().last_error, "сетевая ошибка") != nullptr);
 }
 

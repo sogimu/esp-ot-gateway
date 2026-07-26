@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 #include "domain/services/kalman1d.h"
 
 class IHeatingStateStore;
@@ -11,7 +11,7 @@ class IHeatingStatsStore;
 /// Estimates gas consumption from modulation % and return temperature.
 /// Uses Kalman1D filters on raw inputs, physical model for flow rate,
 /// and EMA accumulators for rolling averages.
-class GasFlowService : public IPollable {
+class GasFlowService : public IControlTask {
 public:
     static constexpr int RING_SIZE = 720; // 2h @ 10s interval
 
@@ -20,7 +20,7 @@ public:
 
     void load_integral();  // restore integral_m3 from NVS
 
-    void poll() override;
+    void execute() override;
     void reset();
 
     // Accessors

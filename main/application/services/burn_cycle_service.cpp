@@ -9,7 +9,7 @@ BurnCycleService::BurnCycleService(IHeatingStateStore& state, ITimeSource& time,
 {
 }
 
-void BurnCycleService::poll()
+void BurnCycleService::execute()
 {
     uint32_t now_ms = static_cast<uint32_t>(time_.monotonic_ms());
 

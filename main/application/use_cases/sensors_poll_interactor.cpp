@@ -7,7 +7,7 @@ SensorsPollInteractor::SensorsPollInteractor(ITemperatureSensor& sensor, IHeatin
 {
 }
 
-void SensorsPollInteractor::poll()
+void SensorsPollInteractor::execute()
 {
     // Call sensors_poll() every cycle — it manages its own 2-phase state machine
     sensor_.request_conversion();

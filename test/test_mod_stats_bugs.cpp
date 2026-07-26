@@ -14,7 +14,7 @@ static void poll_burning(ModulationStatsService& svc, FakeHeatingStateStore& sta
 {
     state.set_flame(true);
     state.set_modulation(modulation);
-    for (int i = 0; i < times; i++) svc.poll();
+    for (int i = 0; i < times; i++) svc.execute();
 }
 
 struct FakeHeatingStatsStore : IHeatingStatsStore {

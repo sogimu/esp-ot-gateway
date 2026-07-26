@@ -1,6 +1,6 @@
 #pragma once
 
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 #include "application/ports/driving/imqtt_configurator.h"
 #include "application/ports/driven/imqtt_message_sink.h"
 #include <cstdint>
@@ -23,7 +23,7 @@ class IMqttStateRenderer;
 ///
 /// Входящие команды обрабатываются ИСКЛЮЧИТЕЛЬНО в poll().
 /// MQTT-колбек только помещает сообщения в IMqttMessageSink.
-class MqttInteractor : public IPollable, public IMqttConfigurator {
+class MqttInteractor : public IControlTask, public IMqttConfigurator {
 public:
     MqttInteractor(IMqttHardware& mqtt, IMqttMessageSink& sink,
                    IMqttConfigStore& cfg_store,
@@ -36,8 +36,8 @@ public:
     /// Загрузить настройки MQTT из NVS и подключиться (если enabled).
     void init();
 
-    /// IPollable: периодический цикл (~1.1с).
-    void poll() override;
+    /// IControlTask: периодический цикл (~1.1с).
+    void execute() override;
 
     // ── IMqttConfigurator ───────────────────────────────
 

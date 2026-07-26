@@ -83,7 +83,7 @@ void GasFlowService::update_ema(float& ema, float val, float alpha)
     else ema = alpha * val + (1.0f - alpha) * ema;
 }
 
-void GasFlowService::poll()
+void GasFlowService::execute()
 {
     uint32_t now_ms = static_cast<uint32_t>(time_.monotonic_ms());
     if (last_update_ms_ == 0) {

@@ -168,7 +168,7 @@ TEST_CASE("GasFlow: integral_m3 accumulates across poll cycles", "[gas][regressi
     state.set_modulation(0);
     for (int i = 0; i < 10; i++) {
         time.advance_ms(1100);
-        gfs.poll();
+        gfs.execute();
     }
 
     // No flame → no gas flow → integral unchanged

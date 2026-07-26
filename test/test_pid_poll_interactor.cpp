@@ -85,7 +85,7 @@ TEST_CASE("PidPoll: poll() не делает ничего когда PID вык�
     state.set_ch_mode(CHMode::Manual_Static);
     state.set_t1_temp(22.0f); state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(61); pid.poll();
+    time.advance_sec(61); pid.execute();
     REQUIRE(log.event_count_ == 0);
     REQUIRE(!state.get_pid_active());
 }
@@ -95,8 +95,8 @@ TEST_CASE("PidPoll: poll() вычисляет PID когда включён и �
     state.set_t1_temp(18.0f); state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
     state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll();
-    time.advance_sec(60); pid.poll();
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_active()); REQUIRE(state.get_pid_output() >= 20.0f);
 }
 
@@ -108,11 +108,11 @@ TEST_CASE("PidPoll: disable() полностью останавливает — 
     state.set_t1_temp(18.0f); state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
     state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll(); time.advance_sec(60); pid.poll();
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_active());
     pid.disable();
     int before = log.event_count_;
-    time.advance_sec(61); pid.poll();
+    time.advance_sec(61); pid.execute();
     REQUIRE(log.event_count_ == before);
 }
 
@@ -124,11 +124,11 @@ TEST_CASE("PidPoll: enable после disable запускает PID с чист
     state.set_t1_temp(18.0f); state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
     state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll(); time.advance_sec(60); pid.poll();
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_active());
     pid.disable(); REQUIRE(!state.get_pid_enabled());
     pid.enable();  REQUIRE(state.get_pid_enabled());
-    time.advance_sec(1); pid.poll(); time.advance_sec(60); pid.poll();
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_active()); REQUIRE(state.get_pid_output() >= 20.0f);
 }
 
@@ -140,7 +140,7 @@ TEST_CASE("PidPoll: target_room из конфига", "[pid][config][params]") {
     state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 25.0f, 300);
     state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll(); time.advance_sec(60); pid.poll();
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_target_room() == Approx(25.0f));
 }
 TEST_CASE("PidPoll: Kp из конфига — больший Kp даёт больший выход", "[pid][config][params]") {
@@ -149,14 +149,14 @@ TEST_CASE("PidPoll: Kp из конфига — больший Kp даёт бол
     s1.set_pid_config(4.0f, 0.0f, 0.0f, 60, 0, 22.0f, 300);
     s1.set_ch_sp_min(20.0f); s1.set_ch_sp_max(80.0f);
     PidPollInteractor p1(s1, b1, t1, l1);
-    t1.advance_sec(1); p1.poll(); t1.advance_sec(60); p1.poll();
+    t1.advance_sec(1); p1.execute(); t1.advance_sec(60); p1.execute();
     float out_hi = s1.get_pid_output();
     FakeHeatingStateStore s2; FakeBoilerHardware b2; FakeTimeSource t2; PidPollTestLogger l2;
     s2.set_ch_mode(CHMode::PID_Static); s2.set_t1_temp(10.0f);
     s2.set_pid_config(1.0f, 0.0f, 0.0f, 60, 0, 22.0f, 300);
     s2.set_ch_sp_min(20.0f); s2.set_ch_sp_max(80.0f);
     PidPollInteractor p2(s2, b2, t2, l2);
-    t2.advance_sec(1); p2.poll(); t2.advance_sec(60); p2.poll();
+    t2.advance_sec(1); p2.execute(); t2.advance_sec(60); p2.execute();
     REQUIRE(out_hi > s2.get_pid_output());
 }
 TEST_CASE("PidPoll: датчик T2 из конфига", "[pid][config][params]") {
@@ -165,7 +165,7 @@ TEST_CASE("PidPoll: датчик T2 из конфига", "[pid][config][params]
     state.set_pid_config(2.0f, 0.0f, 0.0f, 60, 1, 22.0f, 300);
     state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll(); time.advance_sec(60); pid.poll();
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_room_temp() == Approx(24.0f));
 }
 TEST_CASE("PidPoll: dt из конфига", "[pid][config][params]") {
@@ -174,7 +174,7 @@ TEST_CASE("PidPoll: dt из конфига", "[pid][config][params]") {
     state.set_pid_config(2.0f, 0.01f, 0.0f, 30, 0, 22.0f, 300);
     state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll(); time.advance_sec(30); pid.poll();
+    time.advance_sec(1); pid.execute(); time.advance_sec(30); pid.execute();
     REQUIRE(state.get_pid_active());
 }
 TEST_CASE("PidPoll: lockout из конфига", "[pid][config][params]") {
@@ -191,7 +191,7 @@ TEST_CASE("PidPoll: выход PID ограничен ch_sp_min..ch_sp_max", "[p
     state.set_pid_config(10.0f, 0.1f, 0.0f, 60, 0, 22.0f, 300);
     state.set_ch_sp_min(30.0f); state.set_ch_sp_max(60.0f);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll(); time.advance_sec(60); pid.poll();
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
     float out = state.get_pid_output();
     REQUIRE(out >= 30.0f); REQUIRE(out <= 60.0f);
 }
@@ -201,7 +201,7 @@ TEST_CASE("PidPoll: hysteresis из конфига", "[pid][config][params]") {
     state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
     state.set_pid_hysteresis(1.0f); state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll(); time.advance_sec(60); pid.poll();
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_hysteresis() == Approx(1.0f));
 }
 TEST_CASE("PidPoll: Ki из конфига читается", "[pid][config][params]") {
@@ -210,7 +210,7 @@ TEST_CASE("PidPoll: Ki из конфига читается", "[pid][config][par
     state.set_pid_config(2.0f, 0.05f, 0.0f, 60, 0, 22.0f, 300);
     state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll(); time.advance_sec(60); pid.poll();
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_ki() == Approx(0.05f));
 }
 TEST_CASE("PidPoll: Kd из конфига читается", "[pid][config][params]") {
@@ -240,7 +240,7 @@ TEST_CASE("PID_Sched: schedule updates target after first poll", "[pid][sched]")
     PidPollInteractor pid(state, boiler, time, log);
     REQUIRE(state.get_pid_target_room() == Approx(22.0f)); // до poll
 
-    time.advance_sec(1); pid.poll();
+    time.advance_sec(1); pid.execute();
     REQUIRE(state.get_pid_target_room() == Approx(25.0f)); // из расписания
 }
 
@@ -258,7 +258,7 @@ TEST_CASE("PID_Sched: ignored when mode is PID_Static", "[pid][sched]") {
     FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
     time.set_us(12ULL * 3600 * 1000000);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll();
+    time.advance_sec(1); pid.execute();
     REQUIRE(state.get_pid_target_room() == Approx(22.0f)); // не из расписания
 }
 
@@ -276,11 +276,11 @@ TEST_CASE("PID_Sched: hour change updates target live", "[pid][sched]") {
     FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
     time.set_us(8ULL * 3600 * 1000000);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll();
+    time.advance_sec(1); pid.execute();
     REQUIRE(state.get_pid_target_room() == Approx(24.0f));
 
     time.set_us(9ULL * 3600 * 1000000);
-    time.advance_sec(1); pid.poll();
+    time.advance_sec(1); pid.execute();
     REQUIRE(state.get_pid_target_room() == Approx(21.0f));
 }
 
@@ -298,6 +298,6 @@ TEST_CASE("PID_Sched: disabled schedule keeps config target", "[pid][sched]") {
     FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
     time.set_us(12ULL * 3600 * 1000000);
     PidPollInteractor pid(state, boiler, time, log);
-    time.advance_sec(1); pid.poll();
+    time.advance_sec(1); pid.execute();
     REQUIRE(state.get_pid_target_room() == Approx(22.0f));
 }

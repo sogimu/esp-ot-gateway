@@ -5,15 +5,15 @@
 #include <mutex>
 
 #include "application/ports/driving/iota_manager.h"
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 #include "application/ports/driven/iota_validity.h"
 #include "application/ports/driven/iota_downloader.h"
 #include "application/ports/driven/iota_version_index.h"
 
-/// Оркестратор OTA: реализует IOtaManager и IPollable. Свободен от железа —
+/// Оркестратор OTA: реализует IOtaManager и IControlTask. Свободен от железа —
 /// FreeRTOS/esp_restart инжектятся через std::function в конструкторе,
 /// что позволяет тестировать логику на хосте с заглушками.
-class OtaInteractor : public IOtaManager, public IPollable {
+class OtaInteractor : public IOtaManager, public IControlTask {
 public:
     using NowMsFn = std::function<int64_t()>;
 
@@ -43,7 +43,10 @@ public:
     char*     fetch_version_list() override;
     bool      begin_update(const char* tag) override;
     void      rollback_now() override;
-    void      poll() override;
+    void      poll() override;     // IOtaManager — синхронизация прогресса
+
+    // ── IControlTask ─────────────────────────────────────
+    void execute() override { poll(); }
 
     /// Тело загрузки (public — вызывается из spawn-лямбды).
     void run_download();

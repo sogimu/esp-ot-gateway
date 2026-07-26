@@ -26,7 +26,7 @@
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
 // ── Driving adapters ─────────────────────────────────────
-#include "infrastructure/driving/main_poller_task_adapter.h"
+#include "infrastructure/driving/control_loop_task_adapter.h"
 #include "infrastructure/driving/http_controller_adapter.h"
 
 // ── WiFi provisioning ────────────────────────────────────
@@ -48,7 +48,7 @@
 #include "infrastructure/driving/ota_interactor.h"
 
 // ── Use cases ────────────────────────────────────────────
-#include "application/use_cases/main_poller_interactor.h"
+#include "application/use_cases/control_loop_interactor.h"
 #include "application/use_cases/boiler_poll_interactor.h"
 #include "application/use_cases/sensors_poll_interactor.h"
 #include "application/use_cases/pid_poll_interactor.h"
@@ -227,15 +227,15 @@ extern "C" void app_main(void)
     }
 
     // ── Phase 6: Main poller ─────────────────────────────
-    MainPollerInteractor main_poller;
-    main_poller.add(&boiler_poll);
-    main_poller.add(&sensors_poll);
-    main_poller.add(&pid_poll);
-    main_poller.add(&mod_stats);
-    main_poller.add(&burn_cycle_service);
-    main_poller.add(&gas_flow);
-    main_poller.add(&dhw_predict);
-    main_poller.add(&mqtt);       // MQTT: публикация после обновления состояния
+    ControlLoopInteractor control_loop;
+    control_loop.add(&boiler_poll);
+    control_loop.add(&sensors_poll);
+    control_loop.add(&pid_poll);
+    control_loop.add(&mod_stats);
+    control_loop.add(&burn_cycle_service);
+    control_loop.add(&gas_flow);
+    control_loop.add(&dhw_predict);
+    control_loop.add(&mqtt);       // MQTT: публикация после обновления состояния
 
     // ── Phase 7: Hardware init + OTA adapters ──────────────
     ca_sensors.init();
@@ -252,11 +252,11 @@ extern "C" void app_main(void)
         stores.heating_stats, ca_state, gas_flow, gas_corr, total_uptime_base_sec, ca_time); };
     OtaInteractor ota(ota_validity, ota_downloader, ota_versions,
                       ota_now_ms, ota_spawn, ota_reboot);
-    main_poller.add(&ota);        // OTA: синхронизация прогресса загрузки
+    control_loop.add(&ota);        // OTA: синхронизация прогресса загрузки
 
-    MainPollerTaskAdapter poll_task(main_poller);
+    ControlLoopTaskAdapter poll_task(control_loop);
     poll_task.start();
-    ESP_LOGI("main", "Задача опроса запущена (7 IPollable)");
+    ESP_LOGI("main", "Задача опроса запущена (7 IControlTask)");
 
     // ── Phase 8: HTTP server ─────────────────────────────
     HttpControllerAdapter http(ca_web, sys_cfg, sys_cfg, gas_corr, sys_cfg,

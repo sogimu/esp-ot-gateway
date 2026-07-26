@@ -34,17 +34,17 @@ TEST_CASE("BurnCycle: detects flame on→off edge", "[burn][app]") {
     BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(false);
-    bcs.poll();
+    bcs.execute();
 
     time.advance_sec(10);
 
     state.set_flame(true);
-    bcs.poll();
+    bcs.execute();
 
     time.advance_sec(60);
 
     state.set_flame(false);
-    bcs.poll();
+    bcs.execute();
 
     REQUIRE(bcs.cycle_count() == 1);
     REQUIRE(bcs.burner_seconds() >= 55);
@@ -57,15 +57,15 @@ TEST_CASE("BurnCycle: accumulates burner seconds on flame-off edge", "[burn][app
     BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(true);
-    bcs.poll();
+    bcs.execute();
 
     for (int i = 0; i < 5; i++) {
         time.advance_ms(1100);
-        bcs.poll();
+        bcs.execute();
     }
 
     state.set_flame(false);
-    bcs.poll();
+    bcs.execute();
 
     REQUIRE(bcs.burner_seconds() >= 3);
 }
@@ -80,7 +80,7 @@ TEST_CASE("BurnCycle: no cycles counted when flame stays off", "[burn][app]") {
 
     for (int i = 0; i < 10; i++) {
         time.advance_ms(1100);
-        bcs.poll();
+        bcs.execute();
     }
 
     REQUIRE(bcs.cycle_count() == 0);
@@ -94,14 +94,14 @@ TEST_CASE("BurnCycle: multiple complete burn cycles", "[burn][app]") {
 
     for (int c = 0; c < 3; c++) {
         state.set_flame(true);
-        bcs.poll();
+        bcs.execute();
         time.advance_sec(30);
-        bcs.poll();
+        bcs.execute();
 
         state.set_flame(false);
-        bcs.poll();
+        bcs.execute();
         time.advance_sec(10);
-        bcs.poll();
+        bcs.execute();
     }
 
     REQUIRE(bcs.cycle_count() == 3);
@@ -115,20 +115,20 @@ TEST_CASE("BurnCycle: average burn computed from cumulative counters", "[burn][a
 
     // Two cycles: 30s and 60s
     state.set_flame(true);
-    bcs.poll();
+    bcs.execute();
     time.advance_sec(30);
-    bcs.poll();
+    bcs.execute();
     state.set_flame(false);
-    bcs.poll();
+    bcs.execute();
     time.advance_sec(10);
-    bcs.poll();
+    bcs.execute();
 
     state.set_flame(true);
-    bcs.poll();
+    bcs.execute();
     time.advance_sec(60);
-    bcs.poll();
+    bcs.execute();
     state.set_flame(false);
-    bcs.poll();
+    bcs.execute();
 
     REQUIRE(bcs.cycle_count() == 2);
     // avg = (30+60)/2 = 45
@@ -144,11 +144,11 @@ TEST_CASE("BurnCycle: burner_hours converts seconds to hours", "[burn][app]") {
     BurnCycleService bcs(state, time, burn_store);
 
     state.set_flame(true);
-    bcs.poll();
+    bcs.execute();
     time.advance_sec(3600);
-    bcs.poll();
+    bcs.execute();
     state.set_flame(false);
-    bcs.poll();
+    bcs.execute();
 
     float hours = bcs.burner_hours();
     REQUIRE(hours >= 0.5f);
@@ -162,31 +162,31 @@ TEST_CASE("BurnCycle: pause classification by 10min threshold", "[burn][app]") {
 
     // First burn
     state.set_flame(true);
-    bcs.poll();
+    bcs.execute();
     time.advance_sec(30);
-    bcs.poll();
+    bcs.execute();
     state.set_flame(false);
-    bcs.poll();
+    bcs.execute();
 
     // Short pause (3 min) — modulation
     time.advance_sec(180);
-    bcs.poll();
+    bcs.execute();
     state.set_flame(true);
-    bcs.poll();
+    bcs.execute();
     time.advance_sec(30);
-    bcs.poll();
+    bcs.execute();
     state.set_flame(false);
-    bcs.poll();
+    bcs.execute();
 
     // Long pause (15 min) — inter-session
     time.advance_sec(900);
-    bcs.poll();
+    bcs.execute();
     state.set_flame(true);
-    bcs.poll();
+    bcs.execute();
     time.advance_sec(30);
-    bcs.poll();
+    bcs.execute();
     state.set_flame(false);
-    bcs.poll();
+    bcs.execute();
 
     REQUIRE(bcs.modulation_cnt() == 1);
     REQUIRE(bcs.inter_session_cnt() == 1);

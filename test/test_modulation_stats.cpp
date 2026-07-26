@@ -17,7 +17,7 @@ static void poll_burning(ModulationStatsService& stats, FakeHeatingStateStore& s
 {
     state.set_flame(true);
     state.set_modulation(modulation);
-    for (int i = 0; i < times; i++) stats.poll();
+    for (int i = 0; i < times; i++) stats.execute();
 }
 
 struct FakeHeatingStatsStore : IHeatingStatsStore {
@@ -48,7 +48,7 @@ TEST_CASE("ModulationStats: flame gate — no sampling while burner off", "[mod]
     // Burner off: modulation reads 0 but must NOT be recorded.
     state.set_flame(false);
     state.set_modulation(0.0f);
-    for (int i = 0; i < 1000; i++) stats.poll();
+    for (int i = 0; i < 1000; i++) stats.execute();
     REQUIRE(stats.samples() == 0);
 
     // Burner on: samples start accumulating.
@@ -58,7 +58,7 @@ TEST_CASE("ModulationStats: flame gate — no sampling while burner off", "[mod]
     // Burner turns off again: count frozen, idle does not dilute percentiles.
     state.set_flame(false);
     state.set_modulation(0.0f);
-    for (int i = 0; i < 1000; i++) stats.poll();
+    for (int i = 0; i < 1000; i++) stats.execute();
     REQUIRE(stats.samples() == 10);
     REQUIRE(stats.p50() == Approx(45.0f));
 }
@@ -184,9 +184,9 @@ TEST_CASE("ModulationStats: decay preserves distribution shape", "[mod][app][dec
     // *values* stay put even as counts shrink.
     const int rounds = static_cast<int>(ModulationStatsService::DECAY_THRESHOLD) / 10 * 30;
     for (int r = 0; r < rounds; r++) {
-        state.set_modulation(20.0f); for (int i = 0; i < 7; i++) stats.poll(); // 70%
-        state.set_modulation(40.0f); for (int i = 0; i < 2; i++) stats.poll(); // 20%
-        state.set_modulation(60.0f); stats.poll();                            // 10%
+        state.set_modulation(20.0f); for (int i = 0; i < 7; i++) stats.execute(); // 70%
+        state.set_modulation(40.0f); for (int i = 0; i < 2; i++) stats.execute(); // 20%
+        state.set_modulation(60.0f); stats.execute();                            // 10%
     }
 
     REQUIRE(stats.samples() < ModulationStatsService::DECAY_THRESHOLD);

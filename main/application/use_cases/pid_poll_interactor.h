@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 #include "domain/services/pid_algorithm.h"
 
 class IHeatingStateStore;
@@ -11,12 +11,12 @@ class ILogger;
 
 /// PID controller tick — evaluates PID once per dt_sec.
 /// Reads room temperature from sensor, computes PID output, writes CH setpoint.
-class PidPollInteractor : public IPollable {
+class PidPollInteractor : public IControlTask {
 public:
     PidPollInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                       ITimeSource& time, ILogger& log);
 
-    void poll() override;
+    void execute() override;
 
     /// Enable PID control. Resets tracking state, updates state store.
     void enable();

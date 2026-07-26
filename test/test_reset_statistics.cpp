@@ -63,11 +63,11 @@ TEST_CASE("ResetStats: reset_cycle_stats clears burner data", "[reset][cycle]")
     BurnCycleService burn_cycles(state, time, burn_store);
     state.set_flame(true);
     time.advance_ms(100);
-    burn_cycles.poll();
+    burn_cycles.execute();
     time.advance_sec(10);
     state.set_flame(false);
     time.advance_ms(100);
-    burn_cycles.poll();
+    burn_cycles.execute();
 
     REQUIRE(burn_cycles.cycle_count() == 1);
     REQUIRE(burn_cycles.burner_seconds() > 0);
@@ -112,9 +112,9 @@ TEST_CASE("ResetStats: reset_modulation_stats clears histogram", "[reset][mod]")
     ModulationStatsService mod_stats(state, hss_mod);
     state.set_flame(true);
     state.set_modulation(50.0f);
-    mod_stats.poll();
+    mod_stats.execute();
     state.set_modulation(60.0f);
-    mod_stats.poll();
+    mod_stats.execute();
 
     REQUIRE(mod_stats.samples() > 0);
 

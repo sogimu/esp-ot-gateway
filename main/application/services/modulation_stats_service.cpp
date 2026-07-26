@@ -19,7 +19,7 @@ ModulationStatsService::~ModulationStatsService()
     free(hist_);
 }
 
-void ModulationStatsService::poll()
+void ModulationStatsService::execute()
 {
     state_.lock_shared();
     bool  flame = state_.is_flame_on();
