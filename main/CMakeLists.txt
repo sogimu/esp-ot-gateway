@@ -38,6 +38,8 @@ idf_component_register(
         "infrastructure/driving/ota_interactor.cpp"
         "infrastructure/freertos/shared_mutex.c"
         "application/use_cases/control_loop_interactor.cpp"
+        "application/use_cases/supervision_loop_interactor.cpp"
+        "application/use_cases/persistence_loop_interactor.cpp"
         "application/use_cases/boiler_poll_interactor.cpp"
         "application/use_cases/sensors_poll_interactor.cpp"
         "application/use_cases/pid_poll_interactor.cpp"

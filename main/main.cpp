@@ -54,6 +54,8 @@
 #include "application/use_cases/pid_poll_interactor.h"
 #include "application/use_cases/system_config_interactor.h"
 #include "application/use_cases/gas_correction_interactor.h"
+#include "application/use_cases/supervision_loop_interactor.h"
+#include "application/use_cases/persistence_loop_interactor.h"
 
 // ── Application services ─────────────────────────────────
 #include "application/services/modulation_stats_service.h"
@@ -81,41 +83,6 @@ static void ota_flush_and_reboot(BurnCycleService& burn_cycle_service,
     heating_stats.save_meter(ca_state, &gas_corr.meter_blob());
     vTaskDelay(pdMS_TO_TICKS(500));
     esp_restart();
-}
-
-// ── Recovery ladder: мониторинг фрагментации кучи ────────────────
-static void run_heap_recovery(uint32_t free_heap, uint32_t largest_free,
-                               EventLogAdapter& ca_log,
-                               HttpControllerAdapter& http)
-{
-    static int recovery_level = 0;
-    if (largest_free < 4096 || free_heap < 8192) {
-        ESP_LOGE("main", "Куча исчерпана (своб=%" PRIu32 " крупн=%" PRIu32 ") — перезагрузка",
-                 free_heap, largest_free);
-        ca_log.event(ILogger::SYSTEM, "Перезагрузка: куча исчерпана (%" PRIu32 "/%" PRIu32 ")",
-                     free_heap, largest_free);
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        esp_restart();
-    } else if (largest_free < 6144 && recovery_level < 3) {
-        recovery_level = 3;
-        ESP_LOGW("main", "Recovery L3: перезапуск HTTP (своб=%" PRIu32 " крупн=%" PRIu32 ")",
-                 free_heap, largest_free);
-        ca_log.event(ILogger::SYSTEM, "Recovery L3: перезапуск HTTP");
-        http.stop();
-        vTaskDelay(pdMS_TO_TICKS(1000));
-        http.start();
-    } else if (largest_free < 12288 && recovery_level < 2) {
-        recovery_level = 2;
-        ESP_LOGW("main", "Recovery L2: фрагментация (своб=%" PRIu32 " крупн=%" PRIu32 ")",
-                 free_heap, largest_free);
-        ca_log.event(ILogger::SYSTEM, "Recovery L2: фрагментация кучи");
-    } else if (largest_free < 16384 && recovery_level < 1) {
-        recovery_level = 1;
-        ESP_LOGW("main", "Recovery L1: предупреждение (своб=%" PRIu32 " крупн=%" PRIu32 ")",
-                 free_heap, largest_free);
-        ca_log.event(ILogger::SYSTEM, "Recovery L1: фрагментация растёт");
-    }
-    if (largest_free >= 32768) recovery_level = 0;
 }
 
 extern "C" void app_main(void)
@@ -268,21 +235,21 @@ extern "C" void app_main(void)
     http.set_ota(&ota);
     http.start();
 
-    // ── Idle: CPU stats every 60s, periodic NVS save every 10 min ──
+    // ── Supervision + Persistence ──────────────────────────
+    SupervisionLoopInteractor  supervision(ota_validity, ca_log, http, wifi);
+    PersistenceLoopInteractor  persister(ota_validity, burn_cycle_service, mod_stats,
+        gas_flow, gas_corr, stores.heating_stats, ca_state, ca_time, total_uptime_base_sec);
+
     static const char* TAG = "main";
-    int save_tick = 0;
+    int cycle = 0;
     while (1) {
-        ota_validity.heartbeat();
-
         vTaskDelay(pdMS_TO_TICKS(15000));  // keep 15s until fragmentation is fixed
-        save_tick++;
+        cycle++;
 
+        // CPU + heap stats
         uint32_t idle0 = ulTaskGetIdleRunTimePercentForCore(0);
         uint32_t idle1 = ulTaskGetIdleRunTimePercentForCore(1);
-        int cpu0 = 100 - (int)idle0;
-        int cpu1 = 100 - (int)idle1;
         uint32_t free_heap = esp_get_free_heap_size();
-
         multi_heap_info_t info;
         heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
         uint32_t largest_free = info.largest_free_block;
@@ -293,46 +260,16 @@ extern "C" void app_main(void)
                  ca_time.monotonic_us() / 1000000,
                  free_heap, largest_free,
                  (uint32_t)info.allocated_blocks, (uint32_t)info.free_blocks,
-                 cpu0, cpu1, (cpu0 + cpu1) / 2);
+                 100 - (int)idle0, 100 - (int)idle1,
+                 (200 - (int)idle0 - (int)idle1) / 2);
 
-        // Per-task CPU stats every 5 min (5 ticks)
-        if (save_tick % 5 == 0) {
+        if (cycle % 5 == 0) {
             static char stats_buf[2048];
             vTaskGetRunTimeStats(stats_buf);
             ESP_LOGI(TAG, "── Статистика задач (CPU) ──\n%s", stats_buf);
         }
 
-        // AP watchdog: restart AP if WiFi died
-        wifi.try_recover_ap();
-
-        run_heap_recovery(free_heap, largest_free, ca_log, http);
-
-        // Save all persistent state to NVS every 10 min (10 ticks).
-        //
-        // ЗАМОРОЗКА NVS (D9): во время PENDING_VERIFY (до mark_valid) блобы не
-        // пишем. Дублирующая защита — основные блобы дополнительно блокируются в
-        // самих save_* методах HeatingStatsNvsStore через OtaValidityAdapter::is_pending_global().
-        // Если свежезалитая прошивка откатится, данные предыдущей валидной версии
-        // останутся нетронутыми. save_tick НЕ сбрасываем во время заморозки, чтобы
-        // первый после mark_valid save сработал ближайшей же итерацией (быстрое
-        // возобновление персистентности). Штатно mark_valid≈90 c (первый healthy
-        // тик), первый save≈150 c — не пересекаются; заморозка даёт гарантию на
-        // нештатных путях (медленный HTTP, краш-диагностика).
-        if (save_tick >= 10) {
-            if (ota_validity.is_pending()) {
-                ESP_LOGW(TAG, "Периодический NVS-save пропущен: образ на проверке (PENDING_VERIFY)");
-            } else {
-                save_tick = 0;
-                uint32_t bs = burn_cycle_service.burner_seconds();
-                burn_cycle_service.save_to_store();
-                static NvsHistBlob hist_blob;
-                mod_stats.fill_histogram(hist_blob);
-                stores.heating_stats.save_stats(ca_state, bs, gas_flow.integral_m3(),
-                               &hist_blob, nullptr, nullptr, nullptr);
-                stores.heating_stats.save_total_uptime(total_uptime_base_sec +
-                                      (uint32_t)(ca_time.monotonic_us() / 1000000));
-                stores.gas.save_meter(ca_state, &gas_corr.meter_blob());
-            }
-        }
+        supervision.tick(free_heap, largest_free);
+        persister.tick();
     }
 }
