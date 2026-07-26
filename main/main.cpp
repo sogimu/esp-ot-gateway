@@ -61,6 +61,63 @@
 #include "application/services/gas_flow_estimator.h"
 #include "application/services/dhw_predict_service.h"
 
+// ── OTA: сброс статистики перед перезагрузкой в новый слот ──────
+static void ota_flush_and_reboot(BurnCycleService& burn_cycle_service,
+                                  ModulationStatsService& mod_stats,
+                                  HeatingStatsNvsStore& heating_stats,
+                                  HeatingStateAdapter& ca_state,
+                                  GasFlowService& gas_flow,
+                                  GasCorrectionInteractor& gas_corr,
+                                  uint32_t& total_uptime_base_sec,
+                                  SntpTimeAdapter& ca_time)
+{
+    burn_cycle_service.save_to_store();
+    NvsHistBlob hb; memset(&hb, 0, sizeof(hb));
+    mod_stats.fill_histogram(hb);
+    heating_stats.save_stats(ca_state, burn_cycle_service.burner_seconds(),
+        gas_flow.integral_m3(), &hb, nullptr, nullptr, nullptr);
+    heating_stats.save_total_uptime(total_uptime_base_sec +
+        (uint32_t)(ca_time.monotonic_us() / 1000000));
+    heating_stats.save_meter(ca_state, &gas_corr.meter_blob());
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
+}
+
+// ── Recovery ladder: мониторинг фрагментации кучи ────────────────
+static void run_heap_recovery(uint32_t free_heap, uint32_t largest_free,
+                               EventLogAdapter& ca_log,
+                               HttpControllerAdapter& http)
+{
+    static int recovery_level = 0;
+    if (largest_free < 4096 || free_heap < 8192) {
+        ESP_LOGE("main", "Куча исчерпана (своб=%" PRIu32 " крупн=%" PRIu32 ") — перезагрузка",
+                 free_heap, largest_free);
+        ca_log.event(ILogger::SYSTEM, "Перезагрузка: куча исчерпана (%" PRIu32 "/%" PRIu32 ")",
+                     free_heap, largest_free);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        esp_restart();
+    } else if (largest_free < 6144 && recovery_level < 3) {
+        recovery_level = 3;
+        ESP_LOGW("main", "Recovery L3: перезапуск HTTP (своб=%" PRIu32 " крупн=%" PRIu32 ")",
+                 free_heap, largest_free);
+        ca_log.event(ILogger::SYSTEM, "Recovery L3: перезапуск HTTP");
+        http.stop();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        http.start();
+    } else if (largest_free < 12288 && recovery_level < 2) {
+        recovery_level = 2;
+        ESP_LOGW("main", "Recovery L2: фрагментация (своб=%" PRIu32 " крупн=%" PRIu32 ")",
+                 free_heap, largest_free);
+        ca_log.event(ILogger::SYSTEM, "Recovery L2: фрагментация кучи");
+    } else if (largest_free < 16384 && recovery_level < 1) {
+        recovery_level = 1;
+        ESP_LOGW("main", "Recovery L1: предупреждение (своб=%" PRIu32 " крупн=%" PRIu32 ")",
+                 free_heap, largest_free);
+        ca_log.event(ILogger::SYSTEM, "Recovery L1: фрагментация растёт");
+    }
+    if (largest_free >= 32768) recovery_level = 0;
+}
+
 extern "C" void app_main(void)
 {
     // ── Phase 0: Pre-scheduler boot ──────────────────────
@@ -203,18 +260,8 @@ extern "C" void app_main(void)
         return xTaskCreate([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); },
                            "ota_dl", 12*1024, self, 3, nullptr) == pdPASS;
     };
-    auto ota_reboot = [&]() {
-        burn_cycle_service.save_to_store();
-        static NvsHistBlob hb; memset(&hb, 0, sizeof(hb));
-        mod_stats.fill_histogram(hb);
-        stores.heating_stats.save_stats(ca_state, burn_cycle_service.burner_seconds(),
-            gas_flow.integral_m3(), &hb, nullptr, nullptr, nullptr);
-        stores.heating_stats.save_total_uptime(total_uptime_base_sec +
-            (uint32_t)(ca_time.monotonic_us() / 1000000));
-        stores.heating_stats.save_meter(ca_state, &gas_corr.meter_blob());
-        vTaskDelay(pdMS_TO_TICKS(500));
-        esp_restart();
-    };
+    auto ota_reboot = [&]() { ota_flush_and_reboot(burn_cycle_service, mod_stats,
+        stores.heating_stats, ca_state, gas_flow, gas_corr, total_uptime_base_sec, ca_time); };
     OtaInteractor ota(ota_validity, ota_downloader, ota_versions,
                       ota_now_ms, ota_spawn, ota_reboot);
     ota_validity.set_http_server_up(true);
@@ -260,37 +307,7 @@ extern "C" void app_main(void)
         // AP watchdog: restart AP if WiFi died
         wifi.try_recover_ap();
 
-        // ── Recovery ladder: prevent silent death from fragmentation ──
-        static int recovery_level = 0;  // highest level reached
-        if (largest_free < 4096 || free_heap < 8192) {
-            // Level 4: last resort — reboot
-            ESP_LOGE(TAG, "Куча исчерпана (своб=%" PRIu32 " крупн=%" PRIu32 ") — перезагрузка",
-                     free_heap, largest_free);
-            ca_log.event(ILogger::SYSTEM, "Перезагрузка: куча исчерпана (%" PRIu32 "/%" PRIu32 ")",
-                         free_heap, largest_free);
-            vTaskDelay(pdMS_TO_TICKS(2000));
-            esp_restart();
-        } else if (largest_free < 6144 && recovery_level < 3) {
-            recovery_level = 3;
-            ESP_LOGW(TAG, "Recovery L3: перезапуск HTTP (своб=%" PRIu32 " крупн=%" PRIu32 ")",
-                     free_heap, largest_free);
-            ca_log.event(ILogger::SYSTEM, "Recovery L3: перезапуск HTTP");
-            http.stop();
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            http.start();
-        } else if (largest_free < 12288 && recovery_level < 2) {
-            recovery_level = 2;
-            ESP_LOGW(TAG, "Recovery L2: фрагментация (своб=%" PRIu32 " крупн=%" PRIu32 ")",
-                     free_heap, largest_free);
-            ca_log.event(ILogger::SYSTEM, "Recovery L2: фрагментация кучи");
-        } else if (largest_free < 16384 && recovery_level < 1) {
-            recovery_level = 1;
-            ESP_LOGW(TAG, "Recovery L1: предупреждение (своб=%" PRIu32 " крупн=%" PRIu32 ")",
-                     free_heap, largest_free);
-            ca_log.event(ILogger::SYSTEM, "Recovery L1: фрагментация растёт");
-        }
-        // Reset ladder when heap recovers
-        if (largest_free >= 32768) recovery_level = 0;
+        run_heap_recovery(free_heap, largest_free, ca_log, http);
 
         // Save all persistent state to NVS every 10 min (10 ticks).
         //
