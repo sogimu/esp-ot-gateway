@@ -142,10 +142,12 @@ extern "C" void app_main(void)
 
     // ── Phase 1: Foundation ──────────────────────────────
     EventLogAdapter ca_log;
+    OtaValidityAdapter ota_validity;
     
 
     CrashDiagnosticsAdapter crash_diag(ca_log);
     crash_diag.start();
+    ota_validity.set_crash_flag(crash_diag.last_boot_had_crash());
 
 
     ca_log.event(ILogger::SYSTEM, "Система запущена");
@@ -235,26 +237,12 @@ extern "C" void app_main(void)
     main_poller.add(&dhw_predict);
     main_poller.add(&mqtt);       // MQTT: публикация после обновления состояния
 
-    // ── Phase 7: Hardware init + start ───────────────────
+    // ── Phase 7: Hardware init + OTA adapters ──────────────
     ca_sensors.init();
     ca_ot_hw.init();
 
-    MainPollerTaskAdapter poll_task(main_poller);
-    poll_task.start();
-    ESP_LOGI("main", "Задача опроса запущена (7 IPollable)");
-
-    // ── Phase 8: HTTP server ─────────────────────────────
-    HttpControllerAdapter http(ca_web, sys_cfg, sys_cfg, gas_corr, sys_cfg,
-                               wifi, ca_time, mqtt);
-
-    // ── OTA: старт подсистемы (адаптеры + интерактор + валидация) ──
-    // OTA validity: следит за состоянием партиции (PENDING_VERIFY/VALID).
-    OtaValidityAdapter ota_validity;
-    // Связка: признак краха → OTA-валидатор (arm() немедленно откатит при краше)
-    ota_validity.set_crash_flag(crash_diag.last_boot_had_crash());
     EspOtaAdapter          ota_downloader;
     OtaVersionIndexAdapter ota_versions;
-
     auto ota_now_ms = [&]() { return ca_time.monotonic_us() / 1000; };
     auto ota_spawn  = [](OtaInteractor* self) -> bool {
         return xTaskCreate([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); },
@@ -264,6 +252,17 @@ extern "C" void app_main(void)
         stores.heating_stats, ca_state, gas_flow, gas_corr, total_uptime_base_sec, ca_time); };
     OtaInteractor ota(ota_validity, ota_downloader, ota_versions,
                       ota_now_ms, ota_spawn, ota_reboot);
+    main_poller.add(&ota);        // OTA: синхронизация прогресса загрузки
+
+    MainPollerTaskAdapter poll_task(main_poller);
+    poll_task.start();
+    ESP_LOGI("main", "Задача опроса запущена (7 IPollable)");
+
+    // ── Phase 8: HTTP server ─────────────────────────────
+    HttpControllerAdapter http(ca_web, sys_cfg, sys_cfg, gas_corr, sys_cfg,
+                               wifi, ca_time, mqtt);
+
+    // ── OTA: взведение валидации (HTTP поднят) ────────────
     ota_validity.set_http_server_up(true);
     ota_validity.arm();
     http.set_ota(&ota);
@@ -274,7 +273,6 @@ extern "C" void app_main(void)
     int save_tick = 0;
     while (1) {
         ota_validity.heartbeat();
-        ota.poll();
 
         vTaskDelay(pdMS_TO_TICKS(15000));  // keep 15s until fragmentation is fixed
         save_tick++;

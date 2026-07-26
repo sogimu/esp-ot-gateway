@@ -5,14 +5,15 @@
 #include <mutex>
 
 #include "application/ports/driving/iota_manager.h"
+#include "application/ports/driving/ipollable.h"
 #include "application/ports/driven/iota_validity.h"
 #include "application/ports/driven/iota_downloader.h"
 #include "application/ports/driven/iota_version_index.h"
 
-/// Оркестратор OTA: реализует IOtaManager. Свободен от железа —
+/// Оркестратор OTA: реализует IOtaManager и IPollable. Свободен от железа —
 /// FreeRTOS/esp_restart инжектятся через std::function в конструкторе,
 /// что позволяет тестировать логику на хосте с заглушками.
-class OtaInteractor : public IOtaManager {
+class OtaInteractor : public IOtaManager, public IPollable {
 public:
     using NowMsFn = std::function<int64_t()>;
 
