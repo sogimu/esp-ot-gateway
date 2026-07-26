@@ -236,40 +236,13 @@ extern "C" void app_main(void)
     http.start();
 
     // ── Supervision + Persistence ──────────────────────────
-    SupervisionLoopInteractor  supervision(ota_validity, ca_log, http, wifi);
+    SupervisionLoopInteractor  supervision(ota_validity, ca_log, http, wifi, ca_time);
     PersistenceLoopInteractor  persister(ota_validity, burn_cycle_service, mod_stats,
         gas_flow, gas_corr, stores.heating_stats, ca_state, ca_time, total_uptime_base_sec);
 
-    static const char* TAG = "main";
-    int cycle = 0;
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(15000));  // keep 15s until fragmentation is fixed
-        cycle++;
-
-        // CPU + heap stats
-        uint32_t idle0 = ulTaskGetIdleRunTimePercentForCore(0);
-        uint32_t idle1 = ulTaskGetIdleRunTimePercentForCore(1);
-        uint32_t free_heap = esp_get_free_heap_size();
-        multi_heap_info_t info;
-        heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
-        uint32_t largest_free = info.largest_free_block;
-
-        ESP_LOGI(TAG, "Аптайм: %lld с, куча: своб=%" PRIu32 " крупн=%" PRIu32
-                 " блоков: алл=%" PRIu32 " своб=%" PRIu32
-                 " | CPU: core0=%d%% core1=%d%% total=%d%%",
-                 ca_time.monotonic_us() / 1000000,
-                 free_heap, largest_free,
-                 (uint32_t)info.allocated_blocks, (uint32_t)info.free_blocks,
-                 100 - (int)idle0, 100 - (int)idle1,
-                 (200 - (int)idle0 - (int)idle1) / 2);
-
-        if (cycle % 5 == 0) {
-            static char stats_buf[2048];
-            vTaskGetRunTimeStats(stats_buf);
-            ESP_LOGI(TAG, "── Статистика задач (CPU) ──\n%s", stats_buf);
-        }
-
-        supervision.tick(free_heap, largest_free);
+        vTaskDelay(pdMS_TO_TICKS(15000));
+        supervision.tick();
         persister.tick();
     }
 }
