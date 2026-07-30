@@ -22,6 +22,7 @@ Most gas boilers spend their lives being switched on and off by a dumb relay the
 - ☁️ **No cloud. Ever.** — everything runs on your LAN. No subscriptions, no servers to shut down, no data leaving your home
 - 🚿 **Hot water, predicted** — a Kalman filter estimates when your DHW tank will be ready ("hot water in ~12 min")
 - ⏰ **24-hour schedule** — hourly heating setpoints, synced via NTP with timezone support
+- 🔄 **OTA updates with rollback** — dual-slot (A/B) over-the-air firmware updates; the new image must prove it's healthy (HTTP up + loop ticking) within 90 s, or the bootloader automatically rolls back to the previous version
 
 > Tested daily on a **Baxi Duo-tec Compact 1.24** with a SmartTherm OpenTherm adapter. The firmware implements a full OpenTherm v2.2 master, so other OpenTherm boilers are expected to work — reports and pull requests are very welcome.
 
@@ -132,6 +133,7 @@ Eight tabs, served straight from the ESP32 (see the screenshots above):
 - **Control** — heating enable; mode **Manual** or **Adaptive (PID)**, plus a submode **Static** or **Scheduled** — so the 24-hour grid can drive either fixed flow setpoints or PID room targets; DHW tank (indirect cylinder) enable, setpoint and hysteresis; a big red boiler-off button
 - **Info** — OEM/ASF fault codes, boiler-reported setpoint bounds, boiler firmware & OpenTherm versions, NTP servers and timezone, uptime
 - **WiFi** — connection status and RSSI, switch-to-AP button, network settings reset
+- **Firmware Update** — over-the-air updates: available versions, download, progress, manual rollback
 - **MQTT** — broker settings with a live status indicator and the reconnect schedule in plain sight
 
 ---
@@ -146,6 +148,7 @@ Under the friendly UI is a codebase built to hexagonal-architecture discipline:
 - **Crash diagnostics** — reset-reason logging, core dump to flash, offline backtrace decoding via `decode_crash.sh`
 - **REST API** — every dashboard action is a JSON endpoint (`/api/status`, `/api/control`, `/api/stats`, `/api/schedule`, `/api/mqtt/*`, …); `curl` examples in [api.en.md](docs/api.en.md)
 - **Hardened networking** — infinite WiFi reconnect with exponential backoff, heap-fragmentation countermeasures, recovery ladder for 24/7 uptime
+- **A/B OTA with auto-rollback** — over-the-air updates via the web interface; after flashing, the new image must confirm it's healthy (HTTP + main loop) within 90 s, otherwise the bootloader rolls back to the previous slot; NVS integrity is preserved during PENDING_VERIFY
 
 Build requirements: ESP-IDF v5.3.x. See **[Building & Debugging](docs/build.en.md)**.
 

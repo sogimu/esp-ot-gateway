@@ -76,16 +76,20 @@ python3 -m esptool --chip esp32 -b 460800 \
 
 ## 3. Подготовка «плохого» образа (рецепт, НЕ ломает main)
 
-Готовый патч лежит в репозитории: **`scripts/ota-bad-image.patch`**. Это
-инертный файл — он никак не влияет на сборку `main` и не применяется сам по
-себе. Патч вставляет намеренный `abort()` **строго после `ota_validity.arm()`**
-в `main.cpp` (под тегом лога `ota_bad`).
+Патч **удалён** из репозитория (рецепт описан, патч не нужен для CI).
+Создайте его вручную на throwaway-ветке:
 
-`[HOST]` Софтверные проверки (уже выполнены, повторяемы):
-- `git apply --check scripts/ota-bad-image.patch` → **OK**;
-- bad-image **собирается** под ESP-IDF v5.3.2 (`Project build complete`);
-- бинарник ~0x11c820 байт помещается в слот 0x180000;
-- `main` остаётся чистым: после `git apply -R` в `main.cpp` нет следов `ota_bad`/`abort`.
+```diff
+--- a/main/main.cpp
++++ b/main/main.cpp
+@@ ... @@ extern "C" void app_main(void)
+     http.set_ota(&ota);
+     const bool http_ok = http.start();
+     ota_validity.set_http_server_up(http_ok);
+     ota_validity.arm();
++    ESP_LOGE("ota_bad", "ТЕСТ: намеренный abort() для проверки авто-отката OTA");
++    abort();  // panic → coredump → ребут
+```
 
 ### Почему panic именно ПОСЛЕ `arm()`, а не в начале `app_main`
 
@@ -108,29 +112,26 @@ python3 -m esptool --chip esp32 -b 460800 \
 
 ```bash
 git checkout -b ota-test/bad-crash       # отдельная throwaway-ветка
-git apply scripts/ota-bad-image.patch    # применить bad-image
+# Применить патч вручную (см. рецепт в §3 выше)
 git add main/main.cpp
 git commit -m "test: bad-image для проверки авто-отката OTA (не для main)"
-# Убедиться, что main/main.cpp содержит ota_bad:
-grep -n ota_bad main/main.cpp
+grep -n ota_bad main/main.cpp           # убедиться, что патч применён
 ```
 
 ### Альтернатива: «зависший» образ (для проверки пути по таймауту 90 с)
 
 Если нужно отдельно проверить путь «истёк дедлайн 90 с» (а не краш-путь),
-вставьте после `arm()` вместо `abort()`:
+замените `http.start()` на `false`:
 
 ```c
-ESP_LOGE("ota_bad", "ТЕСТ: зависание для проверки отката по таймауту 90 с");
-while (1) { vTaskDelay(pdMS_TO_TICKS(1000)); }   // HTTP не поднят → health=false → таймер
+// Вместо: const bool http_ok = http.start();
+const bool http_ok = false;              // HTTP «не поднялся»
+ota_validity.set_http_server_up(false);  // health=false
 ```
 
-В этом варианте `set_http_server_up(true)` сработал, но `heartbeat()` видит
-`http_server_up_=true` → пометит валидным. Чтобы проверить именно таймаут,
-нужно опустить `set_http_server_up(true)` (закомментировать строку перед
-`arm()`). Тогда через 90 с без health сработает
-`rollback_and_reboot("истёк дедлайн 90 с…")`. Это дополнительный сценарий —
-основной HW-план (ниже) покрывает краш-путь.
+Тогда `heartbeat()` видит `http_server_up_=false` → `healthy=false` →
+через 90 с сработает `rollback_and_reboot("истёк дедлайн 90 с…")`.
+Это дополнительный сценарий — основной HW-план (ниже) покрывает краш-путь.
 
 ---
 
@@ -277,10 +278,10 @@ UI — вкладка «Обновление ПО». Запишите **верс
 - Устройство штатно работает на v1.
 - **NVS цел (связка с T2):** конфигурация/статистика не повреждены.
 
-> Кнопка «Откатить» работает в любой момент (не только в окне PENDING):
-> `mark_app_invalid_rollback_and_reboot()` инвалидирует текущий слот и
-> переключает загрузку на другой OTA-слот. Поэтому сценарий В надёжен и без
-> необходимости «поймать» короткое окно до `mark_valid`.
+> Кнопка «Откатить» работает в любой момент: после `mark_valid` партиция уже
+> VALID, поэтому `esp_ota_mark_app_invalid_rollback_and_reboot()` возвращает
+> ошибку, и код выполняет ручной выбор предыдущего OTA-слота через итератор
+> `esp_partition_find`. Сценарий В надёжен без необходимости «поймать» окно.
 
 ---
 
@@ -288,7 +289,6 @@ UI — вкладка «Обновление ПО». Запишите **верс
 
 - [ ] `[HW]` Предусловие 0: новый макет партиций прошит по USB, устройство
       грузится из `ota_0`/`ota_1` (не factory).
-- [ ] `[HOST]` `git apply --check scripts/ota-bad-image.patch` → OK.
 - [ ] `[HOST]` bad-image собирается; main чист после реверса патча.
 - [ ] `[HOST]` bad-тег опубликован, `curl …/firmware/<bad-tag>/esp-ot-gateway.bin` → 200.
 - [ ] `[HW]` **A:** апдейт до 100 %, ребут, `mark_valid < 90 с`, новая версия,

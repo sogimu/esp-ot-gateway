@@ -22,6 +22,10 @@ Base URL: `http://<device-ip>`. No authentication — LAN use only (see the secu
 | POST | `/api/gas/…` `TODO(verify)` | Meter reconciliation actions (see below) |
 | GET | `/api/mqtt/status` | MQTT connection state |
 | GET/POST | `/api/mqtt/settings` | Broker configuration |
+| GET | `/api/ota/status` | OTA state: slot, version, progress, pending |
+| GET | `/api/ota/versions` | Available versions from the GitHub Pages catalogue |
+| POST | `/api/ota/start` | Start OTA update to the given tag `{"tag":"v0.6.0"}` |
+| POST | `/api/ota/rollback` | Manual rollback to the previous OTA slot |
 
 ## `GET /api/status`
 
@@ -175,6 +179,39 @@ curl -s -X POST http://192.168.0.37/api/mqtt/settings \
 ```
 
 Settings match the MQTT tab: master enable, host, port, login, password, topic prefix, status interval (s), statistics interval (s), TLS toggle. Topic reference and Home Assistant details: [mqtt.en.md](mqtt.en.md).
+
+## OTA — Over-the-Air Updates (since v0.6.0)
+
+The firmware uses a dual-slot (A/B) scheme with two OTA slots (`ota_0`, `ota_1`). After flashing a new image the device reboots, and the new firmware must prove it is healthy within 90 seconds (HTTP server up + main loop ticking). If health is not confirmed, the bootloader rolls back to the previous slot.
+
+```bash
+# OTA state
+curl -s http://192.168.0.37/api/ota/status | jq
+# → {"state":"idle","progress":0,"current_version":"v0.6.0","target_tag":"","rollback_pending":false,"last_error":""}
+
+# Available versions (from versions.json on GitHub Pages)
+curl -s http://192.168.0.37/api/ota/versions | jq
+
+# Start update
+curl -s -X POST http://192.168.0.37/api/ota/start \
+  -H 'Content-Type: application/json' -d '{"tag":"v0.6.0"}'
+# → {"ok":true}
+
+# Manual rollback to the previous slot (reboot — response arrives before restart)
+curl -s -X POST http://192.168.0.37/api/ota/rollback
+# → {"ok":true}
+```
+
+| `/api/ota/status` field | Type | Description |
+|---|---|---|
+| `state` | `idle`/`fetching`/`writing`/`verify_pending`/`done`/`error` | Current state |
+| `progress` | 0–100 | Download progress |
+| `current_version` | string | Version running in the current slot |
+| `target_tag` | string | Version tag being updated to |
+| `rollback_pending` | bool | Image is awaiting validity confirmation |
+| `last_error` | string | Last OTA error |
+
+Full test plan: **[ota-testing.md](ota-testing.md)**.
 
 ## Conventions
 
