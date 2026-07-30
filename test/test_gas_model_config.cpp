@@ -1,3 +1,5 @@
+#include "application/ports/driven/iheating_stats_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 /// Tests for GasFlowService with configurable boiler model parameters:
 ///   - DHW branch in calc_power and efficiency
 ///   - CH power parameters from state (replaces hardcoded PMIN_WARM, etc.)
@@ -11,6 +13,7 @@
 #include "application/services/gas_flow_estimator.h"
 #undef private
 #include "fakes/fake_heating_state_store.h"
+#include "fakes/fake_configuration_store.h"
 #include "fakes/fake_time_source.h"
 
 using Catch::Approx;
@@ -19,11 +22,36 @@ using Catch::Approx;
 // DHW: calc_power
 // ═══════════════════════════════════════════════════════════════
 
+struct FakeGasStore : IGasCorrectionStore {
+    FakeConfigurationStore* cfg = nullptr;
+    int boiler_config_saved_ = 0;
+
+    bool load_meter(IHeatingStateStore& s, void* blob) override {
+        return cfg ? cfg->load_meter(s, blob) : false;
+    }
+    void save_meter(const IHeatingStateStore& s, const void* blob) override {
+        if (cfg) cfg->save_meter(s, blob);
+    }
+    void save_integral(float v) override { if (cfg) cfg->save_integral(v); }
+    void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
+};
+
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
+};
+
 TEST_CASE("calc_power uses dhw params when dhw_active", "[gas_model][dhw]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     state.set_dhw_pmin(6.0f);
     state.set_dhw_pmax(30.0f);
@@ -46,7 +74,8 @@ TEST_CASE("calc_power ignores MWT in DHW mode", "[gas_model][dhw]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     state.set_dhw_pmin(7.0f);
     state.set_dhw_pmax(25.0f);
@@ -70,7 +99,8 @@ TEST_CASE("DHW and CH have same flow with same power params", "[gas_model][dhw]"
     // not on efficiency. CH and DHW with same modulation and params → same flow.
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     state.set_modulation(50.0f);
     state.set_return_temp(40.0f);
@@ -80,8 +110,8 @@ TEST_CASE("DHW and CH have same flow with same power params", "[gas_model][dhw]"
     svc.set_k_calib(1.0f);
 
     // First poll: CH mode — run many iterations for Kalman convergence
-    svc.poll();
-    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.poll(); }
+    svc.execute();
+    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.execute(); }
     float flow_ch = svc.instant_flow();
     INFO("flow in CH mode: " << flow_ch);
 
@@ -89,8 +119,8 @@ TEST_CASE("DHW and CH have same flow with same power params", "[gas_model][dhw]"
     svc.reset();
     state.set_dhw_active(true);
     state.set_flame(true);
-    svc.poll();
-    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.poll(); }
+    svc.execute();
+    for (int i = 0; i < 30; i++) { time.advance_ms(10000); svc.execute(); }
     float flow_dhw = svc.instant_flow();
     INFO("flow in DHW mode: " << flow_dhw);
 
@@ -108,7 +138,8 @@ TEST_CASE("calc_power uses ch_pmin from state", "[gas_model][ch]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     // Set a non-default ch_pmin
     state.set_ch_pmin(5.0f);
@@ -123,7 +154,8 @@ TEST_CASE("calc_power uses ch_pmax from state", "[gas_model][ch]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     // Set a non-default ch_pmax
     state.set_ch_pmax(25.0f);
@@ -142,7 +174,8 @@ TEST_CASE("calc_power with non-default ch_pmin/ch_pmax", "[gas_model][ch]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     state.set_ch_pmin(4.0f);
     state.set_ch_pmax(18.0f);
@@ -160,7 +193,8 @@ TEST_CASE("efficiency uses configured eff points", "[gas_model][efficiency]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     // Set custom efficiency points: (20, 0.99), (50, 0.90), (90, 0.85)
     state.set_eff_t1(20.0f); state.set_eff_v1(0.99f);
@@ -187,7 +221,8 @@ TEST_CASE("efficiency clamps below t1", "[gas_model][efficiency]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     // Set custom points
     state.set_eff_t1(25.0f); state.set_eff_v1(0.97f);
@@ -203,7 +238,8 @@ TEST_CASE("efficiency clamps above t3", "[gas_model][efficiency]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     // Set custom points
     state.set_eff_t1(25.0f); state.set_eff_v1(0.97f);
@@ -223,7 +259,8 @@ TEST_CASE("corrected_calorific uses gas_temp_offset", "[gas_model][cv]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     // Set offset=0, outdoor=20 → T_gas=20+0=20°C → CV=9.5*288.15/293.15
     state.set_gas_temp_offset(0.0f);
@@ -239,7 +276,8 @@ TEST_CASE("corrected_calorific with default offset gives same result", "[gas_mod
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     // Default offset is -5.0, outdoor=20 → T_gas=15 → CV=9.5*288.15/288.15=9.5
     svc.outdoor_temp_ = 20.0f;
@@ -255,7 +293,8 @@ TEST_CASE("corrected_calorific offset positive raises CV", "[gas_model][cv]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     // offset=+5 (warmer gas), outdoor=0 → T_gas=5°C → CV = 9.5*288.15/278.15
     state.set_gas_temp_offset(5.0f);
@@ -276,7 +315,8 @@ TEST_CASE("calc_power respects dhw_pmin after state change", "[gas_model][dhw]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService svc(state, time, hss);
 
     // Start with defaults — CH and DHW both 5.5/24.0
     svc.dhw_active_ = true;

@@ -1,11 +1,11 @@
 #pragma once
 
 #include <cstdint>
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 #include "domain/services/kalman2d.h"
 
 class IHeatingStateStore;
-class IConfigurationStore;
+class IPredictStore;
 class ITimeSource;
 
 /// DHW heating time prediction using Kalman2D filter.
@@ -14,18 +14,18 @@ class ITimeSource;
 ///
 /// Thread safety: poll() called from main_poll task only.
 /// Reads from state_ (lock_shared), writes prediction to state_ (lock_exclusive).
-class DHWPredictService : public IPollable {
+class DHWPredictService : public IControlTask {
 public:
-    DHWPredictService(IHeatingStateStore& state, IConfigurationStore& config, ITimeSource& time);
+    DHWPredictService(IHeatingStateStore& state, IPredictStore& store, ITimeSource& time);
 
-    void poll() override;
+    void execute() override;
 
     // NVS persistence — called after construction to restore saved state
     void load_history();
 
 private:
     IHeatingStateStore&  state_;
-    IConfigurationStore& config_;
+    IPredictStore&       store_;
     ITimeSource&         time_;
 
     // Kalman filter state

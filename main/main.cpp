@@ -15,12 +15,18 @@
 #include "infrastructure/driven/boiler_opentherm_adapter.h"
 #include "infrastructure/driven/temperature_sensor_adapter.h"
 #include "infrastructure/driven/web_presenter_adapter.h"
-#include "infrastructure/driven/nvs_config_store.h"
+#include "infrastructure/driven/nvs_config_store.h"  // blob types (NvsHistBlob, etc.)
+#include "infrastructure/driven/time_settings_nvs_store.h"
+#include "infrastructure/driven/boiler_nvs_store.h"
+#include "infrastructure/driven/gas_correction_nvs_store.h"
+#include "infrastructure/driven/predict_nvs_store.h"
+#include "infrastructure/driven/burn_stats_nvs_store.h"
+#include "infrastructure/driven/heating_stats_nvs_store.h"
 #include "infrastructure/driven/sntp_time_adapter.h"
 #include "infrastructure/driven/crash_diagnostics_adapter.h"
 
 // ── Driving adapters ─────────────────────────────────────
-#include "infrastructure/driving/main_poller_task_adapter.h"
+#include "infrastructure/driving/control_loop_task_adapter.h"
 #include "infrastructure/driving/http_controller_adapter.h"
 
 // ── WiFi provisioning ────────────────────────────────────
@@ -35,13 +41,21 @@
 #include "infrastructure/driven/mqtt_nvs_store.h"
 #include "infrastructure/driving/mqtt_interactor.h"
 
+// ── OTA ──────────────────────────────────────────────────
+#include "infrastructure/driven/ota_validity_adapter.h"
+#include "infrastructure/driven/esp_ota_adapter.h"
+#include "infrastructure/driven/ota_version_index_adapter.h"
+#include "infrastructure/driving/ota_interactor.h"
+
 // ── Use cases ────────────────────────────────────────────
-#include "application/use_cases/main_poller_interactor.h"
+#include "application/use_cases/control_loop_interactor.h"
 #include "application/use_cases/boiler_poll_interactor.h"
 #include "application/use_cases/sensors_poll_interactor.h"
 #include "application/use_cases/pid_poll_interactor.h"
 #include "application/use_cases/system_config_interactor.h"
 #include "application/use_cases/gas_correction_interactor.h"
+#include "application/use_cases/supervision_loop_interactor.h"
+#include "application/use_cases/persistence_loop_interactor.h"
 
 // ── Application services ─────────────────────────────────
 #include "application/services/modulation_stats_service.h"
@@ -49,174 +63,132 @@
 #include "application/services/gas_flow_estimator.h"
 #include "application/services/dhw_predict_service.h"
 
+// ── OTA: сброс статистики перед перезагрузкой в новый слот ──────
+static void ota_flush_and_reboot(BurnCycleService& burn_cycle_service,
+                                  ModulationStatsService& mod_stats,
+                                  HeatingStatsNvsStore& heating_stats,
+                                  HeatingStateAdapter& ca_state,
+                                  GasFlowService& gas_flow,
+                                  GasCorrectionInteractor& gas_corr,
+                                  uint32_t& total_uptime_base_sec,
+                                  SntpTimeAdapter& ca_time)
+{
+    OtaValidityAdapter::set_flushing_global(true);
+    burn_cycle_service.save_to_store();
+    NvsHistBlob hb; memset(&hb, 0, sizeof(hb));
+    mod_stats.fill_histogram(hb);
+    heating_stats.save_stats(ca_state, burn_cycle_service.burner_seconds(),
+        gas_flow.integral_m3(), &hb, nullptr, nullptr, nullptr);
+    heating_stats.save_total_uptime(total_uptime_base_sec +
+        (uint32_t)(ca_time.monotonic_us() / 1000000));
+    heating_stats.save_meter(ca_state, &gas_corr.meter_blob());
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
+}
+
 extern "C" void app_main(void)
 {
     // ── Phase 0: Pre-scheduler boot ──────────────────────
     ets_printf("=== Gas boiler Baxi duo-tec compact ===\n");
     ets_printf("Clean Architecture\n");
 
+
+    // NVS-хранилища сгруппированы в одной структуре.
+    struct {
+        TimeSettingsNvsStore  time;
+        WifiNvsStore          wifi;
+        MqttNvsStore          mqtt;
+        BoilerNvsStore        boiler;
+        GasCorrectionNvsStore gas;
+        PredictNvsStore       predict;
+        BurnStatsNvsStore     burn_stats;
+        HeatingStatsNvsStore  heating_stats;
+    } stores;
+    stores.time.init();
+    stores.gas.init(stores.boiler);
+    stores.wifi.init();
+
     // ── Phase 1: Foundation ──────────────────────────────
     EventLogAdapter ca_log;
-
-    NvsConfigStore nvs;
-    nvs.init();
+    OtaValidityAdapter ota_validity;
+    
 
     CrashDiagnosticsAdapter crash_diag(ca_log);
     crash_diag.start();
+    ota_validity.set_crash_flag(crash_diag.last_boot_had_crash());
 
-    if (crash_diag.last_boot_had_crash()) {
-        ca_log.event(ILogger::SYSTEM, "Предыдущая загрузка: КРАШ");
-    }
 
-    ca_log.event(ILogger::SYSTEM, "Система запущена");
+    ca_log.event(ILogger::SYSTEM, "Система запущена (%s)", FIRMWARE_VERSION);
 
     // ── Phase 2: Driven adapters ────────────────────────
-    HeatingStateAdapter      ca_state;
-    SntpTimeAdapter          ca_time;
-    ca_time.init();
+    HeatingStateAdapter      ca_state(stores.time, stores.boiler);
     OtHardwareAdapter        ca_ot_hw;
     BoilerOpenThermAdapter   ca_boiler(ca_ot_hw);
     TemperatureSensorAdapter ca_sensors;
-    WebPresenterAdapter      ca_web;
 
-    FreeRtosMqttQueue        ca_mqtt_queue;
-    MqttSocketAdapter        ca_mqtt(ca_mqtt_queue, ca_time);
-    MqttRendererAdapter      ca_mqtt_renderer(ca_web);
-
-    ca_log.set_time_source(&ca_time);
-
-    ca_web.set_state(&ca_state);
-    ca_web.set_log_reader(&ca_log);   // IEventLogReader (lock/unlock/to_json)
-    ca_web.set_time_source(&ca_time);
-
-    nvs.load_all(ca_state);  // restore persisted config into state
-    nvs.load_meter(ca_state); // restore gas meter base reading
+    ca_state.load_settings();
 
     // ── Phase 3: Network ─────────────────────────────────
-    WifiNvsStore     wifi_nvs;
-    wifi_nvs.init();
 
     Esp32WifiAdapter   wifi_hw;
-    WifiApStaAdapter   wifi(wifi_hw, wifi_nvs);
+    WifiApStaAdapter   wifi(wifi_hw, stores.wifi);
     auto wifi_mode = wifi.boot();
 
     // SNTP + manual time
-    ca_time.set_logger(&ca_log);
-    if (wifi_mode == IWifiManager::Mode::STA) {
-        // Full SNTP sync (STA mode has internet)
-        ca_time.start();
-        ca_time.set_timezone(ca_state.get_tz_offset());
-        if (ca_time.is_synced()) {
-            ca_time.save_time_offset();  // сохранить смещение в NVS для будущих загрузок
-        }
-    } else {
-        // No internet — try restoring manual time offset from NVS
-        if (ca_time.restore_time_offset()) {
-            ESP_LOGI("main", "SNTP пропущен (нет STA) — время из NVS");
-        } else {
-            ESP_LOGW("main", "SNTP пропущен, ручное время не задано");
-        }
-    }
+    SntpTimeAdapter ca_time(ca_state.get_tz_offset(),
+                             wifi_mode == IWifiManager::Mode::STA, &ca_log);
+    ca_log.set_time_source(&ca_time);  // EventLog теперь знает источник времени
 
     // ── Phase 4: Use cases ───────────────────────────────
     BoilerPollInteractor  boiler_poll(ca_boiler, ca_state, ca_log, ca_time);
     SensorsPollInteractor sensors_poll(ca_sensors, ca_state);
     PidPollInteractor     pid_poll(ca_state, ca_boiler, ca_time, ca_log);
 
-    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, nvs, ca_log, ca_time);
-    sys_cfg.set_boiler_poll(&boiler_poll);
-    sys_cfg.set_pid_poll(&pid_poll);
-
-    GasCorrectionInteractor gas_corr(ca_state, nvs, ca_log);
-
     // ── Phase 5: Application services ────────────────────
-    ModulationStatsService mod_stats(ca_state);
-    BurnCycleService       burn_cycles(ca_state, ca_time);
-    GasFlowService         gas_flow(ca_state, ca_time);
-    sys_cfg.set_burn_cycles(&burn_cycles);
-    sys_cfg.set_mod_stats(&mod_stats);
-    sys_cfg.set_gas_flow_reset(&gas_flow);
-    DHWPredictService      dhw_predict(ca_state, nvs, ca_time);
+    ModulationStatsService mod_stats(ca_state, stores.heating_stats);
+    BurnCycleService       burn_cycle_service(ca_state, ca_time, stores.burn_stats);
+    GasFlowService         gas_flow(ca_state, ca_time, stores.heating_stats);
+    SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time,
+                                    &boiler_poll, &pid_poll,
+                                    &burn_cycle_service, &mod_stats, &gas_flow);
+    DHWPredictService      dhw_predict(ca_state, stores.predict, ca_time);
     dhw_predict.load_history();
 
-    // Wire gas correction interactor to gas flow service and restore correction log
-    gas_corr.set_gas_flow(&gas_flow);
-    gas_corr.set_time_source(&ca_time);
+    // Gas correction interactor — после gas_flow (нужен для integral_m3)
+    GasCorrectionInteractor gas_corr(ca_state, stores.gas, ca_log,
+                                      &ca_time, &gas_flow);
     gas_corr.init();
 
     // Restore saved burner stats from NVS
-    {
-        uint32_t bs = 0, tps = 0, cc = 0, ips = 0, ic = 0, mps = 0, mc = 0;
-        if (nvs.load_burn_stats(bs, tps, cc, ips, ic, mps, mc)) {
-            *burn_cycles.burner_sec_ptr()      = bs;
-            *burn_cycles.total_pause_sec_ptr() = tps;
-            *burn_cycles.cycle_cnt_ptr()       = cc;
-            *burn_cycles.inter_pause_sec_ptr() = ips;
-            *burn_cycles.inter_cnt_ptr()       = ic;
-            *burn_cycles.mod_pause_sec_ptr()   = mps;
-            *burn_cycles.mod_cnt_ptr()         = mc;
-            ESP_LOGI("main", "NVS: восстановлена burn-статистика (burner_sec=%" PRIu32 ")", bs);
-        }
-    }
+    burn_cycle_service.load_from_store();
 
-    // Restore modulation histogram from NVS
-    {
-        static NvsHistBlob hist_blob;
-        memset(&hist_blob, 0, sizeof(hist_blob));
-        float saved_integ_m3 = 0;
-        uint32_t saved_burner_sec_hist = 0;
-        if (nvs.load_stats(saved_burner_sec_hist, saved_integ_m3,
-                           &hist_blob, nullptr, nullptr, nullptr)) {
-            // Migration: under the new bounded scheme the histogram is halved
-            // whenever samples reaches DECAY_THRESHOLD, so a live count can
-            // never reach it. A restored blob at/above the threshold is
-            // old-format cumulative data (unbounded, not flame-gated, idle-time
-            // flooded bin 0) — discard it for a clean slate instead of letting
-            // months of skewed history slowly decay away.
-            if (hist_blob.samples >= ModulationStatsService::DECAY_THRESHOLD) {
-                ESP_LOGW("main", "NVS: старая накопительная гистограмма (samples=%" PRIu32
-                                 ") отброшена — статистика модуляции начнётся заново",
-                         hist_blob.samples);
-            } else {
-                *mod_stats.samples_ptr() = hist_blob.samples;
-                for (int i = 0; i < HIST_BINS; i++)
-                    mod_stats.hist_ptr()[i] = hist_blob.hist[i];
-                ESP_LOGI("main", "NVS: восстановлена гистограмма (samples=%" PRIu32 ")",
-                         hist_blob.samples);
-            }
-            gas_flow.set_integral(saved_integ_m3);
-            ESP_LOGI("main", "NVS: integral_m3=%.3f", (double)saved_integ_m3);
-        }
-    }
+    mod_stats.load_from_store();
+    gas_flow.load_integral();
 
-    // Restore total uptime (cumulative across reboots)
-    uint32_t total_uptime_base_sec = 0;
-    nvs.load_total_uptime(total_uptime_base_sec);
-    ca_web.set_total_uptime_base(total_uptime_base_sec);
-
-    ca_web.set_mod_stats(&mod_stats);
-    ca_web.set_burn_cycles(&burn_cycles);
-    ca_web.set_gas_flow(&gas_flow);
-    ca_web.set_gas_correction(&gas_corr);
+    // Web presenter — все зависимости готовы
+    uint32_t total_uptime_base_sec = stores.heating_stats.restore_total_uptime();
+    WebPresenterAdapter ca_web(ca_state, ca_log, ca_time,
+                               mod_stats, burn_cycle_service,
+                               gas_flow, gas_corr, total_uptime_base_sec);
+    FreeRtosMqttQueue        ca_mqtt_queue;
+    MqttSocketAdapter        ca_mqtt(ca_mqtt_queue, ca_time);
+    MqttRendererAdapter ca_mqtt_renderer(ca_web);
 
     // ── MQTT interactor ──────────────────────────────────
-    MqttNvsStore       mqtt_nvs;
-    mqtt_nvs.init();
+    stores.mqtt.init();
 
     MqttInteractor mqtt(ca_mqtt, ca_mqtt_queue,
-                        mqtt_nvs,      // IMqttConfigStore
+                        stores.mqtt,   // IMqttConfigStore
                         ca_state,
                         sys_cfg,       // IConfigureSystem
                         ca_log,
                         ca_time,
-                        ca_mqtt_renderer);  // IMqttStateRenderer
+                        ca_mqtt_renderer,  // IMqttStateRenderer
+                        &ca_log);          // IEventLogReader (journal callback)
 
     // MQTT инициализируется всегда (если enabled в NVS).
     // Время нужно только для таймстемпов в логах, MQTT работает без него.
     mqtt.init();
-
-    // Wire journal → MQTT: every log entry published live to {prefix}/journal
-    ca_log.set_event_callback(MqttInteractor::journal_callback, &mqtt);
 
     if (!ca_time.has_valid_time()) {
         ESP_LOGW("main", "SNTP: время недостоверно, но MQTT запущен");
@@ -224,124 +196,55 @@ extern "C" void app_main(void)
     }
 
     // ── Phase 6: Main poller ─────────────────────────────
-    MainPollerInteractor main_poller;
-    main_poller.add(&boiler_poll);
-    main_poller.add(&sensors_poll);
-    main_poller.add(&pid_poll);
-    main_poller.add(&mod_stats);
-    main_poller.add(&burn_cycles);
-    main_poller.add(&gas_flow);
-    main_poller.add(&dhw_predict);
-    main_poller.add(&mqtt);       // MQTT: публикация после обновления состояния
+    ControlLoopInteractor control_loop;
+    control_loop.add(&boiler_poll);
+    control_loop.add(&sensors_poll);
+    control_loop.add(&pid_poll);
+    control_loop.add(&mod_stats);
+    control_loop.add(&burn_cycle_service);
+    control_loop.add(&gas_flow);
+    control_loop.add(&dhw_predict);
+    control_loop.add(&mqtt);       // MQTT: публикация после обновления состояния
 
-    // ── Phase 7: Hardware init + start ───────────────────
+    // ── Phase 7: Hardware init + OTA adapters ──────────────
     ca_sensors.init();
     ca_ot_hw.init();
 
-    MainPollerTaskAdapter poll_task(main_poller);
+    EspOtaAdapter          ota_downloader;
+    OtaVersionIndexAdapter ota_versions;
+    auto ota_now_ms = [&]() { return ca_time.monotonic_us() / 1000; };
+    auto ota_spawn  = [](OtaInteractor* self) -> bool {
+        return xTaskCreate([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); },
+                           "ota_dl", 16*1024, self, 3, nullptr) == pdPASS;
+    };
+    auto ota_reboot = [&]() { ota_flush_and_reboot(burn_cycle_service, mod_stats,
+        stores.heating_stats, ca_state, gas_flow, gas_corr, total_uptime_base_sec, ca_time); };
+    OtaInteractor ota(ota_validity, ota_downloader, ota_versions,
+                      ota_now_ms, ota_spawn, ota_reboot);
+    control_loop.add(&ota);        // OTA: синхронизация прогресса загрузки
+
+    ControlLoopTaskAdapter poll_task(control_loop);
     poll_task.start();
-    ESP_LOGI("main", "Задача опроса запущена (7 IPollable)");
+    ESP_LOGI("main", "Задача опроса запущена (7 IControlTask)");
 
     // ── Phase 8: HTTP server ─────────────────────────────
-    HttpControllerAdapter http;
-    http.set_presenter(&ca_web);
-    http.set_config(&sys_cfg);
-    http.set_pid(&sys_cfg);
-    http.set_fault(&sys_cfg);
-    http.set_gas(&gas_corr);
-    http.set_wifi(&wifi);
-    http.set_time_adapter(&ca_time);
-    http.set_mqtt(&mqtt);
-    http.start();
+    HttpControllerAdapter http(ca_web, sys_cfg, sys_cfg, gas_corr, sys_cfg,
+                               wifi, ca_time, mqtt);
 
-    // ── Idle: CPU stats every 60s, periodic NVS save every 10 min ──
-    static const char* TAG = "main";
-    int save_tick = 0;
+    // ── OTA: взведение валидации (HTTP поднят) ────────────
+    http.set_ota(&ota);
+    const bool http_ok = http.start();
+    ota_validity.set_http_server_up(http_ok);
+    ota_validity.arm();
+
+    // ── Supervision + Persistence ──────────────────────────
+    SupervisionLoopInteractor  supervision(ota_validity, ca_log, http, wifi, ca_time);
+    PersistenceLoopInteractor  persister(ota_validity, burn_cycle_service, mod_stats,
+        gas_flow, gas_corr, stores.heating_stats, ca_state, ca_time, total_uptime_base_sec);
+
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(15000));  // keep 15s until fragmentation is fixed
-        save_tick++;
-
-        uint32_t idle0 = ulTaskGetIdleRunTimePercentForCore(0);
-        uint32_t idle1 = ulTaskGetIdleRunTimePercentForCore(1);
-        int cpu0 = 100 - (int)idle0;
-        int cpu1 = 100 - (int)idle1;
-        uint32_t free_heap = esp_get_free_heap_size();
-
-        multi_heap_info_t info;
-        heap_caps_get_info(&info, MALLOC_CAP_DEFAULT);
-        uint32_t largest_free = info.largest_free_block;
-
-        ESP_LOGI(TAG, "Аптайм: %lld с, куча: своб=%" PRIu32 " крупн=%" PRIu32
-                 " блоков: алл=%" PRIu32 " своб=%" PRIu32
-                 " | CPU: core0=%d%% core1=%d%% total=%d%%",
-                 ca_time.monotonic_us() / 1000000,
-                 free_heap, largest_free,
-                 (uint32_t)info.allocated_blocks, (uint32_t)info.free_blocks,
-                 cpu0, cpu1, (cpu0 + cpu1) / 2);
-
-        // Per-task CPU stats every 5 min (5 ticks)
-        if (save_tick % 5 == 0) {
-            static char stats_buf[2048];
-            vTaskGetRunTimeStats(stats_buf);
-            ESP_LOGI(TAG, "── Статистика задач (CPU) ──\n%s", stats_buf);
-        }
-
-        // AP watchdog: restart AP if WiFi died
-        wifi.try_recover_ap();
-
-        // ── Recovery ladder: prevent silent death from fragmentation ──
-        static int recovery_level = 0;  // highest level reached
-        if (largest_free < 4096 || free_heap < 8192) {
-            // Level 4: last resort — reboot
-            ESP_LOGE(TAG, "Куча исчерпана (своб=%" PRIu32 " крупн=%" PRIu32 ") — перезагрузка",
-                     free_heap, largest_free);
-            ca_log.event(ILogger::SYSTEM, "Перезагрузка: куча исчерпана (%" PRIu32 "/%" PRIu32 ")",
-                         free_heap, largest_free);
-            vTaskDelay(pdMS_TO_TICKS(2000));
-            esp_restart();
-        } else if (largest_free < 6144 && recovery_level < 3) {
-            recovery_level = 3;
-            ESP_LOGW(TAG, "Recovery L3: перезапуск HTTP (своб=%" PRIu32 " крупн=%" PRIu32 ")",
-                     free_heap, largest_free);
-            ca_log.event(ILogger::SYSTEM, "Recovery L3: перезапуск HTTP");
-            http.stop();
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            http.start();
-        } else if (largest_free < 12288 && recovery_level < 2) {
-            recovery_level = 2;
-            ESP_LOGW(TAG, "Recovery L2: фрагментация (своб=%" PRIu32 " крупн=%" PRIu32 ")",
-                     free_heap, largest_free);
-            ca_log.event(ILogger::SYSTEM, "Recovery L2: фрагментация кучи");
-        } else if (largest_free < 16384 && recovery_level < 1) {
-            recovery_level = 1;
-            ESP_LOGW(TAG, "Recovery L1: предупреждение (своб=%" PRIu32 " крупн=%" PRIu32 ")",
-                     free_heap, largest_free);
-            ca_log.event(ILogger::SYSTEM, "Recovery L1: фрагментация растёт");
-        }
-        // Reset ladder when heap recovers
-        if (largest_free >= 32768) recovery_level = 0;
-
-        // Save all persistent state to NVS every 10 min (10 ticks)
-        if (save_tick >= 10) {
-            save_tick = 0;
-            uint32_t bs = burn_cycles.burner_seconds();
-            nvs.save_burn_stats(bs,
-                                burn_cycles.total_pause_seconds(),
-                                burn_cycles.cycle_count(),
-                                burn_cycles.inter_session_pause_sec(),
-                                burn_cycles.inter_session_cnt(),
-                                burn_cycles.modulation_pause_sec(),
-                                burn_cycles.modulation_cnt());
-            static NvsHistBlob hist_blob;
-            hist_blob.samples = mod_stats.samples();
-            for (int i = 0; i < HIST_BINS; i++) {
-                hist_blob.hist[i] = mod_stats.hist_ptr()[i];
-            }
-            nvs.save_stats(ca_state, bs, gas_flow.integral_m3(),
-                           &hist_blob, nullptr, nullptr, nullptr);
-            nvs.save_total_uptime(total_uptime_base_sec +
-                                  (uint32_t)(ca_time.monotonic_us() / 1000000));
-            nvs.save_meter(ca_state, &gas_corr.meter_blob());
-        }
+        vTaskDelay(pdMS_TO_TICKS(15000));
+        supervision.tick();
+        persister.tick();
     }
 }

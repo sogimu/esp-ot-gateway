@@ -18,15 +18,51 @@
 
 const char* SntpTimeAdapter::TAG = "sntp";
 
-SntpTimeAdapter::SntpTimeAdapter()
+SntpTimeAdapter::SntpTimeAdapter(int tz_offset, bool has_internet, ILogger* log)
+    : tz_offset_(tz_offset), logger_(log)
 {
     strncpy(srv0_, "pool.ntp.org", sizeof(srv0_) - 1);
     strncpy(srv1_, "time.google.com", sizeof(srv1_) - 1);
+    init();
+    configure(tz_offset, has_internet);
 }
 
 SntpTimeAdapter::~SntpTimeAdapter()
 {
+    led_blink_stop();
     esp_sntp_stop();
+}
+
+// ── LED blink during SNTP sync ────────────────────────────
+
+void SntpTimeAdapter::led_blink_cb(void* arg)
+{
+    auto* self = static_cast<SntpTimeAdapter*>(arg);
+    self->blink_level_ = !self->blink_level_;
+    gpio_set_level(SNTP_LED_GPIO, self->blink_level_);
+}
+
+void SntpTimeAdapter::led_blink_start() const
+{
+    if (!blink_timer_) {
+        esp_timer_create_args_t args = {};
+        args.callback = &SntpTimeAdapter::led_blink_cb;
+        args.arg = const_cast<SntpTimeAdapter*>(this);
+        args.name = "sntp_led";
+        esp_timer_create(&args, &blink_timer_);
+    }
+    gpio_set_direction(SNTP_LED_GPIO, GPIO_MODE_OUTPUT);
+    blink_level_ = 1;
+    gpio_set_level(SNTP_LED_GPIO, 1);
+    esp_timer_start_periodic(blink_timer_, 200000);  // 200 мс
+}
+
+void SntpTimeAdapter::led_blink_stop() const
+{
+    if (blink_timer_) {
+        esp_timer_stop(blink_timer_);
+        gpio_set_level(SNTP_LED_GPIO, 0);
+    }
 }
 
 void SntpTimeAdapter::init()
@@ -148,6 +184,24 @@ void SntpTimeAdapter::start()
     }
 }
 
+void SntpTimeAdapter::configure(int tz_offset, bool has_internet)
+{
+    set_timezone(tz_offset);
+    if (has_internet) {
+        start();
+        set_timezone(tz_offset);  // восстановить — start() ставит UTC+0 для SNTP
+        if (is_synced()) {
+            save_time_offset();
+        }
+    } else {
+        if (restore_time_offset()) {
+            ESP_LOGI(TAG, "SNTP пропущен (нет STA) — время из NVS");
+        } else {
+            ESP_LOGW(TAG, "SNTP пропущен, ручное время не задано");
+        }
+    }
+}
+
 void SntpTimeAdapter::set_timezone(int tz)
 {
     tz_offset_ = tz;
@@ -182,32 +236,44 @@ ITimeSource::time_point SntpTimeAdapter::now() const
 
 bool SntpTimeAdapter::is_synced() const
 {
-    if (time_synced_) return true;
+    // 1. Проверяем завершение SNTP. Логируем только первый раз —
+    //    последующие вызовы с COMPLETED не дублируют сообщение.
     if (sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
-        time_t now;
-        std::time(&now);
-        uint64_t real_us = (uint64_t)now * 1000000ULL;
-        uint64_t boot_us = esp_timer_get_time();
-        boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
-        time_synced_ = true;
-        const char* srv = srv0_[0] ? srv0_ : "pool.ntp.org";
-        ESP_LOGI(TAG, "SNTP: синхронизирован через %s, UTC: %lld", srv, (long long)now);
-        if (logger_) logger_->event(ILogger::SYSTEM,
-            "SNTP: синхр. через %s, UNIX %lld с", srv, (long long)now);
+        if (!sntp_real_synced_) {
+            led_blink_stop();  // синхронизация завершена — LED off
+            time_t now;
+            std::time(&now);
+            if (now >= 1577836800) {
+                uint64_t real_us = (uint64_t)now * 1000000ULL;
+                uint64_t boot_us = esp_timer_get_time();
+                boot_offset_us_ = microseconds((int64_t)(real_us - boot_us));
+                time_synced_ = true;
+                sntp_real_synced_ = true;
+                const char* srv = srv0_[0] ? srv0_ : "pool.ntp.org";
+                ESP_LOGI(TAG, "SNTP: синхронизирован через %s, UTC: %lld", srv, (long long)now);
+                if (logger_) logger_->event(ILogger::SYSTEM,
+                    "SNTP: синхр. через %s, UNIX %lld с", srv, (long long)now);
+            }
+        }
         return true;
     }
-    // SNTP daemon may have failed because WiFi wasn't ready at boot.
-    // Retry once per minute until sync succeeds.
-    uint64_t now_ms = esp_timer_get_time() / 1000;
-    if (now_ms - last_sntp_retry_ms_ > 60000) {
-        last_sntp_retry_ms_ = now_ms;
-        const char* srv = srv0_[0] ? srv0_ : "pool.ntp.org";
-        ESP_LOGI(TAG, "SNTP: повторная попытка через %s...", srv);
-        if (logger_) logger_->event(ILogger::SYSTEM,
-            "SNTP: повторный запрос к %s", srv);
-        sntp_restart();
+
+    // 2. SNTP не завершён. Retry — только если не было реальной синхронизации
+    //    (время из NVS может быть устаревшим — продолжаем попытки).
+    if (!sntp_real_synced_) {
+        uint64_t now_ms = esp_timer_get_time() / 1000;
+        if (now_ms - last_sntp_retry_ms_ > 60000) {
+            last_sntp_retry_ms_ = now_ms;
+            led_blink_start();  // мигаем LED во время попытки синхронизации
+            const char* srv = srv0_[0] ? srv0_ : "pool.ntp.org";
+            ESP_LOGI(TAG, "SNTP: повторная попытка через %s...", srv);
+            if (logger_) logger_->event(ILogger::SYSTEM,
+                "SNTP: повторный запрос к %s", srv);
+            sntp_restart();
+        }
     }
-    return false;
+
+    return time_synced_;
 }
 
 // ── Manual time ──────────────────────────────────────────

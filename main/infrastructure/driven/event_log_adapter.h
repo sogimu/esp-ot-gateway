@@ -7,11 +7,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 
-/// Callback invoked on every event append. Called OUTSIDE the ring-buffer mutex
-/// — safe for I/O. The message pointer is valid only until the callback returns.
-using EventAppendCallback = void (*)(uint8_t category, const char* message,
-                                      uint32_t time_sec, bool ts_valid, void* ctx);
-
 struct LogEntry {
     uint32_t time_sec;
     uint8_t  category;
@@ -25,16 +20,17 @@ struct LogEntry {
 /// event() is task-context only — no ISR callers, so mutex blocking is safe.
 class EventLogAdapter : public ILogger, public IEventLogReader {
 public:
-    EventLogAdapter();
+    explicit EventLogAdapter(class ITimeSource* time = nullptr);
     ~EventLogAdapter();
+
+    /// Установить источник времени (вызывается после создания SntpTimeAdapter).
+    void set_time_source(class ITimeSource* time) { time_ = time; }
 
     void event(Category cat, const char* fmt, ...) override;
 
-    void set_time_source(class ITimeSource* t) { time_ = t; }
-
     /// Register a callback for live event streaming (MQTT journal).
     /// Called once during init — no locking needed.
-    void set_event_callback(EventAppendCallback cb, void* ctx) {
+    void set_event_callback(EventAppendCallback cb, void* ctx) override {
         cb_ = cb; cb_ctx_ = ctx;
     }
 

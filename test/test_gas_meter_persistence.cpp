@@ -1,3 +1,5 @@
+#include "application/ports/driven/iheating_stats_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 /// Tests for gas meter base reading persistence.
 /// Regression: save_meter/load_meter were never called, gas_meter_base
 /// reset to 0 on every reboot.
@@ -26,18 +28,44 @@ struct FakeLogger : public ILogger {
     int event_count_ = 0;
 };
 
+struct FakeGasStore : IGasCorrectionStore {
+    FakeConfigurationStore* cfg = nullptr;
+    int boiler_config_saved_ = 0;
+
+    bool load_meter(IHeatingStateStore& s, void* blob) override {
+        return cfg ? cfg->load_meter(s, blob) : false;
+    }
+    void save_meter(const IHeatingStateStore& s, const void* blob) override {
+        if (cfg) cfg->save_meter(s, blob);
+    }
+    void save_integral(float v) override { if (cfg) cfg->save_integral(v); }
+    void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
+};
+
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
+};
+
 TEST_CASE("GasMeter: set_gas_meter_base saves to meter namespace", "[gas][regression]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     FakeLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     gas.set_gas_meter_base(1234.567f);
 
     // State must have the value
     REQUIRE(state.get_gas_meter_base() == Approx(1234.567f));
     // save_meter must have been called (not save_config)
-    REQUIRE(config.save_config_called_ == 0);
+    REQUIRE(config.save_time_settings_called_ == 0);
 }
 
 TEST_CASE("GasMeter: load_meter restores gas_meter_base to state", "[gas][regression]") {
@@ -60,8 +88,10 @@ TEST_CASE("GasMeter: load_meter restores gas_meter_base to state", "[gas][regres
 TEST_CASE("GasMeter: set_gas_meter_base rejects negative values", "[gas][regression]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     FakeLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     gas.set_gas_meter_base(-100.0f);
     REQUIRE(state.get_gas_meter_base() == Approx(0.0f));
@@ -70,8 +100,10 @@ TEST_CASE("GasMeter: set_gas_meter_base rejects negative values", "[gas][regress
 TEST_CASE("GasMeter: set_gas_meter_base with zero is accepted", "[gas][regression]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     FakeLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     state.set_gas_meter_base(100.0f);
     gas.set_gas_meter_base(0.0f);
@@ -87,8 +119,11 @@ TEST_CASE("GasFlow: save_stats stores integral_m3 via config store", "[gas][regr
     // Simulate what main.cpp does: accumulate gas, save integral_m3
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService gfs(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gfs(state, time, hss);
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
 
     // Accumulate some gas (simulated by set_integral)
     gfs.set_integral(5.678f);
@@ -106,12 +141,13 @@ TEST_CASE("GasFlow: load_stats restores integral_m3 after simulated reboot", "[g
     FakeTimeSource time;
 
     // "Before reboot" — accumulate gas
-    GasFlowService gfs_before(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gfs_before(state, time, hss);
     gfs_before.set_integral(12.345f);
     float saved_integral = gfs_before.integral_m3();
 
     // "After reboot" — fresh service, restore from saved value
-    GasFlowService gfs_after(state, time);
+    GasFlowService gfs_after(state, time, hss);
     REQUIRE(gfs_after.integral_m3() == Approx(0.0f)); // starts at 0
 
     // Simulate load_stats restoring integral_m3 (as main.cpp does)
@@ -122,7 +158,8 @@ TEST_CASE("GasFlow: load_stats restores integral_m3 after simulated reboot", "[g
 TEST_CASE("GasFlow: integral_m3 accumulates across poll cycles", "[gas][regression]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService gfs(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gfs(state, time, hss);
 
     float before = gfs.integral_m3();
 
@@ -131,7 +168,7 @@ TEST_CASE("GasFlow: integral_m3 accumulates across poll cycles", "[gas][regressi
     state.set_modulation(0);
     for (int i = 0; i < 10; i++) {
         time.advance_ms(1100);
-        gfs.poll();
+        gfs.execute();
     }
 
     // No flame → no gas flow → integral unchanged
@@ -141,7 +178,8 @@ TEST_CASE("GasFlow: integral_m3 accumulates across poll cycles", "[gas][regressi
 TEST_CASE("GasFlow: reset zeros integral then restore works", "[gas][regression]") {
     FakeHeatingStateStore state;
     FakeTimeSource time;
-    GasFlowService gfs(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gfs(state, time, hss);
 
     gfs.set_integral(100.0f);
     gfs.reset();

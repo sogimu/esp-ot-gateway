@@ -1,19 +1,19 @@
-/// Tests for MainPollerInteractor (application/use_cases/main_poller_interactor.h)
+/// Tests for ControlLoopInteractor (application/use_cases/control_loop_interactor.h)
 /// Covers: adding pollables, run_once iteration, ordering.
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
-#include "application/use_cases/main_poller_interactor.h"
+#include "application/use_cases/control_loop_interactor.h"
 #include <vector>
 
 using Catch::Approx;
 
-/// A simple spy IPollable that counts how many times it was polled.
-class SpyPollable : public IPollable {
+/// A simple spy IControlTask that counts how many times it was polled.
+class SpyPollable : public IControlTask {
 public:
     explicit SpyPollable(const char* label = "") : label_(label) {}
 
-    void poll() override {
+    void execute() override {
         call_count_++;
         last_order_ = global_counter_++;
     }
@@ -35,12 +35,12 @@ int SpyPollable::global_counter_ = 0;
 // ── Core functionality ──────────────────────────────────────
 
 TEST_CASE("MainPoller: empty poller does nothing", "[poller][app]") {
-    MainPollerInteractor poller;
+    ControlLoopInteractor poller;
     poller.run_once(); // should not crash
 }
 
 TEST_CASE("MainPoller: single pollable is called", "[poller][app]") {
-    MainPollerInteractor poller;
+    ControlLoopInteractor poller;
     SpyPollable spy;
     spy.reset();
 
@@ -51,7 +51,7 @@ TEST_CASE("MainPoller: single pollable is called", "[poller][app]") {
 }
 
 TEST_CASE("MainPoller: all pollables are called on each run_once", "[poller][app]") {
-    MainPollerInteractor poller;
+    ControlLoopInteractor poller;
     SpyPollable a, b, c;
     a.reset(); b.reset(); c.reset();
 
@@ -67,7 +67,7 @@ TEST_CASE("MainPoller: all pollables are called on each run_once", "[poller][app
 }
 
 TEST_CASE("MainPoller: repeated run_once calls all pollables each time", "[poller][app]") {
-    MainPollerInteractor poller;
+    ControlLoopInteractor poller;
     SpyPollable s1, s2;
     s1.reset(); s2.reset();
 
@@ -83,7 +83,7 @@ TEST_CASE("MainPoller: repeated run_once calls all pollables each time", "[polle
 }
 
 TEST_CASE("MainPoller: pollables called in insertion order", "[poller][app]") {
-    MainPollerInteractor poller;
+    ControlLoopInteractor poller;
     SpyPollable a("a"), b("b"), c("c"), d("d");
     a.reset(); b.reset(); c.reset(); d.reset();
 
@@ -102,7 +102,7 @@ TEST_CASE("MainPoller: pollables called in insertion order", "[poller][app]") {
 }
 
 TEST_CASE("MainPoller: up to 8 pollables works", "[poller][app]") {
-    MainPollerInteractor poller;
+    ControlLoopInteractor poller;
     SpyPollable spies[8];
 
     for (int i = 0; i < 8; i++) {
@@ -118,16 +118,18 @@ TEST_CASE("MainPoller: up to 8 pollables works", "[poller][app]") {
     }
 }
 
-TEST_CASE("MainPoller: add returns false when full", "[poller][app]") {
-    MainPollerInteractor poller;
-    SpyPollable spies[10];
+TEST_CASE("ControlLoop: unlimited add — vector-based", "[poller][app]") {
+    ControlLoopInteractor poller;
+    SpyPollable spies[20];
 
-    // Fill all 8 slots
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 20; i++) {
+        spies[i].reset();
         REQUIRE(poller.add(&spies[i]) == true);
     }
 
-    // 9th should fail
-    REQUIRE(poller.add(&spies[8]) == false);
-    REQUIRE(poller.add(&spies[9]) == false);
+    poller.run_once();
+
+    for (int i = 0; i < 20; i++) {
+        REQUIRE(spies[i].call_count_ == 1);
+    }
 }

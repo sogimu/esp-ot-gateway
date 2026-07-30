@@ -9,4 +9,4 @@ void BoilerPollInteractor::set_ch_setpoint(float) {}
 void BoilerPollInteractor::set_dhw_setpoint(float) {}
 void BoilerPollInteractor::set_dhw_hysteresis(float) {}
 void BoilerPollInteractor::trigger_fault_reset() {}
-void BoilerPollInteractor::poll() {}
+void BoilerPollInteractor::execute() {}

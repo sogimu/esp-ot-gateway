@@ -1,17 +1,17 @@
 #pragma once
 #include <cstdint>
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 #include "domain/value_objects/pid_quality_metrics.h"
 
 class IHeatingStateStore;
 
-class PidQualityAssessor : public IPollable {
+class PidQualityAssessor : public IControlTask {
 public:
     static constexpr int RING_SIZE = 1440;  // 24h x 60min
 
     explicit PidQualityAssessor(IHeatingStateStore& state);
 
-    void poll() override;
+    void execute() override;
     void reset();
 
     const QualityScores& scores() const { return scores_; }

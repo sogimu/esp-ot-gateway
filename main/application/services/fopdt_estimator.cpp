@@ -17,7 +17,7 @@ void FopdtEstimator::reset() {
     prev_ms_ = static_cast<uint32_t>(time_.monotonic_ms());
 }
 
-void FopdtEstimator::poll() {
+void FopdtEstimator::execute() {
     state_.lock_shared();
     float room = state_.get_pid_room_temp();
     float target = state_.get_pid_target_room();

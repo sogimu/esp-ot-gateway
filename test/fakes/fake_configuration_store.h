@@ -1,17 +1,17 @@
 #pragma once
 
-#include "application/ports/driven/iconfiguration_store.h"
+#include "application/ports/driven/itime_settings_store.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "nvs_config_store.h"  // NvsMeterBlob
 #include <cstring>
 
 /// Fake configuration store — in-memory, for unit testing.
-class FakeConfigurationStore : public IConfigurationStore {
+class FakeConfigurationStore : public ITimeSettingsStore {
 public:
     FakeConfigurationStore() { clear(); }
 
     void clear() {
-        save_config_called_ = 0;
+        save_time_settings_called_ = 0;
         save_predict_called_ = 0;
         std::memset(saved_rates_, 0, sizeof(saved_rates_));
         saved_idx_ = 0;
@@ -41,21 +41,19 @@ public:
         meter_save_called_ = false;
         meter_load_called_ = false;
         meter_load_returns_ = false;
-        load_meter_base_ = 0;
         std::memset(&saved_meter_blob_, 0, sizeof(saved_meter_blob_));
-        std::memset(&load_meter_blob_, 0, sizeof(load_meter_blob_));
     }
 
-    void load_all(class IHeatingStateStore&) override {}
+    void load_time_settings(class IHeatingStateStore&) {}
 
-    void save_config(const class IHeatingStateStore&) override {
-        save_config_called_++;
+    void save_time_settings(const class IHeatingStateStore&) {
+        save_time_settings_called_++;
     }
 
-    void save_stats(const class IHeatingStateStore&,
-                    uint32_t bs, float integ_m3,
-                    const void* h, const void* c,
-                    const void* e, const void* cal) override {
+    // save_stats/load_stats — regular methods (no longer in IConfigurationStore,
+    // but kept for test compatibility with test_nvs_nullptr_safety).
+    void save_stats(const class IHeatingStateStore&, uint32_t bs, float integ_m3,
+                    const void* h, const void* c, const void* e, const void* cal) {
         stats_save_bs_ = bs;
         stats_save_integ_ = integ_m3;
         stats_save_h_null_   = (h == nullptr);
@@ -63,10 +61,8 @@ public:
         stats_save_e_null_   = (e == nullptr);
         stats_save_cal_null_ = (cal == nullptr);
     }
-
     bool load_stats(uint32_t& bs, float& integ_m3,
-                    void* h, void* c,
-                    void* e, void* cal) override {
+                    void* h, void* c, void* e, void* cal) {
         stats_load_h_null_   = (h == nullptr);
         stats_load_c_null_   = (c == nullptr);
         stats_load_e_null_   = (e == nullptr);
@@ -78,7 +74,7 @@ public:
 
     void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
                          uint32_t inter_pause_sec, uint32_t inter_cnt,
-                         uint32_t mod_pause_sec, uint32_t mod_cnt) override {
+                         uint32_t mod_pause_sec, uint32_t mod_cnt) {
         burn_stats_saved_ = true;
         saved_burn_.burner_sec = burner_sec;
         saved_burn_.total_pause_sec = total_pause_sec;
@@ -91,7 +87,7 @@ public:
 
     bool load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
                          uint32_t& inter_pause_sec, uint32_t& inter_cnt,
-                         uint32_t& mod_pause_sec, uint32_t& mod_cnt) override {
+                         uint32_t& mod_pause_sec, uint32_t& mod_cnt) {
         if (!burn_stats_load_returns_) return false;
         burner_sec = load_burn_.burner_sec;
         total_pause_sec = load_burn_.total_pause_sec;
@@ -115,7 +111,7 @@ public:
         load_burn_.mod_cnt = mc;
     }
 
-    void save_meter(const class IHeatingStateStore& s, const void* blob = nullptr) override {
+    void save_meter(const class IHeatingStateStore& s, const void* blob = nullptr) {
         meter_save_called_ = true;
         if (blob) {
             std::memcpy(&saved_meter_blob_, blob, sizeof(NvsMeterBlob));
@@ -124,28 +120,38 @@ public:
             saved_meter_blob_.base_reading = s.get_gas_meter_base();
         }
     }
-    bool load_meter(class IHeatingStateStore& s, void* blob = nullptr) override {
+    bool load_meter(class IHeatingStateStore& s, void* blob = nullptr) {
         meter_load_called_ = true;
         if (!meter_load_returns_) return false;
-        s.set_gas_meter_base(load_meter_base_);
-        if (blob) std::memcpy(blob, &load_meter_blob_, sizeof(NvsMeterBlob));
+        s.set_gas_meter_base(meter_load_base_);
+        if (blob) std::memcpy(blob, &meter_load_blob_, sizeof(NvsMeterBlob));
         return true;
     }
-    void set_meter_load(float base, const NvsMeterBlob* blob = nullptr) {
-        meter_load_returns_ = true;
-        load_meter_base_ = base;
-        if (blob) std::memcpy(&load_meter_blob_, blob, sizeof(NvsMeterBlob));
-        else std::memset(&load_meter_blob_, 0, sizeof(load_meter_blob_));
+    void save_integral(float value) { saved_integral_ = value; save_integral_called_ = true; }
+
+    void save_total_uptime(uint32_t sec) { total_uptime_saved_ = sec; }
+    bool load_total_uptime(uint32_t& sec) {
+        if (total_uptime_load_ok_) { sec = total_uptime_load_; return true; }
+        return false;
     }
 
-    void save_predict(const float rates[3], int idx, int count) override {
+    void set_meter_load(float base, const NvsMeterBlob* blob = nullptr) {
+        meter_load_returns_ = true;
+        meter_load_base_ = base;
+        if (blob) std::memcpy(&meter_load_blob_, blob, sizeof(NvsMeterBlob));
+        else std::memset(&meter_load_blob_, 0, sizeof(meter_load_blob_));
+    }
+    float meter_load_base_ = 0;
+    NvsMeterBlob meter_load_blob_;
+
+    void save_predict(const float rates[3], int idx, int count) {
         save_predict_called_++;
         std::memcpy(saved_rates_, rates, 3 * sizeof(float));
         saved_idx_ = idx;
         saved_count_ = count;
     }
 
-    bool load_predict(float rates[3], int& idx, int& count) override {
+    bool load_predict(float rates[3], int& idx, int& count) {
         if (!predict_returns_) return false;
         std::memcpy(rates, predict_rates_, 3 * sizeof(float));
         idx = predict_idx_;
@@ -160,19 +166,13 @@ public:
         predict_count_ = count;
     }
 
-    void save_total_uptime(uint32_t sec) override { total_uptime_saved_ = sec; }
-    bool load_total_uptime(uint32_t& sec) override {
-        if (total_uptime_load_ok_) { sec = total_uptime_load_; return true; }
-        return false;
-    }
     void set_total_uptime_load(uint32_t sec) { total_uptime_load_ok_ = true; total_uptime_load_ = sec; }
 
-    void save_integral(float value) override { saved_integral_ = value; save_integral_called_ = true; }
     float saved_integral_ = -1.0f;
     bool save_integral_called_ = false;
 
     // ── Call tracking ──────────────────────────────────
-    int save_config_called_ = 0;
+    int save_time_settings_called_ = 0;
     int save_predict_called_ = 0;
     float saved_rates_[3] = {};
     int saved_idx_ = 0;
@@ -189,7 +189,6 @@ public:
     uint32_t total_uptime_load_ = 0;
     bool total_uptime_load_ok_ = false;
 
-    // Stats blob nullptr tracking — set by save_stats/load_stats
     bool stats_save_h_null_ = false;
     bool stats_save_c_null_ = false;
     bool stats_save_e_null_ = false;
@@ -205,9 +204,7 @@ public:
     bool meter_save_called_ = false;
     bool meter_load_called_ = false;
     bool meter_load_returns_ = false;
-    float load_meter_base_ = 0;
     NvsMeterBlob saved_meter_blob_;
-    NvsMeterBlob load_meter_blob_;
 
 private:
     bool predict_returns_ = false;

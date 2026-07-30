@@ -1,6 +1,6 @@
 #pragma once
 
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 #include "application/ports/driving/imqtt_configurator.h"
 #include "application/ports/driven/imqtt_message_sink.h"
 #include <cstdint>
@@ -23,20 +23,21 @@ class IMqttStateRenderer;
 ///
 /// Входящие команды обрабатываются ИСКЛЮЧИТЕЛЬНО в poll().
 /// MQTT-колбек только помещает сообщения в IMqttMessageSink.
-class MqttInteractor : public IPollable, public IMqttConfigurator {
+class MqttInteractor : public IControlTask, public IMqttConfigurator {
 public:
     MqttInteractor(IMqttHardware& mqtt, IMqttMessageSink& sink,
                    IMqttConfigStore& cfg_store,
                    IHeatingStateStore& state,
                    IConfigureSystem& cfg_sys,
                    ILogger& log, ITimeSource& time,
-                   IMqttStateRenderer& renderer);
+                   IMqttStateRenderer& renderer,
+                   class IEventLogReader* log_reader = nullptr);
 
     /// Загрузить настройки MQTT из NVS и подключиться (если enabled).
     void init();
 
-    /// IPollable: периодический цикл (~1.1с).
-    void poll() override;
+    /// IControlTask: периодический цикл (~1.1с).
+    void execute() override;
 
     // ── IMqttConfigurator ───────────────────────────────
 
@@ -118,6 +119,7 @@ private:
     ILogger&                  log_;
     ITimeSource&              time_;
     IMqttStateRenderer&       renderer_;
+    IEventLogReader*          log_reader_ = nullptr;
 
     // ── Настройки из NVS ───────────────────────────────
     char     host_[128]   = {};

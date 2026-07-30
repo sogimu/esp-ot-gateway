@@ -11,6 +11,7 @@
 #include "application/ports/driving/igas_calibration.h"
 #include "application/ports/driving/ifault_reset.h"
 #include "application/ports/driving/imqtt_configurator.h"
+#include "application/ports/driving/iota_manager.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -24,13 +25,20 @@ static const char* TAG = "http";
 
 HttpControllerAdapter* HttpControllerAdapter::s_self = nullptr;
 
-HttpControllerAdapter::HttpControllerAdapter()  { s_self = this; }
+HttpControllerAdapter::HttpControllerAdapter(WebPresenterAdapter& presenter,
+                                             IConfigureSystem&  cfg,  IConfigurePid& pid,
+                                             IGasCalibration&  gas,  IFaultReset&   fault,
+                                             IWifiManager&     wifi, SntpTimeAdapter& time,
+                                             IMqttConfigurator& mqtt)
+    : presenter_(&presenter), cfg_(&cfg), pid_(&pid), gas_(&gas), fault_(&fault),
+      wifi_(&wifi), time_(&time), mqtt_(&mqtt)
+{ s_self = this; }
 HttpControllerAdapter::~HttpControllerAdapter() { stop(); s_self = nullptr; }
 
-void HttpControllerAdapter::start()
+bool HttpControllerAdapter::start()
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers    = 31;
+    config.max_uri_handlers    = 35;
     config.lru_purge_enable    = true;
     config.max_open_sockets    = 3;       // limit concurrent connections
     config.keep_alive_enable   = false;   // close after each request — frees socket buffers
@@ -39,7 +47,7 @@ void HttpControllerAdapter::start()
 
     if (httpd_start(&server_, &config) != ESP_OK) {
         ESP_LOGE(TAG, "Ошибка запуска HTTP сервера");
-        return;
+        return false;
     }
     static const httpd_uri_t routes[] = {
         { .uri = "/",                  .method = HTTP_GET,  .handler = handler_root,          .user_ctx = NULL },
@@ -62,6 +70,12 @@ void HttpControllerAdapter::start()
         // MQTT API
         { .uri = "/api/mqtt/status",   .method = HTTP_GET,  .handler = handler_mqtt_status,   .user_ctx = NULL },
         { .uri = "/api/mqtt/settings", .method = HTTP_POST, .handler = handler_mqtt_settings, .user_ctx = NULL },
+
+        // OTA API
+        { .uri = "/api/ota/status",    .method = HTTP_GET,  .handler = handler_ota_status,    .user_ctx = NULL },
+        { .uri = "/api/ota/versions",  .method = HTTP_GET,  .handler = handler_ota_versions,  .user_ctx = NULL },
+        { .uri = "/api/ota/start",     .method = HTTP_POST, .handler = handler_ota_start,     .user_ctx = NULL },
+        { .uri = "/api/ota/rollback",  .method = HTTP_POST, .handler = handler_ota_rollback,  .user_ctx = NULL },
 
         // Improv
         { .uri = "/prov",              .method = HTTP_GET,  .handler = handler_prov_get,      .user_ctx = NULL },
@@ -86,6 +100,7 @@ void HttpControllerAdapter::start()
     for (int i = 0; i < route_count; i++)
         httpd_register_uri_handler(server_, &routes[i]);
     ESP_LOGI(TAG, "HTTP сервер запущен на порту %d", config.server_port);
+    return true;
 }
 void HttpControllerAdapter::stop() { if (server_) { httpd_stop(server_); server_ = nullptr; } }
 
@@ -644,4 +659,90 @@ esp_err_t HttpControllerAdapter::handler_mqtt_settings(httpd_req_t* req)
 
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, "{\"ok\":true}");
+}
+
+// ── OTA API ───────────────────────────────────────────────────
+
+esp_err_t HttpControllerAdapter::handler_ota_status(httpd_req_t* req) {
+    auto* o = s_self ? s_self->ota_ : nullptr;
+    httpd_resp_set_type(req, "application/json");
+    if (!o) {
+        return httpd_resp_sendstr(req, "{\"state\":\"unavailable\"}");
+    }
+    OtaStatus s = o->status();
+    const char* state_str = "idle";
+    switch (s.state) {
+        case OtaStatus::IDLE:           state_str = "idle"; break;
+        case OtaStatus::FETCHING:       state_str = "fetching"; break;
+        case OtaStatus::WRITING:        state_str = "writing"; break;
+        case OtaStatus::VERIFY_PENDING: state_str = "verify_pending"; break;
+        case OtaStatus::DONE:           state_str = "done"; break;
+        case OtaStatus::ERROR:          state_str = "error"; break;
+    }
+    char buf[384];
+    snprintf(buf, sizeof(buf),
+        "{\"state\":\"%s\",\"progress\":%d,\"current_version\":\"%s\","
+        "\"target_tag\":\"%s\",\"rollback_pending\":%s,\"last_error\":\"%s\"}",
+        state_str, s.progress_pct, s.current_version, s.target_tag,
+        s.rollback_pending ? "true" : "false", s.last_error);
+    return httpd_resp_sendstr(req, buf);
+}
+
+esp_err_t HttpControllerAdapter::handler_ota_versions(httpd_req_t* req) {
+    auto* o = s_self ? s_self->ota_ : nullptr;
+    httpd_resp_set_type(req, "application/json");
+    if (!o) {
+        return httpd_resp_sendstr(req, "{\"versions\":[],\"error\":\"unavailable\"}");
+    }
+    char* json = o->fetch_version_list();   // heap JSON, caller frees
+    if (!json) {
+        return httpd_resp_sendstr(req, "{\"versions\":[],\"error\":\"fetch failed\"}");
+    }
+    esp_err_t ret = httpd_resp_sendstr(req, json);
+    free(json);
+    return ret;
+}
+
+esp_err_t HttpControllerAdapter::handler_ota_start(httpd_req_t* req) {
+    auto* o = s_self ? s_self->ota_ : nullptr;
+    httpd_resp_set_type(req, "application/json");
+    if (!o) {
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"unavailable\"}");
+    }
+
+    char body[128] = {0};
+    int recv_len = httpd_req_recv(req, body, sizeof(body) - 1);
+    if (recv_len <= 0) {
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"empty body\"}");
+    }
+
+    int tlen = 0;
+    const char* tag = json_get_string(body, "\"tag\"", tlen);
+    if (!tag || tlen == 0) {
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"no tag\"}");
+    }
+    char tag_buf[32] = {0};
+    int n = tlen < 31 ? tlen : 31;
+    memcpy(tag_buf, tag, n);
+    tag_buf[n] = '\0';
+
+    // Отклонить запуск, если уже идёт обновление (состояние не IDLE/DONE/ERROR)
+    OtaStatus s = o->status();
+    if (s.state == OtaStatus::FETCHING ||
+        s.state == OtaStatus::WRITING ||
+        s.state == OtaStatus::VERIFY_PENDING) {
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"update in progress\"}");
+    }
+
+    bool ok = o->begin_update(tag_buf);
+    return httpd_resp_sendstr(req, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+}
+
+esp_err_t HttpControllerAdapter::handler_ota_rollback(httpd_req_t* req) {
+    auto* o = s_self ? s_self->ota_ : nullptr;
+    // Ответить ДО перезагрузки — паттерн respond-then-reboot
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"ok\":true}");
+    if (o) o->rollback_now();
+    return ESP_OK;
 }

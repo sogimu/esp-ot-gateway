@@ -1,7 +1,21 @@
 #include "infrastructure/driven/heating_state_adapter.h"
+#include "application/ports/driven/itime_settings_store.h"
+#include "application/ports/driven/iboiler_config_store.h"
 #include "domain/value_objects/ch_schedule.h"
 #include "domain/value_objects/ch_mode.h"
 #include <cstring>
+
+HeatingStateAdapter::HeatingStateAdapter(ITimeSettingsStore& time, IBoilerConfigStore& boiler)
+    : time_store_(time), boiler_store_(boiler)
+{
+    shared_mutex_init(&mutex_);
+}
+
+void HeatingStateAdapter::load_settings()
+{
+    time_store_.load_time_settings(*this);
+    boiler_store_.load_boiler_config(*this);
+}
 
 // FreeRTOS read-write lock — prevents torn reads on arrays and multi-field structs
 void HeatingStateAdapter::lock_shared()     { shared_mutex_lock_shared(&mutex_); }

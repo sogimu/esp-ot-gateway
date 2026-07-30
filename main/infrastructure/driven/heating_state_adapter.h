@@ -2,6 +2,9 @@
 
 #include "application/ports/driven/iheating_state_store.h"
 
+class ITimeSettingsStore;
+class IBoilerConfigStore;
+
 extern "C" {
 #include "infrastructure/freertos/shared_mutex.h"
 }
@@ -11,7 +14,10 @@ extern "C" {
 /// Prevents torn reads on arrays (schedule_temps_, sntp_srv*_) and multi-field structs.
 class HeatingStateAdapter : public IHeatingStateStore {
 public:
-    HeatingStateAdapter() { shared_mutex_init(&mutex_); }
+    HeatingStateAdapter(ITimeSettingsStore& time, IBoilerConfigStore& boiler);
+
+    /// Загрузить настройки из NVS-хранилищ (вызвать при старте).
+    void load_settings();
 
     // Lock protocol
     void lock_shared() override;
@@ -195,7 +201,9 @@ public:
     void set_eff_v3(float v) override;
     float get_eff_v3() const override;
 private:
-    SharedMutex mutex_;
+    SharedMutex        mutex_;
+    ITimeSettingsStore& time_store_;
+    IBoilerConfigStore& boiler_store_;
 
     struct State {
         bool   connected_ = false;

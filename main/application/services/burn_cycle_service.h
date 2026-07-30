@@ -1,18 +1,19 @@
 #pragma once
 
 #include <cstdint>
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 
 class IHeatingStateStore;
 class ITimeSource;
+class IBurnStatsStore;
 
 /// Tracks burner cycle statistics with cumulative counters.
-/// All counters are NVS-persistable — averages survive reboots.
-class BurnCycleService : public IPollable {
+/// Все счётчики NVS-персистентны — инкапсулирует загрузку/сохранение.
+class BurnCycleService : public IControlTask {
 public:
-    BurnCycleService(IHeatingStateStore& state, ITimeSource& time);
+    BurnCycleService(IHeatingStateStore& state, ITimeSource& time, IBurnStatsStore& store);
 
-    void poll() override;
+    void execute() override;
     void reset();
 
     // ── Cumulative counters (persisted to NVS) ──────────
@@ -35,18 +36,14 @@ public:
     float avg_inter_session_pause_sec() const;
     float avg_modulation_pause_sec()    const;
 
-    // ── Pointers for NVS restore ────────────────────────
-    uint32_t* burner_sec_ptr()     { return &burner_sec_; }
-    uint32_t* cycle_cnt_ptr()      { return &cycle_cnt_; }
-    uint32_t* total_pause_sec_ptr() { return &total_pause_sec_; }
-    uint32_t* inter_pause_sec_ptr() { return &inter_session_pause_sec_; }
-    uint32_t* inter_cnt_ptr()       { return &inter_session_cnt_; }
-    uint32_t* mod_pause_sec_ptr()   { return &modulation_pause_sec_; }
-    uint32_t* mod_cnt_ptr()         { return &modulation_cnt_; }
+    // ── NVS persistence ─────────────────────────────────
+    void load_from_store();
+    void save_to_store();
 
 private:
     IHeatingStateStore& state_;
     ITimeSource&        time_;
+    IBurnStatsStore&    store_;
 
     // Cumulative counters
     uint32_t burner_sec_ = 0;

@@ -17,17 +17,21 @@ class FopdtEstimator;
 /// Writes into caller-provided buffer — no heap, thread-safe.
 class WebPresenterAdapter {
 public:
-    void set_state(IHeatingStateStore* s)    { state_ = s; }
-    void set_log_reader(IEventLogReader* r)  { log_reader_ = r; }
-    void set_logger(ILogger* l)              { logger_ = l; }
-    void set_mod_stats(ModulationStatsService* m) { mod_stats_ = m; }
-    void set_burn_cycles(BurnCycleService* b)    { burn_cycles_ = b; }
-    void set_gas_flow(GasFlowService* g)         { gas_flow_ = g; }
-    void set_gas_correction(GasCorrectionInteractor* g) { gas_corr_ = g; }
+    /// Конструктор для production — все зависимости.
+    WebPresenterAdapter(IHeatingStateStore& state, IEventLogReader& log_reader,
+                        class ITimeSource& time,
+                        ModulationStatsService& mod_stats, BurnCycleService& burn_cycles,
+                        GasFlowService& gas_flow, GasCorrectionInteractor& gas_corr,
+                        uint32_t total_uptime_base);
+
+    /// Конструктор для тестов — дефолтные nullptr'ы.
+    WebPresenterAdapter() = default;
+
+    // Для тестов, где не нужны все зависимости
+    void set_state(IHeatingStateStore* s) { state_ = s; }
+    void set_logger(ILogger* l)           { logger_ = l; }
     void set_pid_quality(const PidQualityAssessor* q) { pid_quality_ = q; }
     void set_fopdt_estimator(const FopdtEstimator* e) { fopdt_ = e; }
-    void set_total_uptime_base(uint32_t sec)     { total_uptime_base_ = sec; }
-    void set_time_source(class ITimeSource* t)   { time_ = t; }
 
     /// Render status JSON into buf, returns length (excluding null terminator).
     int render_status(char* buf, size_t size);

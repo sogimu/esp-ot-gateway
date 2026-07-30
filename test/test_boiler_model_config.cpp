@@ -1,3 +1,5 @@
+#include "application/ports/driven/iheating_stats_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 /// Tests for boiler model config blob sizes, default values, validation and persistence.
 
 #include <catch2/catch_test_macros.hpp>
@@ -13,6 +15,30 @@
 using Catch::Approx;
 
 // ── Blob size checks ───────────────────────────────────────────
+
+struct FakeGasStore : IGasCorrectionStore {
+    FakeConfigurationStore* cfg = nullptr;
+    int boiler_config_saved_ = 0;
+
+    bool load_meter(IHeatingStateStore& s, void* blob) override {
+        return cfg ? cfg->load_meter(s, blob) : false;
+    }
+    void save_meter(const IHeatingStateStore& s, const void* blob) override {
+        if (cfg) cfg->save_meter(s, blob);
+    }
+    void save_integral(float v) override { if (cfg) cfg->save_integral(v); }
+    void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
+};
+
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
+};
 
 TEST_CASE("NvsCalibBlob size is 32", "[boiler_model]") {
     REQUIRE(sizeof(NvsCalibBlob) == 32);
@@ -66,8 +92,10 @@ struct TestLogger : public ILogger {
 TEST_CASE("gas_temp_offset clamps to [-20, +10]", "[boiler_model][validation]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     TestLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     // Set above max
     gas.set_gas_temp_offset(15.0f);
@@ -87,8 +115,10 @@ TEST_CASE("gas_temp_offset clamps to [-20, +10]", "[boiler_model][validation]") 
 TEST_CASE("ch_power validates pmin < pmax", "[boiler_model][validation]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     TestLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     // Set invalid: pmin >= pmax — should reset to defaults
     gas.set_ch_power(10.0f, 5.0f);
@@ -106,8 +136,10 @@ TEST_CASE("ch_power validates pmin < pmax", "[boiler_model][validation]") {
 TEST_CASE("dhw_power validates pmin < pmax", "[boiler_model][validation]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     TestLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     // Set invalid: pmin >= pmax — should reset to defaults
     gas.set_dhw_power(20.0f, 5.0f);
@@ -120,8 +152,10 @@ TEST_CASE("dhw_power validates pmin < pmax", "[boiler_model][validation]") {
 TEST_CASE("efficiency points validate t1 < t2 < t3", "[boiler_model][validation]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     TestLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     // Set invalid ordering: t1=50, t2=40 — should reset to defaults
     gas.set_efficiency_points(50.0f, 0.98f, 40.0f, 0.93f, 80.0f, 0.88f);
@@ -140,8 +174,10 @@ TEST_CASE("efficiency points validate t1 < t2 < t3", "[boiler_model][validation]
 TEST_CASE("efficiency points clamp T to [20, 90] and V to [0.80, 1.00]", "[boiler_model][validation]") {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
     TestLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+GasCorrectionInteractor gas(state, gas_store, log);
 
     // Set values outside range (ordering t1<t2<t3 holds after clamping)
     gas.set_efficiency_points(15.0f, 1.05f, 50.0f, 0.70f, 95.0f, 0.95f);

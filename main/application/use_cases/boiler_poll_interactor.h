@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 
 class IBoilerHardware;
 class IHeatingStateStore;
@@ -10,11 +10,11 @@ class ITimeSource;
 
 /// Full OpenTherm poll cycle: handshake → DHW hysteresis → status → extra_step → connectivity.
 /// Replaces OpenthermEndpoint::poll_cycle() when activated.
-class BoilerPollInteractor : public IPollable {
+class BoilerPollInteractor : public IControlTask {
 public:
     BoilerPollInteractor(IBoilerHardware& boiler, IHeatingStateStore& state, ILogger& log, ITimeSource& time);
 
-    void poll() override;
+    void execute() override;
 
     // Configuration setters (called from SystemConfigInteractor or HTTP)
     void set_ch_enable(bool en);

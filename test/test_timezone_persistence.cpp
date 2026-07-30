@@ -1,4 +1,5 @@
 /// Tests for timezone persistence via SystemConfigInteractor.
+#include "application/ports/driven/iboiler_config_store.h"
 /// Regression: json_get_int returned -1 for missing JSON key, and
 /// the guard v > -100 passed, calling set_timezone(-1) whenever
 /// /api/control was POSTed without a tz_offset field (e.g. every
@@ -26,19 +27,25 @@ struct FakeLogger : public ILogger {
     int event_count_ = 0;
 };
 
+struct FakeBoilerConfig : IBoilerConfigStore {
+    void load_boiler_config(IHeatingStateStore&) override {}
+    void save_boiler_config(const IHeatingStateStore&) override {}
+};
+
 TEST_CASE("Timezone: set_timezone(7) persists +7 to state and config store", "[tz]") {
     FakeHeatingStateStore state;
     FakeBoilerHardware boiler;
     FakeConfigurationStore config;
     FakeLogger log;
     FakeTimeSource time;
-    SystemConfigInteractor sys(state, boiler, config, log, time);
+    FakeBoilerConfig boiler_cfg; SystemConfigInteractor sys(state, boiler, config, boiler_cfg, log, time);
 
     sys.set_timezone(7);
 
     REQUIRE(state.get_tz_offset() == 7);
-    REQUIRE(config.save_config_called_ > 0);
+    REQUIRE(config.save_time_settings_called_ > 0);
 }
+
 
 TEST_CASE("Timezone: unrelated config change does not overwrite timezone", "[tz]") {
     FakeHeatingStateStore state;
@@ -46,7 +53,7 @@ TEST_CASE("Timezone: unrelated config change does not overwrite timezone", "[tz]
     FakeConfigurationStore config;
     FakeLogger log;
     FakeTimeSource time;
-    SystemConfigInteractor sys(state, boiler, config, log, time);
+    FakeBoilerConfig boiler_cfg; SystemConfigInteractor sys(state, boiler, config, boiler_cfg, log, time);
 
     sys.set_timezone(7);
     REQUIRE(state.get_tz_offset() == 7);
@@ -60,13 +67,14 @@ TEST_CASE("Timezone: unrelated config change does not overwrite timezone", "[tz]
     REQUIRE(state.get_tz_offset() == 7);
 }
 
+
 TEST_CASE("Timezone: valid range -12..+14 is accepted", "[tz]") {
     FakeHeatingStateStore state;
     FakeBoilerHardware boiler;
     FakeConfigurationStore config;
     FakeLogger log;
     FakeTimeSource time;
-    SystemConfigInteractor sys(state, boiler, config, log, time);
+    FakeBoilerConfig boiler_cfg; SystemConfigInteractor sys(state, boiler, config, boiler_cfg, log, time);
 
     sys.set_timezone(7);
     REQUIRE(state.get_tz_offset() == 7);

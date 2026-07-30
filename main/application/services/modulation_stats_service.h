@@ -1,9 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 
 class IHeatingStateStore;
+class IHeatingStatsStore;
 
 /// Tracks modulation histogram (100 bins, 1% resolution) — heap-allocated to
 /// avoid stack overflow.
@@ -20,7 +21,7 @@ class IHeatingStateStore;
 /// Accessors are called from HTTP task (reader). ESP32 word-aligned reads of
 /// uint32_t/float are atomic. hist_[] entries may lag 1-2 poll cycles behind
 /// samples_ counter — acceptable for dashboard display.
-class ModulationStatsService : public IPollable {
+class ModulationStatsService : public IControlTask {
 public:
     static constexpr int BINS = 100;
 
@@ -34,10 +35,10 @@ public:
     /// operation — recent enough to react to changes, wide enough to be stable.
     static constexpr uint32_t DECAY_THRESHOLD = 50000;
 
-    ModulationStatsService(IHeatingStateStore& state);
+    ModulationStatsService(IHeatingStateStore& state, IHeatingStatsStore& store);
     ~ModulationStatsService();
 
-    void poll() override;
+    void execute() override;
     void reset();
 
     uint32_t samples() const { return samples_; }
@@ -49,11 +50,12 @@ public:
     float p75() const;
     float p90() const;
     float p99() const;
-    uint32_t* samples_ptr() { return &samples_; }
-    uint32_t* hist_ptr() { return hist_; }
+    void load_from_store();
+    void fill_histogram(struct NvsHistBlob& blob) const;
 
 private:
-    IHeatingStateStore& state_;
+    IHeatingStateStore&  state_;
+    IHeatingStatsStore&  store_;
     uint32_t* hist_; // malloc'd
     uint32_t samples_ = 0;
     float percentile(float p) const;

@@ -1,17 +1,17 @@
 #pragma once
-#include "application/ports/driving/ipollable.h"
+#include "application/ports/driving/icontrol_task.h"
 #include "domain/value_objects/pid_quality_metrics.h"
 
 class IHeatingStateStore;
 class ITimeSource;
 
-class FopdtEstimator : public IPollable {
+class FopdtEstimator : public IControlTask {
 public:
     static constexpr int EVENT_RING_SIZE = 10;
 
     FopdtEstimator(IHeatingStateStore& state, ITimeSource& time);
 
-    void poll() override;
+    void execute() override;
     void reset();
 
     // Медианные оценки по последним событиям

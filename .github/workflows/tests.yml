@@ -127,7 +127,10 @@ jobs:
           mkdir -p site
           cp -r web-flasher/. site/
           mkdir -p site/firmware
-          RELEASES=$(gh release list --limit 50 --json tagName -q '.[].tagName')
+          # Полный JSON релизов нужен и для versions.json, и для цикла по тегам.
+          RELEASES_JSON=$(gh release list --limit 50 --json tagName,name,publishedAt,isPrerelease)
+          echo "$RELEASES_JSON" | jq '{versions:[.[]|{tag:.tagName,name:.name,published_at:.publishedAt,prerelease:.isPrerelease}]}' > site/versions.json
+          RELEASES=$(echo "$RELEASES_JSON" | jq -r '.[].tagName')
           for tag in $RELEASES; do
             DST="site/firmware/$tag"
             mkdir -p "$DST"
@@ -143,7 +146,7 @@ jobs:
             printf '  "builds": [{\n'
             printf '    "chipFamily": "ESP32",\n'
             printf '    "flashMode": "dio",\n'
-            printf '    "flashSize": "2MB",\n'
+            printf '    "flashSize": "4MB",\n'
             printf '    "flashFreq": "80m",\n'
             printf '    "parts": [\n'
             printf '      { "path": "bootloader.bin", "offset": 4096 },\n'

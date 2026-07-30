@@ -61,7 +61,7 @@ void PidPollInteractor::disable()
         log_.event(ILogger::MODE, "PID выключен");
 }
 
-void PidPollInteractor::poll()
+void PidPollInteractor::execute()
 {
     uint32_t now = static_cast<uint32_t>(time_.monotonic_ms());
     if (last_compute_ms_ == 0) last_compute_ms_ = now;

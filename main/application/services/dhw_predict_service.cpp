@@ -1,6 +1,6 @@
 #include "application/services/dhw_predict_service.h"
 #include "application/ports/driven/iheating_state_store.h"
-#include "application/ports/driven/iconfiguration_store.h"
+#include "application/ports/driven/ipredict_store.h"
 #include "application/ports/driven/itime_source.h"
 #include <cmath>
 #include <cstring>
@@ -19,8 +19,8 @@ static constexpr float MIN_RATE    = 0.002f;
 static constexpr float MIN_VAR     = 1e-6f;
 static constexpr float MIN_UNCERT  = 15.0f;
 
-DHWPredictService::DHWPredictService(IHeatingStateStore& state, IConfigurationStore& config, ITimeSource& time)
-    : state_(state), config_(config), time_(time)
+DHWPredictService::DHWPredictService(IHeatingStateStore& state, IPredictStore& store, ITimeSource& time)
+    : state_(state), store_(store), time_(time)
 {
     kalman_.reset(0, DEF_RATE_PRIOR);
 }
@@ -29,7 +29,7 @@ void DHWPredictService::load_history()
 {
     float rates[3] = {};
     int idx = 0, cnt = 0;
-    if (config_.load_predict(rates, idx, cnt)) {
+    if (store_.load_predict(rates, idx, cnt)) {
         memcpy(hist_rates_, rates, sizeof(float) * HIST_N);
         hist_idx_ = idx;
         hist_count_ = (cnt > HIST_N) ? HIST_N : cnt;
@@ -125,7 +125,7 @@ void DHWPredictService::finish_session(uint32_t duration_ms)
     if (hist_count_ < HIST_N) hist_count_++;
 
     // Persist to NVS
-    config_.save_predict(hist_rates_, hist_idx_, hist_count_);
+    store_.save_predict(hist_rates_, hist_idx_, hist_count_);
 
     session_active_ = false;
     state_.lock_exclusive();
@@ -171,7 +171,7 @@ void DHWPredictService::push_prediction()
 
 // ── Main poll ──────────────────────────────────────────────────
 
-void DHWPredictService::poll()
+void DHWPredictService::execute()
 {
     state_.lock_shared();
     bool flame      = state_.is_flame_on();

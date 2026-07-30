@@ -146,7 +146,7 @@ void PidQualityAssessor::recompute_scores()
     scores_.composite    = composite;
 }
 
-void PidQualityAssessor::poll()
+void PidQualityAssessor::execute()
 {
     poll_tick_++;
     if (poll_tick_ >= 55) {

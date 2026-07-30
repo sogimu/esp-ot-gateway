@@ -1,3 +1,5 @@
+#include "application/ports/driven/iheating_stats_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 /// Tests for ModulationStatsService (application/services/modulation_stats_service.h)
 /// Covers: flame-gated binning, percentile computation, histogram decay, reset.
 
@@ -15,12 +17,23 @@ static void poll_burning(ModulationStatsService& stats, FakeHeatingStateStore& s
 {
     state.set_flame(true);
     state.set_modulation(modulation);
-    for (int i = 0; i < times; i++) stats.poll();
+    for (int i = 0; i < times; i++) stats.execute();
 }
+
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
+};
 
 TEST_CASE("ModulationStats: initial state is empty", "[mod][app]") {
     FakeHeatingStateStore state;
-    ModulationStatsService stats(state);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     REQUIRE(stats.samples() == 0);
     REQUIRE(stats.p50() == Approx(0.0f));
@@ -29,12 +42,13 @@ TEST_CASE("ModulationStats: initial state is empty", "[mod][app]") {
 
 TEST_CASE("ModulationStats: flame gate — no sampling while burner off", "[mod][app][flame]") {
     FakeHeatingStateStore state;
-    ModulationStatsService stats(state);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // Burner off: modulation reads 0 but must NOT be recorded.
     state.set_flame(false);
     state.set_modulation(0.0f);
-    for (int i = 0; i < 1000; i++) stats.poll();
+    for (int i = 0; i < 1000; i++) stats.execute();
     REQUIRE(stats.samples() == 0);
 
     // Burner on: samples start accumulating.
@@ -44,14 +58,15 @@ TEST_CASE("ModulationStats: flame gate — no sampling while burner off", "[mod]
     // Burner turns off again: count frozen, idle does not dilute percentiles.
     state.set_flame(false);
     state.set_modulation(0.0f);
-    for (int i = 0; i < 1000; i++) stats.poll();
+    for (int i = 0; i < 1000; i++) stats.execute();
     REQUIRE(stats.samples() == 10);
     REQUIRE(stats.p50() == Approx(45.0f));
 }
 
 TEST_CASE("ModulationStats: single sample", "[mod][app]") {
     FakeHeatingStateStore state;
-    ModulationStatsService stats(state);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     poll_burning(stats, state, 45.0f, 1);
 
@@ -62,7 +77,8 @@ TEST_CASE("ModulationStats: single sample", "[mod][app]") {
 
 TEST_CASE("ModulationStats: percentiles with uniform distribution", "[mod][app]") {
     FakeHeatingStateStore state;
-    ModulationStatsService stats(state);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // Add 100 samples: 10@0%, 10@10%, ..., 10@90%
     for (int pct = 0; pct <= 90; pct += 10) {
@@ -90,7 +106,8 @@ TEST_CASE("ModulationStats: percentiles with uniform distribution", "[mod][app]"
 
 TEST_CASE("ModulationStats: all same value → all percentiles equal", "[mod][app]") {
     FakeHeatingStateStore state;
-    ModulationStatsService stats(state);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     poll_burning(stats, state, 35.0f, 1000);
 
@@ -102,7 +119,8 @@ TEST_CASE("ModulationStats: all same value → all percentiles equal", "[mod][ap
 
 TEST_CASE("ModulationStats: histogram bin clamping", "[mod][app]") {
     FakeHeatingStateStore state;
-    ModulationStatsService stats(state);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // Below 0% → clamped to bin 0
     poll_burning(stats, state, -5.0f, 1);
@@ -114,7 +132,8 @@ TEST_CASE("ModulationStats: histogram bin clamping", "[mod][app]") {
 
 TEST_CASE("ModulationStats: p1/p99 in skewed distribution", "[mod][app]") {
     FakeHeatingStateStore state;
-    ModulationStatsService stats(state);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // 990 samples at 30%, 10 samples at 90% (skewed right)
     poll_burning(stats, state, 30.0f, 990);
@@ -132,7 +151,8 @@ TEST_CASE("ModulationStats: p1/p99 in skewed distribution", "[mod][app]") {
 
 TEST_CASE("ModulationStats: decay bounds the sample count", "[mod][app][decay]") {
     FakeHeatingStateStore state;
-    ModulationStatsService stats(state);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
 
     // Feed well past the decay threshold at a single modulation value.
     const uint32_t N = ModulationStatsService::DECAY_THRESHOLD * 3 + 137;
@@ -144,7 +164,7 @@ TEST_CASE("ModulationStats: decay bounds the sample count", "[mod][app][decay]")
     REQUIRE(stats.samples() > ModulationStatsService::DECAY_THRESHOLD / 4);
 
     // A single bin can never overflow uint32_t — it is bounded by the threshold.
-    uint32_t* h = stats.hist_ptr();
+    const uint32_t* h = stats.hist();
     REQUIRE(h[42] == stats.samples());  // all mass in bin 42 (42.0%)
 
     // Distribution shape survives decay: every percentile still 42%.
@@ -154,7 +174,8 @@ TEST_CASE("ModulationStats: decay bounds the sample count", "[mod][app][decay]")
 
 TEST_CASE("ModulationStats: decay preserves distribution shape", "[mod][app][decay]") {
     FakeHeatingStateStore state;
-    ModulationStatsService stats(state);
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService stats(state, hss_mod);
     state.set_flame(true);
 
     // Stationary mix fed round-robin (as real interleaved operation would be),
@@ -163,9 +184,9 @@ TEST_CASE("ModulationStats: decay preserves distribution shape", "[mod][app][dec
     // *values* stay put even as counts shrink.
     const int rounds = static_cast<int>(ModulationStatsService::DECAY_THRESHOLD) / 10 * 30;
     for (int r = 0; r < rounds; r++) {
-        state.set_modulation(20.0f); for (int i = 0; i < 7; i++) stats.poll(); // 70%
-        state.set_modulation(40.0f); for (int i = 0; i < 2; i++) stats.poll(); // 20%
-        state.set_modulation(60.0f); stats.poll();                            // 10%
+        state.set_modulation(20.0f); for (int i = 0; i < 7; i++) stats.execute(); // 70%
+        state.set_modulation(40.0f); for (int i = 0; i < 2; i++) stats.execute(); // 20%
+        state.set_modulation(60.0f); stats.execute();                            // 10%
     }
 
     REQUIRE(stats.samples() < ModulationStatsService::DECAY_THRESHOLD);

@@ -1,6 +1,6 @@
 #include "application/use_cases/gas_correction_interactor.h"
 #include "application/ports/driven/iheating_state_store.h"
-#include "application/ports/driven/iconfiguration_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/services/gas_flow_estimator.h"
@@ -9,15 +9,16 @@
 #include <cmath>
 #include <cstring>
 
-GasCorrectionInteractor::GasCorrectionInteractor(IHeatingStateStore& state, IConfigurationStore& config, ILogger& log)
-    : state_(state), config_(config), log_(log)
+GasCorrectionInteractor::GasCorrectionInteractor(IHeatingStateStore& state, IGasCorrectionStore& store, ILogger& log,
+                                                   ITimeSource* time, GasFlowService* gas_flow)
+    : state_(state), store_(store), log_(log), time_(time), gas_flow_(gas_flow)
 {
     memset(&meter_blob_, 0, sizeof(meter_blob_));
 }
 
 void GasCorrectionInteractor::init()
 {
-    if (config_.load_meter(state_, &meter_blob_)) {
+    if (store_.load_meter(state_, &meter_blob_)) {
         log_.event(ILogger::SYSTEM, "Журнал сверки: %lu записей",
                    (unsigned long)meter_blob_.corrections_count);
     }
@@ -34,7 +35,7 @@ void GasCorrectionInteractor::set_k_calib(float v)
     state_.set_k_calib(v);
     state_.unlock_exclusive();
     if (gas_flow_) gas_flow_->set_k_calib(v);
-    config_.save_config(state_);
+    store_.save_boiler_config(state_);
     log_.event(ILogger::USER, "K_калиб: %.3f", (double)v);
 }
 
@@ -43,7 +44,7 @@ void GasCorrectionInteractor::set_p_max(float v)
     state_.lock_exclusive();
     state_.set_p_max(v);
     state_.unlock_exclusive();
-    config_.save_config(state_);
+    store_.save_boiler_config(state_);
 }
 
 void GasCorrectionInteractor::set_gas_calorific(float v)
@@ -51,7 +52,7 @@ void GasCorrectionInteractor::set_gas_calorific(float v)
     state_.lock_exclusive();
     state_.set_gas_calorific(v);
     state_.unlock_exclusive();
-    config_.save_config(state_);
+    store_.save_boiler_config(state_);
 }
 
 void GasCorrectionInteractor::set_gas_meter_base(float v)
@@ -61,7 +62,7 @@ void GasCorrectionInteractor::set_gas_meter_base(float v)
     state_.set_gas_meter_base(v);
     state_.unlock_exclusive();
     meter_blob_.base_reading = v;
-    config_.save_meter(state_, &meter_blob_);
+    store_.save_meter(state_, &meter_blob_);
     log_.event(ILogger::USER, "База счётчика: %.3f", (double)v);
 }
 
@@ -108,7 +109,7 @@ bool GasCorrectionInteractor::add_meter_correction(float reading)
     state_.set_k_calib(new_k);
     state_.unlock_exclusive();
     if (gas_flow_) gas_flow_->set_k_calib(new_k);
-    config_.save_config(state_);
+    store_.save_boiler_config(state_);
 
     // Add entry to correction log (ring buffer)
     int idx = meter_blob_.corrections_head;
@@ -130,20 +131,20 @@ bool GasCorrectionInteractor::add_meter_correction(float reading)
     meter_blob_.integral_at_last_correction = integral;
 
     // Persist
-    config_.save_meter(state_, &meter_blob_);
-    config_.save_config(state_);
+    store_.save_meter(state_, &meter_blob_);
+    store_.save_boiler_config(state_);
 
     // Sync: reset integral and set base to actual reading
     // so "Текущее расчётное" == "Показание счётчика" after correction
     if (gas_flow_) {
         gas_flow_->set_integral(0);
-        config_.save_integral(0);  // persist immediately so reboot doesn't restore old value
+        store_.save_integral(0);  // persist immediately so reboot doesn't restore old value
     }
     state_.lock_exclusive();
     state_.set_gas_meter_base(reading);
     state_.unlock_exclusive();
     meter_blob_.base_reading = reading;
-    config_.save_meter(state_, &meter_blob_);
+    store_.save_meter(state_, &meter_blob_);
 
     log_.event(ILogger::USER,
                "Сверка: K%.4f>%.4f откл=%.3f",
@@ -162,8 +163,8 @@ void GasCorrectionInteractor::reset_corrections()
     state_.unlock_exclusive();
     kalman_k_.reset(1.0f);
     if (gas_flow_) gas_flow_->set_k_calib(1.0f);
-    config_.save_meter(state_, &meter_blob_);
-    config_.save_config(state_);
+    store_.save_meter(state_, &meter_blob_);
+    store_.save_boiler_config(state_);
     log_.event(ILogger::USER, "Журнал сверки и K сброшены");
 }
 
@@ -174,7 +175,7 @@ void GasCorrectionInteractor::set_gas_temp_offset(float v)
     state_.lock_exclusive();
     state_.set_gas_temp_offset(v);
     state_.unlock_exclusive();
-    config_.save_config(state_);
+    store_.save_boiler_config(state_);
     log_.event(ILogger::USER, "Δt газа: %.1f °C", (double)v);
 }
 
@@ -189,7 +190,7 @@ void GasCorrectionInteractor::set_ch_power(float pmin, float pmax)
     state_.set_ch_pmin(pmin);
     state_.set_ch_pmax(pmax);
     state_.unlock_exclusive();
-    config_.save_config(state_);
+    store_.save_boiler_config(state_);
     log_.event(ILogger::USER, "CH мощность: %.1f–%.1f кВт (входная)",
                (double)pmin, (double)pmax);
 }
@@ -205,7 +206,7 @@ void GasCorrectionInteractor::set_dhw_power(float pmin, float pmax)
     state_.set_dhw_pmin(pmin);
     state_.set_dhw_pmax(pmax);
     state_.unlock_exclusive();
-    config_.save_config(state_);
+    store_.save_boiler_config(state_);
     log_.event(ILogger::USER, "ГВС мощность: %.1f–%.1f кВт", (double)pmin, (double)pmax);
 }
 
@@ -232,7 +233,7 @@ void GasCorrectionInteractor::set_efficiency_points(float t1, float v1,
     state_.set_eff_t2(t2); state_.set_eff_v2(v2);
     state_.set_eff_t3(t3); state_.set_eff_v3(v3);
     state_.unlock_exclusive();
-    config_.save_config(state_);
+    store_.save_boiler_config(state_);
     log_.event(ILogger::USER, "КПД точки: (%.0f,%.3f) (%.0f,%.3f) (%.0f,%.3f)",
                (double)t1, (double)v1, (double)t2, (double)v2, (double)t3, (double)v3);
 }

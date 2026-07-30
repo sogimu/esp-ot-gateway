@@ -14,7 +14,7 @@
 /// Run one poll cycle: configure state, call poll(), advance time.
 /// Constructor now initializes prev_ms_ from time_.monotonic_ms(),
 /// so the first poll() has a valid baseline — no priming needed.
-#define POLL_STEP()   do { est.poll(); time.advance_ms(1000); } while(0)
+#define POLL_STEP()   do { est.execute(); time.advance_ms(1000); } while(0)
 
 // ── Test 1: Full cycle IDLE → HEAT_UP → SETTLING → STEADY ──────────────────
 

@@ -117,7 +117,7 @@ void BoilerPollInteractor::trigger_fault_reset()
 // Main poll cycle
 // ================================================================
 
-void BoilerPollInteractor::poll()
+void BoilerPollInteractor::execute()
 {
     do_handshake();
     do_dhw_hysteresis();

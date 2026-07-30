@@ -1,6 +1,5 @@
 #pragma once
 
-#include "application/ports/driven/iconfiguration_store.h"
 #include <cstdint>
 #include <cstddef>
 
@@ -61,33 +60,3 @@ struct __attribute__((packed)) NvsPredictBlob { float rates[3]; int32_t idx, cou
 static_assert(sizeof(NvsPredictBlob) == 3 * 4 + 4 + 4, "NvsPredictBlob size mismatch");
 
 // ── CA NVS adapter (standalone, no MVC dependencies) ──────────
-
-class NvsConfigStore : public IConfigurationStore {
-public:
-    void init();   // nvs_flash_init
-
-    void load_all(IHeatingStateStore& state) override;
-    void save_config(const IHeatingStateStore& state) override;
-    void save_stats(const IHeatingStateStore&, uint32_t, float,
-                     const void*, const void*, const void*, const void*) override;
-    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override;
-    void save_meter(const IHeatingStateStore&, const void* blob = nullptr) override;
-    bool load_meter(IHeatingStateStore&, void* blob = nullptr) override;
-    void save_predict(const float[3], int, int) override;
-    bool load_predict(float[3], int&, int&) override;
-
-    void save_total_uptime(uint32_t total_uptime_sec) override;
-    bool load_total_uptime(uint32_t& total_uptime_sec) override;
-
-    void save_integral(float value) override;
-
-    bool save_eff(const IHeatingStateStore& state);
-    bool load_eff(IHeatingStateStore& state);
-
-    void save_burn_stats(uint32_t burner_sec, uint32_t total_pause_sec, uint32_t cycle_cnt,
-                         uint32_t inter_pause_sec, uint32_t inter_cnt,
-                         uint32_t mod_pause_sec, uint32_t mod_cnt) override;
-    bool load_burn_stats(uint32_t& burner_sec, uint32_t& total_pause_sec, uint32_t& cycle_cnt,
-                         uint32_t& inter_pause_sec, uint32_t& inter_cnt,
-                         uint32_t& mod_pause_sec, uint32_t& mod_cnt) override;
-};

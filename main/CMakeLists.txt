@@ -25,10 +25,21 @@ idf_component_register(
         "infrastructure/driven/boiler_opentherm_adapter.cpp"
         "infrastructure/driven/temperature_sensor_adapter.cpp"
         "infrastructure/driven/web_presenter_adapter.cpp"
-        "infrastructure/driven/nvs_config_store.cpp"
-        "infrastructure/driving/main_poller_task_adapter.cpp"
+        "infrastructure/driven/boiler_nvs_store.cpp"
+        "infrastructure/driven/gas_correction_nvs_store.cpp"
+        "infrastructure/driven/predict_nvs_store.cpp"
+        "infrastructure/driven/burn_stats_nvs_store.cpp"
+        "infrastructure/driven/heating_stats_nvs_store.cpp"
+        "infrastructure/driven/esp_ota_adapter.cpp"
+        "infrastructure/driven/ota_version_index_adapter.cpp"
+        "infrastructure/driven/ota_validity_adapter.cpp"
+        "infrastructure/driven/time_settings_nvs_store.cpp"
+        "infrastructure/driving/control_loop_task_adapter.cpp"
+        "infrastructure/driving/ota_interactor.cpp"
         "infrastructure/freertos/shared_mutex.c"
-        "application/use_cases/main_poller_interactor.cpp"
+        "application/use_cases/control_loop_interactor.cpp"
+        "application/use_cases/supervision_loop_interactor.cpp"
+        "application/use_cases/persistence_loop_interactor.cpp"
         "application/use_cases/boiler_poll_interactor.cpp"
         "application/use_cases/sensors_poll_interactor.cpp"
         "application/use_cases/pid_poll_interactor.cpp"
@@ -80,6 +91,9 @@ idf_component_register(
         log
         espcoredump
         mqtt
+        app_update
+        esp_https_ota
+        esp_http_client
     )
 
 # ── Firmware version compile definition ──

@@ -1,3 +1,5 @@
+#include "application/ports/driven/iheating_stats_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 /// Orchestration tests for gas meter correction:
 /// - READ PATH: init() restores correction log from NVS
 /// - SAVE PATH: add_meter_correction() computes delta, updates k_calib, persists log
@@ -37,6 +39,30 @@ struct GasCorrTestLogger : public ILogger {
 
 // ── Minimal debug: verify FakeLogger virtual dispatch works ─────────
 
+struct FakeGasStore : IGasCorrectionStore {
+    FakeConfigurationStore* cfg = nullptr;
+    int boiler_config_saved_ = 0;
+
+    bool load_meter(IHeatingStateStore& s, void* blob) override {
+        return cfg ? cfg->load_meter(s, blob) : false;
+    }
+    void save_meter(const IHeatingStateStore& s, const void* blob) override {
+        if (cfg) cfg->save_meter(s, blob);
+    }
+    void save_integral(float v) override { if (cfg) cfg->save_integral(v); }
+    void save_boiler_config(const IHeatingStateStore&) override { boiler_config_saved_++; }
+};
+
+struct FakeHeatingStatsStore : IHeatingStatsStore {
+    void save_stats(const IHeatingStateStore&, uint32_t, float, const void*, const void*, const void*, const void*) override {}
+    bool load_stats(uint32_t&, float&, void*, void*, void*, void*) override { return false; }
+    void save_total_uptime(uint32_t) override {}
+    bool load_total_uptime(uint32_t&) override { return false; }
+    void save_integral(float) override {}
+    void save_meter(const IHeatingStateStore&, const void*) override {}
+    bool load_meter(IHeatingStateStore&, void*) override { return false; }
+};
+
 TEST_CASE("FakeLogger: direct virtual call via ILogger& works", "[debug]") {
     GasCorrTestLogger log;
     REQUIRE(log.event_count_ == 0);
@@ -56,8 +82,10 @@ TEST_CASE("GasCorrection: init loads correction log from store", "[gas][orchestr
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, nullptr);
 
     // Prepare saved correction log in fake store
     NvsMeterBlob saved;
@@ -100,8 +128,10 @@ TEST_CASE("GasCorrection: init with empty store does not crash", "[gas][orchestr
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
-    GasCorrectionInteractor gas(state, config, log);
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, nullptr);
 
     // No set_meter_load → load_meter returns false
 
@@ -117,12 +147,14 @@ TEST_CASE("GasCorrection: load_meter with blob=nullptr still works", "[gas][orch
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
 
     // load_meter called without blob (backward compat)
     config.set_meter_load(333.0f, nullptr);
 
-    GasCorrectionInteractor gas(state, config, log);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, nullptr);
     gas.init();
 
     // State should have base_reading restored (load_meter sets it)
@@ -135,18 +167,19 @@ TEST_CASE("GasCorrection: add_meter_correction persists to store", "[gas][orches
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f); // so estimated = 100 + 50 = 150
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     // SAVE PATH: user enters reading=155, clicks "Сверить"
     gas.add_meter_correction(155.0f);
 
@@ -158,7 +191,7 @@ TEST_CASE("GasCorrection: add_meter_correction persists to store", "[gas][orches
     //   Kalman1D(init=1.0, Q=0.02, R=1.0): P=1.02, K≈0.505, filtered≈1.0505
 
     REQUIRE(config.meter_save_called_ == true);
-    REQUIRE(config.save_config_called_ > 0); // k_calib change saved
+    REQUIRE(gas_store.boiler_config_saved_ > 0); // k_calib change saved
 
     // Verify saved blob
     // base updated to actual reading (155.0) after correction
@@ -185,9 +218,11 @@ TEST_CASE("GasCorrection: add_meter_correction without gas_flow logs error", "[g
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
 
-    GasCorrectionInteractor gas(state, config, log);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, nullptr);
     // gas_flow NOT set
 
     gas.add_meter_correction(100.0f);
@@ -201,14 +236,15 @@ TEST_CASE("GasCorrection: add_meter_correction with near-zero estimated aborts",
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     // base=0, integral=0 → actual_consumed=0 → < 0.01 threshold
-    GasFlowService gas_flow_svc(state, time);
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     bool ok = gas.add_meter_correction(0.005f);  // actual_consumed = 0.005 < 0.01
 
     REQUIRE(ok == false);
@@ -221,15 +257,16 @@ TEST_CASE("GasCorrection: rejects when actual_consumed < 0.01", "[gas][orchestra
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_gas_meter_base(100.0f);
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.1f);  // integral > 0 but actual_consumed too small
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     bool ok = gas.add_meter_correction(100.005f);  // actual_consumed = 0.005 < 0.01
 
     REQUIRE(ok == false);
@@ -241,15 +278,16 @@ TEST_CASE("GasCorrection: rejects when integral < 10% of actual", "[gas][orchest
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_gas_meter_base(100.0f);
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.002f);  // integral only 4% of actual_consumed
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     bool ok = gas.add_meter_correction(100.050f);  // actual=0.05, integral=0.002 (< 10%)
 
     REQUIRE(ok == false);
@@ -261,17 +299,18 @@ TEST_CASE("GasCorrection: successful correction returns true", "[gas][orchestrat
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_gas_meter_base(100.0f);
     state.set_gas_calorific(9.5f);
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.5f);  // integral = actual (100% of consumption)
     gas_flow_svc.set_k_calib(1.0f);
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-    gas.set_time_source(&time);
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     gas.init();
 
     bool ok = gas.add_meter_correction(100.5f);  // actual=0.5, integral=0.5 (100%)
@@ -286,16 +325,17 @@ TEST_CASE("GasCorrection: multiple corrections build history", "[gas][orchestrat
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(200.0f);
 
-    GasFlowService gas_flow_svc(state, time);
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     // Correction 1: integral=100, estimated=300, actual=310, diff=+10
     gas_flow_svc.set_integral(100.0f);
     gas.add_meter_correction(310.0f);
@@ -324,16 +364,17 @@ TEST_CASE("GasCorrection: ring buffer wraps at CORRECTION_LOG_SIZE", "[gas][orch
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     // Fill up to CORRECTION_LOG_SIZE with distinct readings
     // Start from i=1 — integral must be >= 0.001 for correction to be accepted
     const int N = CORRECTION_LOG_SIZE;
@@ -362,9 +403,11 @@ TEST_CASE("GasCorrection: set_gas_meter_base saves meter blob", "[gas][orchestra
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
 
-    GasCorrectionInteractor gas(state, config, log);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, nullptr);
 
     // Set base reading — should call save_meter with blob
     gas.set_gas_meter_base(500.0f);
@@ -380,18 +423,19 @@ TEST_CASE("GasCorrection: new_k_calib is clamped to [0.1, 10.0]", "[gas][orchest
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(10.0f); // at upper limit
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(900.0f); // estimated=1000
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     // actual reading = 100000 (way above estimate) → k would go >10
     gas.add_meter_correction(100000.0f);
 
@@ -404,18 +448,19 @@ TEST_CASE("GasCorrection: add_meter_correction at lower k_calib boundary", "[gas
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(0.1f); // at lower limit
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(100.0f); // estimated=200
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     // actual = 1 (way below estimate) → k * (1/200) = 0.1*0.005 → <0.1 → clamped to 0.1
     gas.add_meter_correction(1.0f);
 
@@ -428,10 +473,12 @@ TEST_CASE("GasCorrection: init preserves empty blob when load fails", "[gas][orc
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
 
     // load_meter returns false (nothing saved)
-    GasCorrectionInteractor gas(state, config, log);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, nullptr);
     gas.init();
 
     const NvsMeterBlob& blob = gas.meter_blob();
@@ -451,18 +498,19 @@ TEST_CASE("GasCorrection: periodic save_meter without blob preserves corrections
 
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(200.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f);
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     // User presses "Сверить" — correction is saved WITH blob
     gas.add_meter_correction(260.0f);
     REQUIRE(config.meter_save_called_ == true);
@@ -489,18 +537,19 @@ TEST_CASE("GasCorrection: periodic save WITH blob preserves full correction log"
 
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(300.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(100.0f);
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     // Two corrections
     gas.add_meter_correction(410.0f);
     gas_flow_svc.set_integral(200.0f);
@@ -531,10 +580,13 @@ TEST_CASE("GasCorrection: set_gas_meter_base survives simulated reboot", "[gas][
     // This test verifies the save/load round-trip.
 
     FakeHeatingStateStore state1;
-    FakeConfigurationStore config1;  // "NVS before reboot"
+    FakeConfigurationStore config1;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config1;
+// "NVS before reboot"
     GasCorrTestLogger log1;
 
-    GasCorrectionInteractor gas1(state1, config1, log1);
+    GasCorrectionInteractor gas1(state1, gas_store, log1);
     gas1.set_gas_meter_base(777.0f);
 
     REQUIRE(config1.saved_meter_blob_.base_reading == Approx(777.0f));
@@ -542,13 +594,14 @@ TEST_CASE("GasCorrection: set_gas_meter_base survives simulated reboot", "[gas][
     // Simulate reboot: fresh state, fresh config store
     FakeHeatingStateStore state2;
     FakeConfigurationStore config2;
-    GasCorrTestLogger log2;
+GasCorrTestLogger log2;
 
     // Set up what load_meter would return after reboot
     config2.set_meter_load(config1.saved_meter_blob_.base_reading,
                            &config1.saved_meter_blob_);
 
-    GasCorrectionInteractor gas2(state2, config2, log2);
+    GasCorrectionInteractor gas2(state2, gas_store, log2);
+    gas_store.cfg = &config2;  // переключить делегат на свежий конфиг
     gas2.init();
 
     // base_reading must survive reboot
@@ -563,10 +616,13 @@ TEST_CASE("GasCorrection: load_meter returns false on empty NVS — graceful def
     // System must not crash.
 
     FakeHeatingStateStore state;
-    FakeConfigurationStore config;  // no set_meter_load → returns false
+    FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+// no set_meter_load → returns false
     GasCorrTestLogger log;
 
-    GasCorrectionInteractor gas(state, config, log);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, nullptr);
     gas.init();
 
     // Default is 0 — expected for first boot
@@ -581,18 +637,19 @@ TEST_CASE("GasCorrection: after correction base equals reading and integral is z
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f); // estimated = 100 + 50 = 150
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     // User enters reading=155
     gas.add_meter_correction(155.0f);
 
@@ -607,18 +664,19 @@ TEST_CASE("GasCorrection: correction with zero integral is rejected", "[gas][cor
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(200.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(0.0f); // нет потребления с момента последней коррекции
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     gas.add_meter_correction(200.0f);
 
     // Коррекция должна быть отклонена — нет потребления
@@ -637,18 +695,19 @@ TEST_CASE("GasCorrection: reset_corrections clears log and resets k_calib to 1.0
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     state.set_k_calib(0.85f); // нестандартный K
     state.set_gas_meter_base(300.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(100.0f);
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     // Добавляем пару коррекций
     gas.add_meter_correction(410.0f);   // base=300, integral=100 → actual=110, integral=100 → OK
     gas_flow_svc.set_integral(50.0f);
@@ -675,12 +734,14 @@ TEST_CASE("GasCorrection: reset_corrections on empty log works without crash", "
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(500.0f);
 
-    GasCorrectionInteractor gas(state, config, log);
+    GasCorrectionInteractor gas(state, gas_store, log, nullptr, nullptr);
 
     REQUIRE(gas.meter_blob().corrections_count == 0);
     REQUIRE_NOTHROW(gas.reset_corrections());
@@ -694,7 +755,9 @@ TEST_CASE("GasCorrection: correction timestamp includes date from ITimeSource", 
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource time;
 
     // Set a known Unix timestamp: 2026-06-12 15:30:45 UTC
@@ -706,13 +769,11 @@ TEST_CASE("GasCorrection: correction timestamp includes date from ITimeSource", 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, time, hss);
     gas_flow_svc.set_integral(50.0f);
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-    gas.set_time_source(&time);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
     gas.add_meter_correction(155.0f);
 
     REQUIRE(config.saved_meter_blob_.corrections_count == 1);
@@ -742,18 +803,19 @@ TEST_CASE("GasCorrection: correction persists integral reset to NVS", "[gas][reg
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource fake_time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(100.0f);
 
-    GasFlowService gas_flow_svc(state, fake_time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, fake_time, hss);
     gas_flow_svc.set_integral(50.0f); // was 50 m³ accumulated
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &fake_time, &gas_flow_svc);
     // Record correction
     gas.add_meter_correction(160.0f);
 
@@ -770,19 +832,19 @@ TEST_CASE("GasCorrection: timestamp from ITimeSource is non-decreasing", "[gas][
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource fake_time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(200.0f);
 
-    GasFlowService gas_flow_svc(state, fake_time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, fake_time, hss);
     gas_flow_svc.set_integral(10.0f);
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-    gas.set_time_source(&fake_time);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &fake_time, &gas_flow_svc);
     fake_time.set_us(1782000000000000ULL);
     gas.add_meter_correction(210.0f);
     uint32_t ts1 = config.saved_meter_blob_.corrections[0].timestamp;
@@ -803,19 +865,19 @@ TEST_CASE("GasCorrection: timestamp uses wall-clock time from ITimeSource", "[ga
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
-    GasCorrTestLogger log;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+GasCorrTestLogger log;
     FakeTimeSource fake_time;
 
     state.set_k_calib(1.0f);
     state.set_gas_meter_base(300.0f);
 
-    GasFlowService gas_flow_svc(state, fake_time);
+    FakeHeatingStatsStore hss;
+    GasFlowService gas_flow_svc(state, fake_time, hss);
     gas_flow_svc.set_integral(10.0f);
 
-    GasCorrectionInteractor gas(state, config, log);
-    gas.set_gas_flow(&gas_flow_svc);
-    gas.set_time_source(&fake_time);
-
+    GasCorrectionInteractor gas(state, gas_store, log, &fake_time, &gas_flow_svc);
     // Set fake time to a known Unix timestamp (~2026-06-12)
     fake_time.set_us(1782000000000000ULL);
     gas.add_meter_correction(310.0f);
