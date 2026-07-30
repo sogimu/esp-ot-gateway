@@ -1,5 +1,10 @@
 #include "application/use_cases/control_loop_interactor.h"
 
+ControlLoopInteractor::ControlLoopInteractor()
+{
+    tasks_.reserve(16);  // пред-аллокация — без повторных realloc
+}
+
 bool ControlLoopInteractor::add(IControlTask* p)
 {
     tasks_.push_back(p);

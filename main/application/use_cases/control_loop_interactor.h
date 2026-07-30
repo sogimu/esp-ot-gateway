@@ -8,6 +8,8 @@
 /// Called from ControlLoopTaskAdapter every ~1.1 s.
 class ControlLoopInteractor : public IControlLoop {
 public:
+    ControlLoopInteractor();
+
     /// Register a new control task. Always succeeds.
     bool add(IControlTask* p);
 
