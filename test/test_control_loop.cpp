@@ -118,16 +118,18 @@ TEST_CASE("MainPoller: up to 8 pollables works", "[poller][app]") {
     }
 }
 
-TEST_CASE("ControlLoop: add returns false when full", "[poller][app]") {
+TEST_CASE("ControlLoop: unlimited add — vector-based", "[poller][app]") {
     ControlLoopInteractor poller;
-    SpyPollable spies[15];
+    SpyPollable spies[20];
 
-    // Fill all MAX_POLLABLE (12) slots
-    for (int i = 0; i < ControlLoopInteractor::MAX_POLLABLE; i++) {
+    for (int i = 0; i < 20; i++) {
+        spies[i].reset();
         REQUIRE(poller.add(&spies[i]) == true);
     }
 
-    // 13th should fail
-    REQUIRE(poller.add(&spies[12]) == false);
-    REQUIRE(poller.add(&spies[13]) == false);
+    poller.run_once();
+
+    for (int i = 0; i < 20; i++) {
+        REQUIRE(spies[i].call_count_ == 1);
+    }
 }
