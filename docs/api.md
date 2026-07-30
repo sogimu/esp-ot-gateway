@@ -22,6 +22,10 @@
 | POST | `/api/gas/…` `TODO(verify)` | Действия сверки счётчика (см. ниже) |
 | GET | `/api/mqtt/status` | Состояние MQTT-подключения |
 | GET/POST | `/api/mqtt/settings` | Настройки брокера |
+| GET | `/api/ota/status` | Состояние OTA: слот, версия, прогресс, pending |
+| GET | `/api/ota/versions` | Список доступных версий из каталога на GitHub Pages |
+| POST | `/api/ota/start` | Начать OTA-обновление до указанного тега `{"tag":"v0.6.0"}` |
+| POST | `/api/ota/rollback` | Ручной откат на предыдущий OTA-слот |
 
 ## `GET /api/status`
 
@@ -175,6 +179,39 @@ curl -s -X POST http://192.168.0.37/api/mqtt/settings \
 ```
 
 Настройки соответствуют вкладке MQTT: главный выключатель, сервер, порт, логин, пароль, префикс топиков, интервал статуса (с), интервал статистики (с), переключатель TLS. Справочник топиков и детали Home Assistant: [mqtt.md](mqtt.md).
+
+## OTA — обновление по воздуху (с v0.6.0)
+
+Прошивка использует A/B-схему с двумя OTA-слотами (`ota_0`, `ota_1`). После загрузки нового образа устройство перезагружается, и прошивка должна подтвердить валидность в течение 90 секунд (HTTP-сервер поднят + главный цикл тикает). Если здоровье не подтверждено — bootloader откатывает на предыдущий слот.
+
+```bash
+# Состояние OTA
+curl -s http://192.168.0.37/api/ota/status | jq
+# → {"state":"idle","progress":0,"current_version":"v0.6.0","target_tag":"","rollback_pending":false,"last_error":""}
+
+# Список доступных версий (из versions.json на GitHub Pages)
+curl -s http://192.168.0.37/api/ota/versions | jq
+
+# Начать обновление
+curl -s -X POST http://192.168.0.37/api/ota/start \
+  -H 'Content-Type: application/json' -d '{"tag":"v0.6.0"}'
+# → {"ok":true}
+
+# Ручной откат на предыдущий слот (ребут, ответ приходит до перезагрузки)
+curl -s -X POST http://192.168.0.37/api/ota/rollback
+# → {"ok":true}
+```
+
+| Поле `/api/ota/status` | Тип | Описание |
+|---|---|---|
+| `state` | `idle`/`fetching`/`writing`/`verify_pending`/`done`/`error` | Текущее состояние |
+| `progress` | 0–100 | Процент загрузки образа |
+| `current_version` | строка | Версия, работающая в текущем слоте |
+| `target_tag` | строка | Тег версии, на которую идёт обновление |
+| `rollback_pending` | bool | Образ ожидает подтверждения валидности |
+| `last_error` | строка | Последняя ошибка OTA |
+
+Подробный план тестирования: **[ota-testing.md](ota-testing.md)**.
 
 ## Соглашения
 
