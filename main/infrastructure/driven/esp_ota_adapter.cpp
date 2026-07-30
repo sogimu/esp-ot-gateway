@@ -5,6 +5,8 @@
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include <cstdio>
 #include <cstdarg>
@@ -12,7 +14,6 @@
 
 static const char* TAG = "esp_ota";
 
-// Базовый URL каталога прошивок на GitHub Pages.
 static constexpr const char* FIRMWARE_BASE_URL =
     "https://sogimu.github.io/esp-ot-gateway/firmware/";
 
@@ -56,7 +57,6 @@ bool EspOtaAdapter::download(const char* tag)
         return false;
     }
 
-    // Собираем URL: <BASE>/<tag>/esp-ot-gateway.bin
     char url[192];
     int n = snprintf(url, sizeof(url), "%s%s/esp-ot-gateway.bin",
                      FIRMWARE_BASE_URL, tag);
@@ -68,17 +68,13 @@ bool EspOtaAdapter::download(const char* tag)
 
     ESP_LOGI(TAG, "OTA: загрузка %s (тег %s)", url, tag);
 
-    // Конфигурация HTTP-клиента: сертификат сервера проверяется через
-    // встроенный crt_bundle (cert_pem = NULL), таймаут 20 сек, keep-alive,
-    // приёмный и передающий буферы по 1 КБ.
     esp_http_client_config_t http_cfg = {};
-    http_cfg.url                = url;
-    http_cfg.cert_pem           = nullptr;
-    http_cfg.crt_bundle_attach  = esp_crt_bundle_attach;
-    http_cfg.timeout_ms         = 20000;
-    http_cfg.keep_alive_enable  = true;
-    http_cfg.buffer_size        = 1024;
-    http_cfg.buffer_size_tx     = 1024;
+    http_cfg.url               = url;
+    http_cfg.crt_bundle_attach = esp_crt_bundle_attach;
+    http_cfg.timeout_ms        = 30000;
+    http_cfg.keep_alive_enable = true;
+    http_cfg.buffer_size       = 1024;
+    http_cfg.buffer_size_tx    = 1024;
 
     esp_https_ota_config_t ota_cfg = {};
     ota_cfg.http_config = &http_cfg;
@@ -86,7 +82,6 @@ bool EspOtaAdapter::download(const char* tag)
     esp_https_ota_handle_t h = nullptr;
     state_ = State::DOWNLOADING;
 
-    // begin: подготавливает неактивный слот и открывает HTTPS-соединение.
     esp_err_t err = esp_https_ota_begin(&ota_cfg, &h);
     if (err != ESP_OK) {
         set_last_error("begin: 0x%x", (unsigned)err);
@@ -95,23 +90,13 @@ bool EspOtaAdapter::download(const char* tag)
         return false;
     }
 
-    // Полный размер образа (Content-Length) — для расчёта процентов.
-    // esp_https_ota_get_image_size доступен в ESP-IDF v5.3.2.
     int image_size = esp_https_ota_get_image_size(h);
 
-    // Основной цикл: выкачиваем и пишем порциями, пока весь образ не получен.
-    // Внимание: esp_https_ota_perform возвращает ESP_ERR_HTTPS_OTA_IN_PROGRESS
-    // на каждой промежуточной порции (это норма) и ESP_OK — по завершении.
-    // Поэтому прерываем цикл только по настоящим ошибкам.
-    while (!esp_https_ota_is_complete_data_received(h)) {
+    // IDF-стандартный цикл: perform возвращает ESP_ERR_HTTPS_OTA_IN_PROGRESS
+    // пока есть данные, и ESP_OK когда всё скачано и записано во flash.
+    while (1) {
         err = esp_https_ota_perform(h);
-        if (err != ESP_OK && err != ESP_ERR_HTTPS_OTA_IN_PROGRESS) {
-            set_last_error("perform: 0x%x", (unsigned)err);
-            ESP_LOGE(TAG, "esp_https_ota_perform: 0x%x", (unsigned)err);
-            esp_https_ota_abort(h);
-            state_ = State::FAILED;
-            return false;
-        }
+        if (err != ESP_ERR_HTTPS_OTA_IN_PROGRESS) break;
 
         int read = esp_https_ota_get_image_len_read(h);
         if (image_size > 0) {
@@ -119,22 +104,23 @@ bool EspOtaAdapter::download(const char* tag)
             if (pct > 100) pct = 100;
             if (pct < 0)   pct = 0;
             progress_pct_ = pct;
-        } else {
-            // Размер неизвестен — проценты не определены. Не пишем сырые байты
-            // в progress_pct_ (иначе UI может показать «150000%»); оставляем 0.
-            progress_pct_ = 0;
         }
     }
 
-    // finish: проверяет образ и сам вызывает esp_ota_set_boot_partition(),
-    // переводя устройство на новый слот (состояние PENDING_VERIFY).
+    if (err != ESP_OK) {
+        set_last_error("perform: 0x%x", (unsigned)err);
+        ESP_LOGE(TAG, "esp_https_ota_perform: 0x%x", (unsigned)err);
+        esp_https_ota_abort(h);
+        state_ = State::FAILED;
+        return false;
+    }
+
     err = esp_https_ota_finish(h);
     if (err != ESP_OK) {
-        if (err == ESP_ERR_OTA_VALIDATE_FAILED) {
+        if (err == ESP_ERR_OTA_VALIDATE_FAILED)
             set_last_error("finish: образ повреждён (validate)");
-        } else {
+        else
             set_last_error("finish: 0x%x", (unsigned)err);
-        }
         ESP_LOGE(TAG, "esp_https_ota_finish: 0x%x", (unsigned)err);
         state_ = State::FAILED;
         return false;
@@ -143,6 +129,5 @@ bool EspOtaAdapter::download(const char* tag)
     progress_pct_ = 100;
     state_ = State::DONE;
     ESP_LOGI(TAG, "OTA: образ записан, ожидает mark_valid (PENDING_VERIFY)");
-    // esp_restart() НЕ вызываем — это делает вызывающий слой после flush stats.
     return true;
 }

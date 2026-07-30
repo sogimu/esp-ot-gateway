@@ -23,6 +23,9 @@ public:
     explicit EventLogAdapter(class ITimeSource* time = nullptr);
     ~EventLogAdapter();
 
+    /// Установить источник времени (вызывается после создания SntpTimeAdapter).
+    void set_time_source(class ITimeSource* time) { time_ = time; }
+
     void event(Category cat, const char* fmt, ...) override;
 
     /// Register a callback for live event streaming (MQTT journal).

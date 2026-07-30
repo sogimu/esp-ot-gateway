@@ -77,7 +77,7 @@ char* OtaVersionIndexAdapter::fetch_versions()
     while (true) {
         int n = esp_http_client_read(client, chunk, sizeof(chunk));
         if (n == -ESP_ERR_HTTP_EAGAIN) {
-            // Транзитный случай в неблокирующем режиме; повторяем попытку
+            // Временный сбой в неблокирующем режиме; повторяем попытку
             // чтения (ограничено общим таймаутом клиента).
             continue;
         }

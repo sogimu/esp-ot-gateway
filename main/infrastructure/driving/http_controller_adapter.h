@@ -20,7 +20,7 @@ public:
                           IWifiManager& wifi, SntpTimeAdapter& time,
                           IMqttConfigurator& mqtt);
     ~HttpControllerAdapter();
-    void start();
+    bool start();
     void stop();
 
     void set_ota(IOtaManager* o) { ota_ = o; }  // после http.start()

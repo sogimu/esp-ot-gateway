@@ -35,7 +35,7 @@ HttpControllerAdapter::HttpControllerAdapter(WebPresenterAdapter& presenter,
 { s_self = this; }
 HttpControllerAdapter::~HttpControllerAdapter() { stop(); s_self = nullptr; }
 
-void HttpControllerAdapter::start()
+bool HttpControllerAdapter::start()
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.max_uri_handlers    = 35;
@@ -47,7 +47,7 @@ void HttpControllerAdapter::start()
 
     if (httpd_start(&server_, &config) != ESP_OK) {
         ESP_LOGE(TAG, "Ошибка запуска HTTP сервера");
-        return;
+        return false;
     }
     static const httpd_uri_t routes[] = {
         { .uri = "/",                  .method = HTTP_GET,  .handler = handler_root,          .user_ctx = NULL },
@@ -100,6 +100,7 @@ void HttpControllerAdapter::start()
     for (int i = 0; i < route_count; i++)
         httpd_register_uri_handler(server_, &routes[i]);
     ESP_LOGI(TAG, "HTTP сервер запущен на порту %d", config.server_port);
+    return true;
 }
 void HttpControllerAdapter::stop() { if (server_) { httpd_stop(server_); server_ = nullptr; } }
 

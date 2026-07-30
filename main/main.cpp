@@ -73,6 +73,7 @@ static void ota_flush_and_reboot(BurnCycleService& burn_cycle_service,
                                   uint32_t& total_uptime_base_sec,
                                   SntpTimeAdapter& ca_time)
 {
+    OtaValidityAdapter::set_flushing_global(true);
     burn_cycle_service.save_to_store();
     NvsHistBlob hb; memset(&hb, 0, sizeof(hb));
     mod_stats.fill_histogram(hb);
@@ -117,7 +118,7 @@ extern "C" void app_main(void)
     ota_validity.set_crash_flag(crash_diag.last_boot_had_crash());
 
 
-    ca_log.event(ILogger::SYSTEM, "Система запущена");
+    ca_log.event(ILogger::SYSTEM, "Система запущена (%s)", FIRMWARE_VERSION);
 
     // ── Phase 2: Driven adapters ────────────────────────
     HeatingStateAdapter      ca_state(stores.time, stores.boiler);
@@ -136,6 +137,7 @@ extern "C" void app_main(void)
     // SNTP + manual time
     SntpTimeAdapter ca_time(ca_state.get_tz_offset(),
                              wifi_mode == IWifiManager::Mode::STA, &ca_log);
+    ca_log.set_time_source(&ca_time);  // EventLog теперь знает источник времени
 
     // ── Phase 4: Use cases ───────────────────────────────
     BoilerPollInteractor  boiler_poll(ca_boiler, ca_state, ca_log, ca_time);
@@ -213,7 +215,7 @@ extern "C" void app_main(void)
     auto ota_now_ms = [&]() { return ca_time.monotonic_us() / 1000; };
     auto ota_spawn  = [](OtaInteractor* self) -> bool {
         return xTaskCreate([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); },
-                           "ota_dl", 12*1024, self, 3, nullptr) == pdPASS;
+                           "ota_dl", 16*1024, self, 3, nullptr) == pdPASS;
     };
     auto ota_reboot = [&]() { ota_flush_and_reboot(burn_cycle_service, mod_stats,
         stores.heating_stats, ca_state, gas_flow, gas_corr, total_uptime_base_sec, ca_time); };
@@ -230,10 +232,10 @@ extern "C" void app_main(void)
                                wifi, ca_time, mqtt);
 
     // ── OTA: взведение валидации (HTTP поднят) ────────────
-    ota_validity.set_http_server_up(true);
-    ota_validity.arm();
     http.set_ota(&ota);
-    http.start();
+    const bool http_ok = http.start();
+    ota_validity.set_http_server_up(http_ok);
+    ota_validity.arm();
 
     // ── Supervision + Persistence ──────────────────────────
     SupervisionLoopInteractor  supervision(ota_validity, ca_log, http, wifi, ca_time);

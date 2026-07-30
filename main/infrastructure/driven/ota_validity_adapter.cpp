@@ -4,7 +4,8 @@ static const char* TAG = "ota_valid";
 
 // Единственный экземпляр адаптера для глобального доступа из других слоёв
 // (NVS-заморозка D9/D10 через is_pending_global()).
-OtaValidityAdapter* OtaValidityAdapter::instance_ = nullptr;
+OtaValidityAdapter*    OtaValidityAdapter::instance_  = nullptr;
+std::atomic<bool>      OtaValidityAdapter::flushing_{false};
 
 OtaValidityAdapter::OtaValidityAdapter()
 {
@@ -96,12 +97,27 @@ void OtaValidityAdapter::mark_valid()
 void OtaValidityAdapter::rollback_and_reboot(const char* reason)
 {
     ESP_LOGE(TAG, "ОТКАТ прошивки: %s", reason);
-    // esp_ota_mark_app_invalid_rollback_and_reboot() помечает партицию invalid
-    // и перезагружает — при следующей загрузке bootloader уходит в прошлый слот.
-    esp_ota_mark_app_invalid_rollback_and_reboot();
-    // Подстраховка: функция выше перезагружает и не возвращает управление,
-    // но если по какой-то причине вернула — явная перезагрузка (партиция уже
-    // помечена invalid, так что bootloader откатится).
+    esp_err_t err = esp_ota_mark_app_invalid_rollback_and_reboot();
+    // Успех → перезагрузка внутри, сюда не доходим. Ошибка → партиция уже
+    // VALID (не PENDING_VERIFY). Находим другой OTA-слот через итератор.
+    ESP_LOGW(TAG, "mark_invalid_rollback вернул %s — поиск слота для отката",
+             esp_err_to_name(err));
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    const esp_partition_t* other = nullptr;
+    esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_APP,
+                                                      ESP_PARTITION_SUBTYPE_ANY, nullptr);
+    while (it != nullptr) {
+        const esp_partition_t* p = esp_partition_get(it);
+        if (p != running) { other = p; break; }
+        it = esp_partition_next(it);
+    }
+    esp_partition_iterator_release(it);
+    if (other != nullptr) {
+        ESP_LOGI(TAG, "переключение boot-партиции на %s", other->label);
+        esp_ota_set_boot_partition(other);
+    } else {
+        ESP_LOGE(TAG, "нет слота для отката — остаёмся в текущем");
+    }
     esp_restart();
 }
 

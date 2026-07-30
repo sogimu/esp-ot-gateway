@@ -2,6 +2,9 @@
 
 #include "application/ports/driven/itime_source.h"
 
+#include "esp_timer.h"
+#include "driver/gpio.h"
+
 class ILogger;
 
 /// Standalone ITimeSource — NTP-synced wall clock via lwip SNTP.
@@ -39,13 +42,24 @@ private:
     void start();
     void configure(int tz_offset, bool has_internet);
 
+    /// Запустить/остановить мигание светодиодом (GPIO2) во время синхронизации.
+    void led_blink_start() const;
+    void led_blink_stop() const;
+
+    static void led_blink_cb(void* arg);
+
     int  tz_offset_ = 3;
     char srv0_[64] = {};
     char srv1_[64] = {};
     bool started_ = false;
     mutable bool time_synced_ = false;
+    mutable bool sntp_real_synced_ = false;  ///< реальная SNTP-синхронизация (не NVS)
     mutable uint64_t last_sntp_retry_ms_ = 0;
     mutable microseconds boot_offset_us_{0}; // offset from boot time to Unix epoch
     ILogger* logger_ = nullptr;
+
+    mutable esp_timer_handle_t blink_timer_ = nullptr;  ///< таймер мигания LED
+    mutable int blink_level_ = 0;                        ///< текущий уровень LED
+
     static const char* TAG;
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 
 #include "esp_log.h"
@@ -58,6 +59,12 @@ public:
     /// в D9, D10). Возвращает false, если экземпляр ещё не создан.
     static bool is_pending_global();
 
+    /// Глобальный флаг: идёт OTA-flush (сохранение статистики перед
+    /// перезагрузкой в новый слот). PersistenceLoopInteractor проверяет
+    /// и пропускает периодический save, чтобы избежать race.
+    static bool is_flushing_global() { return flushing_.load(); }
+    static void set_flushing_global(bool v) { flushing_.store(v); }
+
 private:
     /// Помечает прошивку валидной (mark_app_valid_cancel_rollback),
     /// логирует успех. Идемпотентна.
@@ -77,6 +84,7 @@ private:
     int64_t deadline_us_ = 0;        ///< arm_time + VALIDITY_WINDOW_US (monotonic)
 
     static OtaValidityAdapter* instance_;  ///< единственный экземпляр для is_pending_global()
+    static std::atomic<bool>   flushing_;  ///< true во время ota_flush_and_reboot
 
     /// Окно подтверждения валидности: 90 с (в микросекундах).
     static constexpr int64_t VALIDITY_WINDOW_US = 90LL * 1000LL * 1000LL;

@@ -51,6 +51,7 @@ void SupervisionLoopInteractor::tick()
 
     // ── Recovery ladder ────────────────────────────────────
     static int recovery_level = 0;
+    static int http_restart_attempts = 0;
     if (largest_free < 4096 || free_heap < 8192) {
         ESP_LOGE(TAG, "Куча исчерпана (своб=%" PRIu32 " крупн=%" PRIu32 ") — перезагрузка",
                  free_heap, largest_free);
@@ -58,14 +59,16 @@ void SupervisionLoopInteractor::tick()
                    free_heap, largest_free);
         vTaskDelay(pdMS_TO_TICKS(2000));
         esp_restart();
-    } else if (largest_free < 6144 && recovery_level < 3) {
+    } else if (largest_free < 6144 && http_restart_attempts < 3) {
+        http_restart_attempts++;
         recovery_level = 3;
         ESP_LOGW(TAG, "Recovery L3: перезапуск HTTP (своб=%" PRIu32 " крупн=%" PRIu32 ")",
                  free_heap, largest_free);
         log_.event(ILogger::SYSTEM, "Recovery L3: перезапуск HTTP");
+        ota_.set_http_server_up(false);
         http_.stop();
         vTaskDelay(pdMS_TO_TICKS(1000));
-        http_.start();
+        ota_.set_http_server_up(http_.start());
     } else if (largest_free < 12288 && recovery_level < 2) {
         recovery_level = 2;
         ESP_LOGW(TAG, "Recovery L2: фрагментация (своб=%" PRIu32 " крупн=%" PRIu32 ")",
@@ -77,5 +80,5 @@ void SupervisionLoopInteractor::tick()
                  free_heap, largest_free);
         log_.event(ILogger::SYSTEM, "Recovery L1: фрагментация растёт");
     }
-    if (largest_free >= 32768) recovery_level = 0;
+    if (largest_free >= 16384) { recovery_level = 0; http_restart_attempts = 0; }
 }

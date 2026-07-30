@@ -33,11 +33,6 @@ public:
                   RebootFn reboot);
     ~OtaInteractor() override;
 
-    using FlushStatsFn = void (*)(void* ctx);
-    void set_flush_stats_callback(FlushStatsFn fn, void* ctx) {
-        flush_fn_ = fn; flush_ctx_ = ctx;
-    }
-
     // ── IOtaManager ────────────────────────────────────
     OtaStatus status() override;
     char*     fetch_version_list() override;
@@ -67,7 +62,4 @@ private:
     char*                cached_versions_ = nullptr;
     int64_t              last_fetch_ms_   = 0;
     static constexpr int64_t CACHE_TTL_MS = 5LL * 60LL * 1000LL;
-
-    FlushStatsFn         flush_fn_  = nullptr;
-    void*                flush_ctx_ = nullptr;
 };

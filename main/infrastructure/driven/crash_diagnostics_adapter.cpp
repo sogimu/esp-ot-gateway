@@ -49,6 +49,7 @@ void CrashDiagnosticsAdapter::check_on_boot(ILogger& log)
     esp_reset_reason_t reason = esp_reset_reason();
     log.event(ILogger::BOOT, "Загрузка: %s", reset_reason_str(reason));
 
+    last_boot_had_crash_ = false;
     esp_err_t cd_err = esp_core_dump_image_check();
     if (cd_err == ESP_OK) {
         last_boot_had_crash_ = true;
@@ -79,5 +80,21 @@ void CrashDiagnosticsAdapter::check_on_boot(ILogger& log)
             ESP_LOGW(TAG, "Дамп повреждён, стёрт");
         }
         esp_core_dump_image_erase();
+    }
+
+    // Даже без coredump: опасные reset_reason тоже считаем крашем.
+    if (!last_boot_had_crash_) {
+        switch (reason) {
+            case ESP_RST_PANIC:
+            case ESP_RST_INT_WDT:
+            case ESP_RST_TASK_WDT:
+            case ESP_RST_WDT:
+            case ESP_RST_BROWNOUT:
+            case ESP_RST_CPU_LOCKUP:
+                last_boot_had_crash_ = true;
+                break;
+            default:
+                break;
+        }
     }
 }

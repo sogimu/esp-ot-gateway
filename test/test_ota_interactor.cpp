@@ -104,16 +104,14 @@ TEST_CASE("OtaInteractor: spawn fails → ERROR", "[ota]") {
 
 TEST_CASE("OtaInteractor: run_download успех → DONE + progress 100 + reboot", "[ota]") {
     FakeOtaValidity val; FakeOtaDownloader dl; FakeOtaVersionIndex ver;
-    int64_t now = 0; bool flushed = false, rebooted = false;
+    int64_t now = 0; bool rebooted = false;
     OtaInteractor ota(val, dl, ver, [&]{ return now; },
         [](OtaInteractor*){ return true; }, [&]{ rebooted = true; });
-    ota.set_flush_stats_callback([](void* ctx){ *static_cast<bool*>(ctx) = true; }, &flushed);
     ota.begin_update("v1");
     ota.run_download();
     REQUIRE(ota.status().state == OtaStatus::DONE);
     REQUIRE(ota.status().progress_pct == 100);
     REQUIRE(rebooted);
-    REQUIRE(flushed);
 }
 
 TEST_CASE("OtaInteractor: run_download провал → ERROR + last_error, без ребута", "[ota]") {

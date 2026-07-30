@@ -94,6 +94,9 @@ void OtaInteractor::poll() {
     std::lock_guard<std::mutex> lk(mutex_);
     sync_progress_locked();
     status_.rollback_pending = validity_.is_pending();
+    if (!status_.rollback_pending && status_.state == OtaStatus::VERIFY_PENDING) {
+        status_.state = OtaStatus::IDLE;
+    }
 }
 
 void OtaInteractor::run_download() {
@@ -118,7 +121,6 @@ void OtaInteractor::run_download() {
         }
     }
     if (ok) {
-        if (flush_fn_) flush_fn_(flush_ctx_);
         ESP_LOGI(TAG, "перезагрузка в новый слот");
         reboot_fn_();
     }

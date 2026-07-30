@@ -38,6 +38,10 @@ void PersistenceLoopInteractor::tick()
         ESP_LOGW("main", "Периодический NVS-save пропущен: образ на проверке (PENDING_VERIFY)");
         return;
     }
+    if (OtaValidityAdapter::is_flushing_global()) {
+        ESP_LOGD("main", "Периодический NVS-save пропущен: идёт OTA-flush");
+        return;
+    }
     save_tick_ = 0;
 
     uint32_t bs = burn_cycle_service_.burner_seconds();

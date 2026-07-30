@@ -110,11 +110,14 @@ set(TEST_SRCS
 
     # OTA interactor — конечный автомат, кэширование версий, блокировка
     test_ota_interactor.cpp
+    # OTA validity adapter — pending/armed/heartbeat/откат
+    test_ota_validity_adapter.cpp
 )
 
 # ── Stubs (replace ESP-IDF-dependent implementations) ──────
 set(STUB_SRCS
     ${TEST_DIR}/fakes/stub_boiler_poll_interactor.cpp
+    ${TEST_DIR}/stubs/esp_ota_stubs.cpp
 )
 
 # ── Application .cpp files (compiled into test binary) ────
@@ -139,6 +142,7 @@ set(APP_SRCS
     ${MAIN_DIR}/infrastructure/driven/web_presenter_adapter.cpp
     # OTA interactor — тестируется на хосте (HW-free, зависит от driven-портов)
     ${MAIN_DIR}/infrastructure/driving/ota_interactor.cpp
+    ${MAIN_DIR}/infrastructure/driven/ota_validity_adapter.cpp
 )
 
 # ── Test executable ───────────────────────────────────────
