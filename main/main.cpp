@@ -215,7 +215,7 @@ extern "C" void app_main(void)
     auto ota_now_ms = [&]() { return ca_time.monotonic_us() / 1000; };
     auto ota_spawn  = [](OtaInteractor* self) -> bool {
         return xTaskCreate([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); },
-                           "ota_dl", 16*1024, self, 3, nullptr) == pdPASS;
+                           "ota_dl", 24*1024, self, 3, nullptr) == pdPASS;
     };
     auto ota_reboot = [&]() { ota_flush_and_reboot(burn_cycle_service, mod_stats,
         stores.heating_stats, ca_state, gas_flow, gas_corr, total_uptime_base_sec, ca_time); };

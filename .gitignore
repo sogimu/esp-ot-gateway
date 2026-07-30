@@ -9,6 +9,10 @@ sdkconfig.old
 AGENTS.md
 build_tests/
 
+# Неотслеживаемые папки
+__pycache__/
+.opencode/
+
 # Generated GZIP-compressed web page (changes on every build)
 main/infrastructure/driving/web_page_gz.inc
 /web_page_gz.inc
