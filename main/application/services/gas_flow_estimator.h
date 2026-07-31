@@ -13,7 +13,14 @@ class IHeatingStatsStore;
 /// and EMA accumulators for rolling averages.
 class GasFlowService : public IControlTask {
 public:
-    static constexpr int RING_SIZE = 720; // 2h @ 10s interval
+    static constexpr int RING_SIZE = 720;     // 2h @ 10s interval
+    static constexpr int DAILY_SLOTS = 8;     // 7 completed days + spare (RAM only, no NVS)
+
+    /// One entry of the weekly gas consumption chart (for web rendering).
+    struct DailyView {
+        int64_t epoch_day;   // local day number (local_now().time_since_epoch() / 86400)
+        float   m3;          // gas consumed that day, m3
+    };
 
     GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store);
     ~GasFlowService();
@@ -51,6 +58,10 @@ public:
 
     // Public for testability — continuous efficiency curve vs return temp
     float efficiency_continuous(float t_ret) const;
+
+    // ── Daily consumption tracking (RAM only, survives corrections, no NVS) ──
+    void update_daily_tracking();
+    int  get_daily_view(DailyView* out, int max) const;
 
 private:
     /// Seasonal correction of calorific value based on outdoor temperature.
@@ -97,6 +108,17 @@ private:
     uint32_t last_update_ms_ = 0;
     uint32_t outdoor_zero_start_ms_ = 0;
     int ema_tick_ = 0;
+
+    // ── Daily consumption tracking ──
+    // daily_accumulator_ runs in parallel with integral_m3_ but is NOT reset
+    // by corrections (set_integral(0) doesn't touch it). Reset only at day
+    // boundary and on explicit stats reset.
+    struct DailySlot { int64_t epoch_day; float m3; };
+    DailySlot daily_[DAILY_SLOTS];
+    int       daily_head_  = 0;
+    int       daily_count_ = 0;
+    int64_t   today_epoch_day_ = -1;   // -1 = not initialized (wall clock not synced yet)
+    float     daily_accumulator_ = 0;
 
     void update_ema(float& ema, float val, float alpha);
 };
