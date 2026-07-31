@@ -5,6 +5,7 @@ class OtaValidityAdapter;
 class EventLogAdapter;
 class HttpControllerAdapter;
 class WifiApStaAdapter;
+class WebPresenterAdapter;
 class ITimeSource;
 
 /// Инкапсулирует задачи Supervision-цикла (~15с): OTA-валидность,
@@ -15,6 +16,7 @@ public:
                                EventLogAdapter& log,
                                HttpControllerAdapter& http,
                                WifiApStaAdapter& wifi,
+                               WebPresenterAdapter& web,
                                ITimeSource& time);
 
     /// Вызвать на каждой итерации главного цикла.
@@ -25,6 +27,7 @@ private:
     EventLogAdapter&      log_;
     HttpControllerAdapter& http_;
     WifiApStaAdapter&     wifi_;
+    WebPresenterAdapter&  web_;
     ITimeSource&          time_;
     int                   cycle_ = 0;
 };

@@ -69,6 +69,13 @@ private:
     const FopdtEstimator*     fopdt_ = nullptr;
     class ITimeSource*        time_ = nullptr;
     uint32_t                  total_uptime_base_ = 0;
+    mutable uint32_t          free_heap_ = 0;       ///< обновляется из supervision
+    mutable uint32_t          largest_free_ = 0;     ///< обновляется из supervision
+
+public:
+    void set_heap_info(uint32_t free_heap, uint32_t largest_free) {
+        free_heap_ = free_heap; largest_free_ = largest_free;
+    }
 
     /// Compute monthly error percentage from the last two corrections.
     float compute_monthly_error_pct() const;

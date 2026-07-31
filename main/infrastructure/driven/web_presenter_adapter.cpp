@@ -100,6 +100,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"t1_temp\":%.1f,\"t2_temp\":%.1f,"
         "\"sched_on\":0,\"hour\":%d,\"time\":\"%s\",\"tz_offset\":%d,"
         "\"utc_time\":\"%s\",\"uptime_sec\":%lu,\"total_uptime_sec\":%lu,"
+        "\"free_heap\":%" PRIu32 ",\"largest_free\":%" PRIu32 ","
         "\"firmware_version\":\"%s\","
         "\"dhw_hyst_on\":%.1f,"
         "\"time_synced\":%d,"
@@ -136,6 +137,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         state_->get_tz_offset(), utcbuf,
         (unsigned long)(time_ ? time_->monotonic_us() / 1000000 : 0),
         (unsigned long)(total_uptime_base_ + (time_ ? time_->monotonic_us() / 1000000 : 0)),
+        free_heap_, largest_free_,
         FIRMWARE_VERSION,
         (double)state_->get_dhw_hysteresis(),
         time_ ? (time_->is_synced() ? 1 : 0) : 0,

@@ -12,6 +12,9 @@
 #include "application/ports/driving/ifault_reset.h"
 #include "application/ports/driving/imqtt_configurator.h"
 #include "application/ports/driving/iota_manager.h"
+#include "esp_ota_ops.h"
+#include "esp_partition.h"
+#include "mbedtls/sha256.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -42,7 +45,7 @@ bool HttpControllerAdapter::start()
     config.lru_purge_enable    = true;
     config.max_open_sockets    = 3;       // limit concurrent connections
     config.keep_alive_enable   = false;   // close after each request — frees socket buffers
-    config.stack_size          = 16384;   // +6KB for 90KB page + JSON serialisation
+    config.stack_size          = 12288;   // +6KB for 90KB page + JSON serialisation
     config.recv_wait_timeout   = 10;      // prevent slow-client worker exhaustion
 
     if (httpd_start(&server_, &config) != ESP_OK) {
@@ -74,8 +77,8 @@ bool HttpControllerAdapter::start()
         // OTA API
         { .uri = "/api/ota/status",    .method = HTTP_GET,  .handler = handler_ota_status,    .user_ctx = NULL },
         { .uri = "/api/ota/versions",  .method = HTTP_GET,  .handler = handler_ota_versions,  .user_ctx = NULL },
-        { .uri = "/api/ota/start",     .method = HTTP_POST, .handler = handler_ota_start,     .user_ctx = NULL },
         { .uri = "/api/ota/rollback",  .method = HTTP_POST, .handler = handler_ota_rollback,  .user_ctx = NULL },
+        { .uri = "/api/ota/upload",    .method = HTTP_POST, .handler = handler_ota_upload,    .user_ctx = NULL },
 
         // Improv
         { .uri = "/prov",              .method = HTTP_GET,  .handler = handler_prov_get,      .user_ctx = NULL },
@@ -703,46 +706,112 @@ esp_err_t HttpControllerAdapter::handler_ota_versions(httpd_req_t* req) {
     return ret;
 }
 
-esp_err_t HttpControllerAdapter::handler_ota_start(httpd_req_t* req) {
-    auto* o = s_self ? s_self->ota_ : nullptr;
-    httpd_resp_set_type(req, "application/json");
-    if (!o) {
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"unavailable\"}");
-    }
-
-    char body[128] = {0};
-    int recv_len = httpd_req_recv(req, body, sizeof(body) - 1);
-    if (recv_len <= 0) {
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"empty body\"}");
-    }
-
-    int tlen = 0;
-    const char* tag = json_get_string(body, "\"tag\"", tlen);
-    if (!tag || tlen == 0) {
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"no tag\"}");
-    }
-    char tag_buf[32] = {0};
-    int n = tlen < 31 ? tlen : 31;
-    memcpy(tag_buf, tag, n);
-    tag_buf[n] = '\0';
-
-    // Отклонить запуск, если уже идёт обновление (состояние не IDLE/DONE/ERROR)
-    OtaStatus s = o->status();
-    if (s.state == OtaStatus::FETCHING ||
-        s.state == OtaStatus::WRITING ||
-        s.state == OtaStatus::VERIFY_PENDING) {
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"update in progress\"}");
-    }
-
-    bool ok = o->begin_update(tag_buf);
-    return httpd_resp_sendstr(req, ok ? "{\"ok\":true}" : "{\"ok\":false}");
-}
-
 esp_err_t HttpControllerAdapter::handler_ota_rollback(httpd_req_t* req) {
     auto* o = s_self ? s_self->ota_ : nullptr;
     // Ответить ДО перезагрузки — паттерн respond-then-reboot
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"ok\":true}");
     if (o) o->rollback_now();
+    return ESP_OK;
+}
+
+// ── OTA upload: браузер заливает бинарник через POST ─────────
+esp_err_t HttpControllerAdapter::handler_ota_upload(httpd_req_t* req)
+{
+    httpd_resp_set_type(req, "application/json");
+
+    int content_len = req->content_len;
+    if (content_len <= 0)
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"empty body\"}");
+
+    // SHA256 из кэша ESP32 (versions.json с GitHub), не от браузера
+    const char* sha256_expected = nullptr;
+    char sha_buf[65] = {0};
+    size_t param_len = httpd_req_get_url_query_len(req);
+    if (param_len > 0) {
+        char* query = static_cast<char*>(malloc(param_len + 1));
+        if (query && httpd_req_get_url_query_str(req, query, param_len + 1) == ESP_OK) {
+            char tag[33] = {0};
+            httpd_query_key_value(query, "tag", tag, sizeof(tag));
+            if (s_self && s_self->ota_)
+                sha256_expected = s_self->ota_->lookup_sha256(tag);
+        }
+        free(query);
+    }
+    bool verify = (sha256_expected != nullptr);
+
+    mbedtls_sha256_context sha_ctx;
+    if (verify) {
+        mbedtls_sha256_init(&sha_ctx);
+        mbedtls_sha256_starts(&sha_ctx, 0);
+    }
+
+    // Найти не-running OTA-слот
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    const esp_partition_t* update_part = nullptr;
+    esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_APP,
+                                                      ESP_PARTITION_SUBTYPE_ANY, nullptr);
+    while (it != nullptr) {
+        const esp_partition_t* p = esp_partition_get(it);
+        if (p != running) { update_part = p; break; }
+        it = esp_partition_next(it);
+    }
+    esp_partition_iterator_release(it);
+
+    if (update_part == nullptr)
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"no OTA slot\"}");
+
+    esp_ota_handle_t ota_handle = 0;
+    esp_err_t err = esp_ota_begin(update_part, OTA_SIZE_UNKNOWN, &ota_handle);
+    if (err != ESP_OK)
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"ota_begin failed\"}");
+
+    int total = 0;
+    char buf[2048];
+    while (total < content_len) {
+        int to_read = (content_len - total) < (int)sizeof(buf) ? (content_len - total) : (int)sizeof(buf);
+        int r = httpd_req_recv(req, buf, to_read);
+        if (r <= 0) {
+            esp_ota_abort(ota_handle);
+            if (verify) mbedtls_sha256_free(&sha_ctx);
+            return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"recv failed\"}");
+        }
+        if (verify) mbedtls_sha256_update(&sha_ctx, (unsigned char*)buf, r);
+        err = esp_ota_write(ota_handle, buf, r);
+        if (err != ESP_OK) {
+            esp_ota_abort(ota_handle);
+            if (verify) mbedtls_sha256_free(&sha_ctx);
+            return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"ota_write failed\"}");
+        }
+        total += r;
+    }
+
+    // Проверка SHA256
+    if (verify) {
+        unsigned char hash[32];
+        mbedtls_sha256_finish(&sha_ctx, hash);
+        mbedtls_sha256_free(&sha_ctx);
+        char hash_hex[65] = {0};
+        for (int i = 0; i < 32; i++)
+            snprintf(hash_hex + i*2, 3, "%02x", hash[i]);
+        if (strcmp(hash_hex, sha256_expected) != 0) {
+            esp_ota_abort(ota_handle);
+            ESP_LOGE(TAG, "OTA upload: SHA256 mismatch");
+            return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"SHA256 mismatch\"}");
+        }
+    }
+
+    err = esp_ota_end(ota_handle);
+    if (err != ESP_OK)
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"ota_end failed\"}");
+
+    err = esp_ota_set_boot_partition(update_part);
+    if (err != ESP_OK)
+        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"set_boot failed\"}");
+
+    httpd_resp_sendstr(req, "{\"ok\":true}");
+    // Задержка для отправки ответа, затем перезагрузка
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
     return ESP_OK;
 }

@@ -70,7 +70,7 @@ bool MqttClientAdapter::connect(const char* uri, const char* user, const char* p
     cfg.task.stack_size = 4096;
     cfg.task.priority   = 7;  // выше control_loop(4), ниже lwip(18)/WiFi(23)
     cfg.session.message_retransmit_timeout = 2000;  // retransmit interval
-    cfg.outbox.limit = 8192;                        // room for status(~1KB)+stats(~2KB)
+    cfg.outbox.limit = 4096;                        // room for status(~1KB)+stats(~2KB)
 
     client_ = esp_mqtt_client_init(&cfg);
     if (!client_) {

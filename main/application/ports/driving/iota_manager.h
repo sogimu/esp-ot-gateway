@@ -15,5 +15,6 @@ public:
   virtual char* fetch_version_list() = 0;     // heap JSON, caller frees; nullptr при ошибке
   virtual bool begin_update(const char* tag) = 0;
   virtual void rollback_now() = 0;
+  virtual const char* lookup_sha256(const char* tag) = 0;
   virtual void poll() = 0;
 };

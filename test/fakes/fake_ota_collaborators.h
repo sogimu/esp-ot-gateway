@@ -1,28 +1,10 @@
 #pragma once
 
-#include "application/ports/driven/iota_downloader.h"
 #include "application/ports/driven/iota_version_index.h"
 #include "application/ports/driven/iota_validity.h"
 
 #include <cstring>
 #include <cstdlib>
-
-/// Fake-загрузчик для хостовых тестов OtaInteractor.
-/// Возвращает предустановленные значения, не зависит от ESP-IDF.
-struct FakeOtaDownloader : IOtaDownloader {
-    bool should_succeed = true;
-    int  pct            = 0;
-    char error[96]      = {0};
-
-    bool download(const char*) override    { return should_succeed; }
-    int  progress_pct() const override    { return pct; }
-    void copy_last_error(char* dst, std::size_t n) const override {
-        if (dst && n) {
-            std::strncpy(dst, error, n - 1);
-            dst[n - 1] = '\0';
-        }
-    }
-};
 
 /// Fake-индекс версий для хостовых тестов OtaInteractor.
 struct FakeOtaVersionIndex : IOtaVersionIndex {
