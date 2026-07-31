@@ -7,6 +7,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "infrastructure/driven/ota_validity_adapter.h"
 
 #include <cstdio>
 #include <cstdarg>
@@ -68,12 +69,14 @@ bool EspOtaAdapter::download(const char* tag)
 
     ESP_LOGI(TAG, "OTA: загрузка %s (тег %s)", url, tag);
 
+    OtaValidityAdapter::set_flushing_global(true);
+    struct FlushGuard { ~FlushGuard() { OtaValidityAdapter::set_flushing_global(false); } } flush_guard;
+
     esp_http_client_config_t http_cfg = {};
     http_cfg.url               = url;
     http_cfg.crt_bundle_attach = esp_crt_bundle_attach;
     http_cfg.timeout_ms        = 30000;
-    http_cfg.keep_alive_enable = true;
-    http_cfg.buffer_size       = 1024;
+    http_cfg.buffer_size       = 4096;
     http_cfg.buffer_size_tx    = 1024;
 
     esp_https_ota_config_t ota_cfg = {};
@@ -92,8 +95,6 @@ bool EspOtaAdapter::download(const char* tag)
 
     int image_size = esp_https_ota_get_image_size(h);
 
-    // IDF-стандартный цикл: perform возвращает ESP_ERR_HTTPS_OTA_IN_PROGRESS
-    // пока есть данные, и ESP_OK когда всё скачано и записано во flash.
     while (1) {
         err = esp_https_ota_perform(h);
         if (err != ESP_ERR_HTTPS_OTA_IN_PROGRESS) break;
@@ -118,7 +119,7 @@ bool EspOtaAdapter::download(const char* tag)
     err = esp_https_ota_finish(h);
     if (err != ESP_OK) {
         if (err == ESP_ERR_OTA_VALIDATE_FAILED)
-            set_last_error("finish: образ повреждён (validate)");
+            set_last_error("finish: образ повреждён");
         else
             set_last_error("finish: 0x%x", (unsigned)err);
         ESP_LOGE(TAG, "esp_https_ota_finish: 0x%x", (unsigned)err);

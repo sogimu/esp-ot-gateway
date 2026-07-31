@@ -214,8 +214,8 @@ extern "C" void app_main(void)
     OtaVersionIndexAdapter ota_versions;
     auto ota_now_ms = [&]() { return ca_time.monotonic_us() / 1000; };
     auto ota_spawn  = [](OtaInteractor* self) -> bool {
-        return xTaskCreate([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); },
-                           "ota_dl", 24*1024, self, 3, nullptr) == pdPASS;
+        return xTaskCreatePinnedToCore([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); vTaskDelete(nullptr); },
+                           "ota_dl", 24*1024, self, 3, nullptr, 1) == pdPASS;  // Core 1 — отдельно от WiFi/LwIP
     };
     auto ota_reboot = [&]() { ota_flush_and_reboot(burn_cycle_service, mod_stats,
         stores.heating_stats, ca_state, gas_flow, gas_corr, total_uptime_base_sec, ca_time); };
@@ -238,7 +238,7 @@ extern "C" void app_main(void)
     ota_validity.arm();
 
     // ── Supervision + Persistence ──────────────────────────
-    SupervisionLoopInteractor  supervision(ota_validity, ca_log, http, wifi, ca_time);
+    SupervisionLoopInteractor  supervision(ota_validity, ca_log, http, wifi, ca_web, ca_time);
     PersistenceLoopInteractor  persister(ota_validity, burn_cycle_service, mod_stats,
         gas_flow, gas_corr, stores.heating_stats, ca_state, ca_time, total_uptime_base_sec);
 

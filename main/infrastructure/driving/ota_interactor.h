@@ -36,6 +36,8 @@ public:
     // ── IOtaManager ────────────────────────────────────
     OtaStatus status() override;
     char*     fetch_version_list() override;
+    /// Найти SHA256 для тега в кэше versions.json. nullptr если нет.
+    const char* lookup_sha256(const char* tag);
     bool      begin_update(const char* tag) override;
     void      rollback_now() override;
     void      poll() override;     // IOtaManager — синхронизация прогресса

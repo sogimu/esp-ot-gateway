@@ -63,4 +63,5 @@ private:
     static esp_err_t handler_ota_versions(httpd_req_t* req);
     static esp_err_t handler_ota_start(httpd_req_t* req);
     static esp_err_t handler_ota_rollback(httpd_req_t* req);
+    static esp_err_t handler_ota_upload(httpd_req_t* req);
 };

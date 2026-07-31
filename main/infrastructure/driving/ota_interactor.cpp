@@ -59,6 +59,23 @@ char* OtaInteractor::fetch_version_list() {
     return dup_json(cached_versions_);
 }
 
+const char* OtaInteractor::lookup_sha256(const char* tag)
+{
+    std::lock_guard<std::mutex> lk(mutex_);
+    if (!cached_versions_ || !tag) return nullptr;
+
+    // Ищем "tag":"<tag>" в JSON-кэше
+    char tag_key[48];
+    snprintf(tag_key, sizeof(tag_key), "\"tag\":\"%s\"", tag);
+    const char* pos = strstr(cached_versions_, tag_key);
+    if (!pos) return nullptr;
+
+    // Ищем ближайший "sha256":"..." после tag
+    const char* sha = strstr(pos, "\"sha256\":\"");
+    if (!sha) return nullptr;
+    return sha + 10;  // указывает на hex-строку (до закрывающей кавычки)
+}
+
 bool OtaInteractor::begin_update(const char* tag) {
     if (!tag || !tag[0]) return false;
     {

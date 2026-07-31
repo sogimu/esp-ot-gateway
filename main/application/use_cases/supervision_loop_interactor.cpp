@@ -4,6 +4,7 @@
 #include "infrastructure/driven/event_log_adapter.h"
 #include "infrastructure/driving/http_controller_adapter.h"
 #include "infrastructure/driving/wifi_apsta_adapter.h"
+#include "infrastructure/driven/web_presenter_adapter.h"
 #include "application/ports/driven/itime_source.h"
 
 #include "esp_log.h"
@@ -14,11 +15,12 @@
 static const char* TAG = "main";
 
 SupervisionLoopInteractor::SupervisionLoopInteractor(OtaValidityAdapter& ota,
-                                                       EventLogAdapter& log,
-                                                       HttpControllerAdapter& http,
-                                                       WifiApStaAdapter& wifi,
-                                                       ITimeSource& time)
-    : ota_(ota), log_(log), http_(http), wifi_(wifi), time_(time) {}
+                                                        EventLogAdapter& log,
+                                                        HttpControllerAdapter& http,
+                                                        WifiApStaAdapter& wifi,
+                                                        WebPresenterAdapter& web,
+                                                        ITimeSource& time)
+    : ota_(ota), log_(log), http_(http), wifi_(wifi), web_(web), time_(time) {}
 
 void SupervisionLoopInteractor::tick()
 {
@@ -43,8 +45,11 @@ void SupervisionLoopInteractor::tick()
              100 - (int)idle0, 100 - (int)idle1,
              (200 - (int)idle0 - (int)idle1) / 2);
 
+    // Обновляем WebPresenter — heap видна в веб-интерфейсе
+    web_.set_heap_info(free_heap, largest_free);
+
     if (cycle_ % 5 == 0) {
-        static char stats_buf[2048];
+        static char stats_buf[1024];
         vTaskGetRunTimeStats(stats_buf);
         ESP_LOGI(TAG, "── Статистика задач (CPU) ──\n%s", stats_buf);
     }

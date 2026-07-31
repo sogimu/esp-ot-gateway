@@ -13,7 +13,7 @@ struct LogEntry {
     char     msg[100];
 };
 
-#define LOG_RING_SIZE 256
+#define LOG_RING_SIZE 64
 
 /// Thread-safe ring-buffer event logger — CA implementation.
 /// Uses FreeRTOS mutex for cross-core safety.
