@@ -7,6 +7,7 @@
 #include "application/services/gas_flow_estimator.h"
 #undef private
 #include "fakes/fake_heating_state_store.h"
+#include "fakes/fake_gas_correction_store.h"
 #include "fakes/fake_time_source.h"
 
 using Catch::Approx;
@@ -34,7 +35,8 @@ struct Harness {
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc{state, time, hss};
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc{state, time, hss, gcs};
 
     Harness(uint64_t start_us = DAY0_US) {
         time.set_us(start_us);
@@ -226,4 +228,99 @@ TEST_CASE("GasDaily: unsynced wall clock does not initialize daily tracking", "[
     REQUIRE(h.svc.daily_count_ == 0);
     // integral still accumulates normally without wall clock
     REQUIRE(h.svc.integral_m3() > 0);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NVS persistence via IGasCorrectionStore (save → reload cycle)
+// ═══════════════════════════════════════════════════════════════
+
+TEST_CASE("daily tracking persists across simulated reboot", "[gas][daily][persist]")
+{
+    FakeHeatingStateStore state;
+    FakeTimeSource time;
+    FakeHeatingStatsStore hss;
+    FakeGasCorrectionStore gcs;
+
+    // Day 0: accumulate some gas
+    {
+        GasFlowService svc1(state, time, hss, gcs);
+        time.set_us(DAY0_US);
+        time.set_synced(true);
+        state.set_p_max(24.0f);
+        state.set_gas_calorific(9.5f);
+        state.set_modulation(50.0f);
+        state.set_return_temp(45.0f);
+        state.set_flame(true);
+        for (int i = 0; i < 360; i++) { time.advance_ms(10000); svc1.execute(); }
+
+        GasDailyBlob blob;
+        svc1.pack_daily(blob);
+        gcs.save_daily_gas(&blob);
+    } // svc1 destroyed — simulated reboot
+
+    // Reboot: new GasFlowService, reload from same gcs
+    GasFlowService svc2(state, time, hss, gcs);
+    time.set_us(DAY0_US);
+    time.set_synced(true);
+    svc2.load_daily();
+
+    REQUIRE(svc2.today_epoch_day_ == static_cast<int64_t>(1736899200ULL / 86400));
+    REQUIRE(svc2.daily_accumulator_ > 0);
+    REQUIRE(svc2.daily_count_ == 0);
+}
+
+TEST_CASE("daily tracking persists across day boundary after reboot", "[gas][daily][persist]")
+{
+    FakeHeatingStateStore state;
+    FakeTimeSource time;
+    FakeHeatingStatsStore hss;
+    FakeGasCorrectionStore gcs;
+
+    // Day 0: run, let day roll over to archive day 0's data
+    {
+        GasFlowService svc1(state, time, hss, gcs);
+        time.set_us(DAY0_US);
+        time.set_synced(true);
+        state.set_p_max(24.0f);
+        state.set_gas_calorific(9.5f);
+        state.set_modulation(50.0f);
+        state.set_return_temp(45.0f);
+        state.set_flame(true);
+        for (int i = 0; i < 360; i++) { time.advance_ms(10000); svc1.execute(); }
+
+        // Day boundary
+        time.set_us(DAY0_US + 86400ULL * 1000000ULL);
+        time.advance_ms(10000);
+        svc1.execute();
+
+        GasDailyBlob blob;
+        svc1.pack_daily(blob);
+        gcs.save_daily_gas(&blob);
+    }
+
+    // Reboot on day 1
+    GasFlowService svc2(state, time, hss, gcs);
+    time.set_us(DAY0_US + 86400ULL * 1000000ULL);
+    time.set_synced(true);
+    svc2.load_daily();
+
+    REQUIRE(svc2.daily_count_ == 1);
+
+    GasFlowService::DailyView out[8];
+    int n = svc2.get_daily_view(out, 8);
+    REQUIRE(n == 2);
+    REQUIRE(out[0].m3 > 0);           // completed day 0
+    REQUIRE(out[1].epoch_day == out[0].epoch_day + 1); // today is next day
+}
+
+TEST_CASE("load_daily returns false when no NVS data (never saved)", "[gas][daily][persist]")
+{
+    FakeHeatingStateStore state;
+    FakeTimeSource time;
+    FakeHeatingStatsStore hss;
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
+
+    GasDailyBlob blob;
+    REQUIRE(gcs.load_daily_gas(&blob) == false);
 }

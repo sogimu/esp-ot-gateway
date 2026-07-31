@@ -2,14 +2,16 @@
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/ports/driven/iheating_stats_store.h"
+#include "application/ports/driven/igas_correction_store.h"
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
-GasFlowService::GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store)
-    : state_(state), time_(time), store_(store)
+GasFlowService::GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store,
+                                 IGasCorrectionStore& gas_store)
+    : state_(state), time_(time), store_(store), gas_store_(gas_store)
 {
     ring_ = static_cast<Sample*>(malloc(RING_SIZE * sizeof(Sample)));
     if (ring_) std::memset(ring_, 0, RING_SIZE * sizeof(Sample));
@@ -246,6 +248,36 @@ int GasFlowService::get_daily_view(DailyView* out, int max) const
         n++;
     }
     return n;
+}
+
+void GasFlowService::pack_daily(GasDailyBlob& blob) const
+{
+    std::memset(&blob, 0, sizeof(blob));
+    for (int i = 0; i < daily_count_; i++) {
+        const DailySlot& s = daily_[(daily_head_ + i) % DAILY_SLOTS];
+        blob.epoch_days[i] = s.epoch_day;
+        blob.m3_values[i] = s.m3;
+    }
+    blob.head = daily_head_;
+    blob.count = daily_count_;
+    blob.today_epoch_day = today_epoch_day_;
+    blob.today_m3 = daily_accumulator_;
+}
+
+void GasFlowService::load_daily()
+{
+    GasDailyBlob blob;
+    if (!gas_store_.load_daily_gas(&blob)) return;
+
+    daily_head_ = blob.head;
+    daily_count_ = blob.count;
+    today_epoch_day_ = blob.today_epoch_day;
+    daily_accumulator_ = blob.today_m3;
+
+    for (int i = 0; i < blob.count; i++) {
+        daily_[(blob.head + i) % DAILY_SLOTS].epoch_day = blob.epoch_days[i];
+        daily_[(blob.head + i) % DAILY_SLOTS].m3 = blob.m3_values[i];
+    }
 }
 
 void GasFlowService::reset()

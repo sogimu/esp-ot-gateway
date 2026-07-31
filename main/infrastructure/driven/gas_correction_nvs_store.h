@@ -20,6 +20,9 @@ public:
     void save_integral(float value) override;
     void save_boiler_config(const IHeatingStateStore& state) override;
 
+    void save_daily_gas(const void* blob) override;
+    bool load_daily_gas(void* blob) override;
+
 private:
     IBoilerConfigStore* boiler_ = nullptr;
 };

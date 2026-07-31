@@ -9,6 +9,7 @@
 #include "application/use_cases/gas_correction_interactor.h"
 #include "application/ports/driven/ilogger.h"
 #include "fakes/fake_heating_state_store.h"
+#include "fakes/fake_gas_correction_store.h"
 #include "fakes/fake_configuration_store.h"
 #include "fakes/fake_boiler_hardware.h"
 #include <cstdio>
@@ -120,7 +121,8 @@ TEST_CASE("GasFlow: save_stats stores integral_m3 via config store", "[gas][regr
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService gfs(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gfs(state, time, hss, gcs);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -142,12 +144,13 @@ TEST_CASE("GasFlow: load_stats restores integral_m3 after simulated reboot", "[g
 
     // "Before reboot" — accumulate gas
     FakeHeatingStatsStore hss;
-    GasFlowService gfs_before(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gfs_before(state, time, hss, gcs);
     gfs_before.set_integral(12.345f);
     float saved_integral = gfs_before.integral_m3();
 
     // "After reboot" — fresh service, restore from saved value
-    GasFlowService gfs_after(state, time, hss);
+    GasFlowService gfs_after(state, time, hss, gcs);
     REQUIRE(gfs_after.integral_m3() == Approx(0.0f)); // starts at 0
 
     // Simulate load_stats restoring integral_m3 (as main.cpp does)
@@ -159,7 +162,8 @@ TEST_CASE("GasFlow: integral_m3 accumulates across poll cycles", "[gas][regressi
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService gfs(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gfs(state, time, hss, gcs);
 
     float before = gfs.integral_m3();
 
@@ -179,7 +183,8 @@ TEST_CASE("GasFlow: reset zeros integral then restore works", "[gas][regression]
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService gfs(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gfs(state, time, hss, gcs);
 
     gfs.set_integral(100.0f);
     gfs.reset();

@@ -7,6 +7,8 @@
 class IHeatingStateStore;
 class ITimeSource;
 class IHeatingStatsStore;
+class IGasCorrectionStore;
+struct GasDailyBlob;
 
 /// Estimates gas consumption from modulation % and return temperature.
 /// Uses Kalman1D filters on raw inputs, physical model for flow rate,
@@ -14,7 +16,7 @@ class IHeatingStatsStore;
 class GasFlowService : public IControlTask {
 public:
     static constexpr int RING_SIZE = 720;     // 2h @ 10s interval
-    static constexpr int DAILY_SLOTS = 8;     // 7 completed days + spare (RAM only, no NVS)
+    static constexpr int DAILY_SLOTS = 8;     // 7 completed days + spare
 
     /// One entry of the weekly gas consumption chart (for web rendering).
     struct DailyView {
@@ -22,7 +24,8 @@ public:
         float   m3;          // gas consumed that day, m3
     };
 
-    GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store);
+    GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store,
+                   IGasCorrectionStore& gas_store);
     ~GasFlowService();
 
     void load_integral();  // restore integral_m3 from NVS
@@ -59,9 +62,11 @@ public:
     // Public for testability — continuous efficiency curve vs return temp
     float efficiency_continuous(float t_ret) const;
 
-    // ── Daily consumption tracking (RAM only, survives corrections, no NVS) ──
+    // ── Daily consumption tracking (NVS-persisted via IHeatingStatsStore) ──
     void update_daily_tracking();
     int  get_daily_view(DailyView* out, int max) const;
+    void load_daily();
+    void pack_daily(GasDailyBlob& blob) const;
 
 private:
     /// Seasonal correction of calorific value based on outdoor temperature.
@@ -74,6 +79,7 @@ private:
     IHeatingStateStore&  state_;
     ITimeSource&         time_;
     IHeatingStatsStore&  store_;
+    IGasCorrectionStore& gas_store_;
 
     Kalman1D kalman_mod_{0, 0.1f, 1.0f};
     Kalman1D kalman_ret_{0, 0.05f, 0.3f};

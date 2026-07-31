@@ -1,6 +1,18 @@
 #pragma once
+#include <cstdint>
 
 class IHeatingStateStore;
+
+static constexpr int GAS_DAILY_SLOTS = 8;
+
+struct GasDailyBlob {
+    int64_t epoch_days[GAS_DAILY_SLOTS];
+    float   m3_values[GAS_DAILY_SLOTS];
+    int32_t head;
+    int32_t count;
+    int64_t today_epoch_day;
+    float   today_m3;
+};
 
 /// Driven-порт: персистентность данных газовой коррекции (журнал сверки счётчика)
 /// и калибровки котла, которую меняет GasCorrectionInteractor.
@@ -23,4 +35,7 @@ public:
 
     /// Сохранить котловую конфигурацию (калибровку) — делегирует IBoilerConfigStore.
     virtual void save_boiler_config(const IHeatingStateStore& state) = 0;
+
+    virtual void save_daily_gas(const void* blob)  { (void)blob; }
+    virtual bool load_daily_gas(void* blob)        { (void)blob; return false; }
 };

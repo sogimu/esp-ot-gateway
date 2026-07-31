@@ -8,6 +8,7 @@
 #include "application/services/gas_flow_estimator.h"
 #undef private
 #include "fakes/fake_heating_state_store.h"
+#include "fakes/fake_gas_correction_store.h"
 #include "fakes/fake_time_source.h"
 
 using Catch::Approx;
@@ -42,8 +43,9 @@ TEST_CASE("GasFlowService: static ema_tick shared across instances", "[gas_flow]
     FakeHeatingStateStore state1, state2;
     FakeTimeSource time1, time2;
     FakeHeatingStatsStore hss;
-    GasFlowService svc1(state1, time1, hss);
-    GasFlowService svc2(state2, time2, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc1(state1, time1, hss, gcs);
+    GasFlowService svc2(state2, time2, hss, gcs);
 
     // Both instances must have valid data to trigger poll
     state1.set_modulation(50.0f);
@@ -83,7 +85,8 @@ TEST_CASE("GasFlowService: efficiency correction curve", "[gas_flow]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     // Test the static efficiency_correction method via physical model
     state.set_modulation(50.0f);
@@ -114,7 +117,8 @@ TEST_CASE("GasFlowService: no flame produces zero flow", "[gas_flow]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(30.0f);
@@ -137,7 +141,8 @@ TEST_CASE("GasFlowService: integral accumulation", "[gas_flow]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -165,7 +170,8 @@ TEST_CASE("GasFlowService: reset clears accumulated state", "[gas_flow]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -192,7 +198,8 @@ TEST_CASE("GasFlowService: handles missing return temperature", "[gas_flow]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(0.0f);   // 0°C return — calc_power uses fallback
@@ -216,7 +223,8 @@ TEST_CASE("GasFlowService: physical model sanity — flow vs modulation", "[gas_
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_return_temp(40.0f);
     state.set_p_max(24.0f);
@@ -253,7 +261,8 @@ TEST_CASE("efficiency_continuous at 30C returns 0.98", "[gas_flow][efficiency]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
     float eff = svc.efficiency_continuous(30.0f);
     INFO("eff at 30C=" << eff);
     CHECK(eff == 0.98f);
@@ -264,7 +273,8 @@ TEST_CASE("efficiency_continuous at 42.5C returns ~0.955", "[gas_flow][efficienc
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
     float eff = svc.efficiency_continuous(42.5f);
     INFO("eff at 42.5C=" << eff);
     // Midpoint of (30, 0.98) -> (55, 0.93); floating-point may produce 0.954999...
@@ -276,7 +286,8 @@ TEST_CASE("efficiency_continuous at 55C returns 0.93", "[gas_flow][efficiency]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
     float eff = svc.efficiency_continuous(55.0f);
     INFO("eff at 55C=" << eff);
     CHECK(eff == 0.93f);
@@ -287,7 +298,8 @@ TEST_CASE("efficiency_continuous at 67.5C returns ~0.905", "[gas_flow][efficienc
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
     float eff = svc.efficiency_continuous(67.5f);
     INFO("eff at 67.5C=" << eff);
     // Midpoint of (55, 0.93) -> (80, 0.88); floating-point may produce 0.904999...
@@ -299,7 +311,8 @@ TEST_CASE("efficiency_continuous at 80C returns 0.88", "[gas_flow][efficiency]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
     float eff = svc.efficiency_continuous(80.0f);
     INFO("eff at 80C=" << eff);
     CHECK(eff == 0.88f);
@@ -310,7 +323,8 @@ TEST_CASE("efficiency_continuous at 20C returns 0.98", "[gas_flow][efficiency]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
     float eff = svc.efficiency_continuous(20.0f);
     INFO("eff at 20C=" << eff);
     // Extrapolation below 30°C — deep condensate zone
@@ -322,7 +336,8 @@ TEST_CASE("efficiency_continuous at 90C returns 0.88", "[gas_flow][efficiency]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
     float eff = svc.efficiency_continuous(90.0f);
     INFO("eff at 90C=" << eff);
     // Extrapolation above 80°C — same as at 80°C
@@ -335,7 +350,8 @@ TEST_CASE("efficiency_continuous is monotonically non-increasing", "[gas_flow][e
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
     float temps[] = {20.0f, 30.0f, 40.0f, 50.0f, 55.0f, 60.0f, 70.0f, 80.0f, 90.0f};
     for (size_t i = 1; i < sizeof(temps) / sizeof(temps[0]); i++) {
         float eff_prev = svc.efficiency_continuous(temps[i - 1]);
@@ -353,7 +369,8 @@ TEST_CASE("flow with eta in denominator", "[gas_flow][efficiency]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_p_max(20.0f);
@@ -387,7 +404,8 @@ TEST_CASE("efficiency does not affect gas flow", "[gas_flow][efficiency]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_p_max(24.0f);
@@ -426,7 +444,8 @@ TEST_CASE("corrected_calorific at +20C outdoor", "[gas_flow][cv]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_p_max(24.0f);
@@ -454,7 +473,8 @@ TEST_CASE("corrected_calorific at -20C outdoor", "[gas_flow][cv]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_p_max(24.0f);
@@ -480,7 +500,8 @@ TEST_CASE("corrected_calorific at 0C outdoor uses correction", "[gas_flow][cv]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_p_max(24.0f);
@@ -505,7 +526,8 @@ TEST_CASE("corrected_calorific fallback when outdoor unknown", "[gas_flow][cv]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_p_max(24.0f);
@@ -533,7 +555,8 @@ TEST_CASE("calc_power below 1pct returns 0 (burner not firing)", "[gas_flow][cal
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     // Modulation < 1% means gas valve is effectively closed
     CHECK(svc.calc_power(0.0f, 80.0f, 60.0f) == Approx(0.0f).margin(0.001f));
@@ -547,7 +570,8 @@ TEST_CASE("calc_power at 1pct or above returns proportional power", "[gas_flow][
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     // Default ch_pmin=5.5, ch_pmax=24.0 → 5.5 + 18.5*0.01 = 5.685
     // Input power is independent of MWT
@@ -560,7 +584,8 @@ TEST_CASE("calc_power at 100pct returns Pmax (24.0 kW)", "[gas_flow][calc_power]
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     // Input power = 24.0 kW at 100% modulation (independent of MWT)
     CHECK(svc.calc_power(100.0f, 80.0f, 60.0f) == Approx(24.0f).margin(0.001f));
@@ -572,7 +597,8 @@ TEST_CASE("calc_power at 50pct returns ~14.75 kW", "[gas_flow][calc_power]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     // ch_pmin=5.5, ch_pmax=24.0 → 5.5 + 18.5*0.5 = 14.75
     CHECK(svc.calc_power(50.0f, 80.0f, 60.0f) == Approx(14.75f).margin(0.001f));
@@ -583,7 +609,8 @@ TEST_CASE("calc_power uses ch_pmin/ch_pmax independent of temperatures", "[gas_f
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     // Default ch_pmin=5.5, ch_pmax=24.0 → 5.5 + 18.5*0.5 = 14.75 kW
     // Input power does not depend on MWT — same at any temperature
@@ -597,7 +624,8 @@ TEST_CASE("calc_power monotonic with modulation", "[gas_flow][calc_power]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     float prev = svc.calc_power(0.0f, 80.0f, 60.0f);
     for (int mod = 10; mod <= 100; mod += 10) {
@@ -617,7 +645,8 @@ TEST_CASE("flame off integral unchanged", "[gas_flow][flame]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -651,7 +680,8 @@ TEST_CASE("flame on integral increases", "[gas_flow][flame]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -677,7 +707,8 @@ TEST_CASE("warmup factor 0.85 immediately after ignition", "[gas_flow][flame][wa
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -716,7 +747,8 @@ TEST_CASE("warmup factor 1.0 after 60 seconds", "[gas_flow][flame][warmup]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -753,7 +785,8 @@ TEST_CASE("outdoor_temp_valid_ starts false", "[gas_flow][outdoor_valid]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     CHECK(svc.outdoor_temp_valid_ == false);
 }
@@ -763,7 +796,8 @@ TEST_CASE("outdoor_temp_valid_ becomes true after valid poll", "[gas_flow][outdo
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -784,7 +818,8 @@ TEST_CASE("outdoor_temp_valid_ stays false on invalid temp", "[gas_flow][outdoor
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -804,7 +839,8 @@ TEST_CASE("outdoor_temp_valid_ accepts -50C boundary", "[gas_flow][outdoor_valid
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -824,7 +860,8 @@ TEST_CASE("outdoor_temp_valid_ accepts +60C boundary", "[gas_flow][outdoor_valid
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);
@@ -844,7 +881,8 @@ TEST_CASE("outdoor_temp_valid_ resets to false on reset", "[gas_flow][outdoor_va
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_outside_temp(15.0f);
     state.set_flame(true);
@@ -869,7 +907,8 @@ TEST_CASE("cv correction flow ratio -20C vs +20C", "[gas_flow][cv]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_p_max(24.0f);
@@ -913,7 +952,8 @@ TEST_CASE("flow_temp_valid_ starts false", "[gas_flow][temp_valid]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     CHECK(svc.flow_temp_valid_ == false);
     CHECK(svc.ret_temp_valid_ == false);
@@ -924,7 +964,8 @@ TEST_CASE("flow_temp_valid_ becomes true after poll with non-zero temp", "[gas_f
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     state.set_modulation(50.0f);
     state.set_return_temp(45.0f);     // non-zero → ret_temp_valid_ = true
@@ -945,7 +986,8 @@ TEST_CASE("calc_power uses MWT after validity flags set, not fallback", "[gas_fl
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     // Input power is flat — same at any MWT or flag state
     svc.flow_temp_valid_ = true;
@@ -962,7 +1004,8 @@ TEST_CASE("calc_power with flags false but non-zero params still works", "[gas_f
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     // Both flags false (default), passing non-zero values
     float power = svc.calc_power(50.0f, 80.0f, 60.0f);
@@ -975,7 +1018,8 @@ TEST_CASE("temp_valid flags reset", "[gas_flow][temp_valid]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService svc(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
 
     svc.flow_temp_valid_ = true;
     svc.ret_temp_valid_  = true;
