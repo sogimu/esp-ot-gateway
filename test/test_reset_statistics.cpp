@@ -11,6 +11,7 @@
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/iboiler_config_store.h"
 #include "fakes/fake_heating_state_store.h"
+#include "fakes/fake_gas_correction_store.h"
 #include "fakes/fake_configuration_store.h"
 #include "fakes/fake_boiler_hardware.h"
 #include "fakes/fake_time_source.h"
@@ -154,7 +155,8 @@ TEST_CASE("ResetStats: reset_gas_stats clears integral and EMAs", "[reset][gas]"
     ResetTestLogger log;
 
     FakeHeatingStatsStore hss;
-    GasFlowService gas_flow(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow(state, time, hss, gcs);
     gas_flow.set_integral(10.0f);
 
     REQUIRE(gas_flow.integral_m3() > 0);
@@ -175,7 +177,8 @@ TEST_CASE("ResetStats: reset_gas_stats on empty data is safe", "[reset][gas]")
     ResetTestLogger log;
 
     FakeHeatingStatsStore hss;
-    GasFlowService gas_flow(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow(state, time, hss, gcs);
 
     FakeBoilerConfigStore boiler_cfg;
     SystemConfigInteractor sys_cfg(state, boiler, config, boiler_cfg, log, time, nullptr, nullptr, nullptr, nullptr, &gas_flow);

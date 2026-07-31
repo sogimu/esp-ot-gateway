@@ -2,13 +2,16 @@
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/ports/driven/iheating_stats_store.h"
+#include "application/ports/driven/igas_correction_store.h"
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 
-GasFlowService::GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store)
-    : state_(state), time_(time), store_(store)
+GasFlowService::GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store,
+                                 IGasCorrectionStore& gas_store)
+    : state_(state), time_(time), store_(store), gas_store_(gas_store)
 {
     ring_ = static_cast<Sample*>(malloc(RING_SIZE * sizeof(Sample)));
     if (ring_) std::memset(ring_, 0, RING_SIZE * sizeof(Sample));
@@ -160,6 +163,7 @@ void GasFlowService::execute()
         if (dt_ms > 0 && dt_ms < 60000) {
             float dt_h = static_cast<float>(dt_ms) / 3600000.0f;
             integral_m3_ += flow * dt_h;
+            daily_accumulator_ += flow * dt_h;  // daily chart (NOT reset by corrections)
         }
     } else {
         latest_flow_ = 0;
@@ -193,6 +197,87 @@ void GasFlowService::execute()
         if (elapsed_h >= 24.0f)      update_ema(ema_24h_, avg, 0.001f);
         if (elapsed_h >= 168.0f)     update_ema(ema_7d_,  avg, 0.0005f);
     }
+
+    // Daily tracking only once wall clock is synced (NTP/manual)
+    if (time_.is_synced()) {
+        update_daily_tracking();
+    }
+}
+
+void GasFlowService::update_daily_tracking()
+{
+    auto local_sec = std::chrono::duration_cast<std::chrono::seconds>(
+        time_.local_now().time_since_epoch()).count();
+    int64_t epoch_day = local_sec / 86400;
+
+    if (today_epoch_day_ < 0) {
+        today_epoch_day_ = epoch_day;
+        daily_accumulator_ = 0;
+        return;
+    }
+
+    if (epoch_day != today_epoch_day_) {
+        // Day boundary: archive yesterday's consumption
+        int idx = (daily_head_ + daily_count_) % DAILY_SLOTS;
+        daily_[idx].epoch_day = today_epoch_day_;
+        daily_[idx].m3 = daily_accumulator_;
+
+        if (daily_count_ < DAILY_SLOTS - 1) {
+            daily_count_++;
+        } else {
+            daily_head_ = (daily_head_ + 1) % DAILY_SLOTS;
+        }
+
+        today_epoch_day_ = epoch_day;
+        daily_accumulator_ = 0;
+    }
+}
+
+int GasFlowService::get_daily_view(DailyView* out, int max) const
+{
+    int n = 0;
+    for (int i = 0; i < daily_count_ && n < max; i++) {
+        const DailySlot& s = daily_[(daily_head_ + i) % DAILY_SLOTS];
+        out[n].epoch_day = s.epoch_day;
+        out[n].m3 = s.m3;
+        n++;
+    }
+    if (n < max && today_epoch_day_ >= 0) {
+        out[n].epoch_day = today_epoch_day_;
+        out[n].m3 = daily_accumulator_;
+        n++;
+    }
+    return n;
+}
+
+void GasFlowService::pack_daily(GasDailyBlob& blob) const
+{
+    std::memset(&blob, 0, sizeof(blob));
+    for (int i = 0; i < daily_count_; i++) {
+        const DailySlot& s = daily_[(daily_head_ + i) % DAILY_SLOTS];
+        blob.epoch_days[i] = s.epoch_day;
+        blob.m3_values[i] = s.m3;
+    }
+    blob.head = daily_head_;
+    blob.count = daily_count_;
+    blob.today_epoch_day = today_epoch_day_;
+    blob.today_m3 = daily_accumulator_;
+}
+
+void GasFlowService::load_daily()
+{
+    GasDailyBlob blob;
+    if (!gas_store_.load_daily_gas(&blob)) return;
+
+    daily_head_ = blob.head;
+    daily_count_ = blob.count;
+    today_epoch_day_ = blob.today_epoch_day;
+    daily_accumulator_ = blob.today_m3;
+
+    for (int i = 0; i < blob.count; i++) {
+        daily_[(blob.head + i) % DAILY_SLOTS].epoch_day = blob.epoch_days[i];
+        daily_[(blob.head + i) % DAILY_SLOTS].m3 = blob.m3_values[i];
+    }
 }
 
 void GasFlowService::reset()
@@ -212,4 +297,8 @@ void GasFlowService::reset()
     outdoor_zero_start_ms_ = 0;
     flow_temp_valid_ = false;
     ret_temp_valid_  = false;
+    daily_head_ = 0;
+    daily_count_ = 0;
+    today_epoch_day_ = -1;
+    daily_accumulator_ = 0;
 }

@@ -100,3 +100,29 @@ void GasCorrectionNvsStore::save_boiler_config(const IHeatingStateStore& state)
 {
     if (boiler_) boiler_->save_boiler_config(state);
 }
+
+// ── daily gas (meter namespace) ───────────────────────────────────────────
+
+bool GasCorrectionNvsStore::load_daily_gas(void* blob)
+{
+    if (!blob) return false;
+    nvs_handle_t n;
+    if (nvs_open("meter", NVS_READONLY, &n) != ESP_OK) return false;
+    size_t sz = 0;
+    bool ok = false;
+    if (nvs_get_blob(n, "daily", nullptr, &sz) == ESP_OK && sz == sizeof(GasDailyBlob)) {
+        nvs_get_blob(n, "daily", blob, &sz);
+        ok = true;
+    }
+    nvs_close(n);
+    return ok;
+}
+
+void GasCorrectionNvsStore::save_daily_gas(const void* blob)
+{
+    if (!blob || OtaValidityAdapter::is_pending_global()) return;
+    nvs_handle_t n;
+    if (nvs_open("meter", NVS_READWRITE, &n) != ESP_OK) return;
+    nvs_set_blob(n, "daily", blob, sizeof(GasDailyBlob));
+    nvs_commit(n); nvs_close(n);
+}

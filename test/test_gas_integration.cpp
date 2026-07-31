@@ -18,9 +18,11 @@
 #include "application/use_cases/gas_correction_interactor.h"
 #include "infrastructure/driven/web_presenter_adapter.h"
 #include "fakes/fake_heating_state_store.h"
+#include "fakes/fake_gas_correction_store.h"
 #include "fakes/fake_configuration_store.h"
 #include "fakes/fake_time_source.h"
 #include "application/ports/driven/ilogger.h"
+#include "fakes/fake_event_log_reader.h"
 
 using Catch::Approx;
 
@@ -84,7 +86,8 @@ TEST_CASE("no corrections gives zero error pct", "[integration][gas]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService gas_flow(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow(state, time, hss, gcs);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -116,7 +119,8 @@ TEST_CASE("gas_meter_total equals base + integral", "[integration][gas]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService gas_flow(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow(state, time, hss, gcs);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -156,7 +160,8 @@ TEST_CASE("JSON stats contains gas_error_pct with 2 corrections", "[integration]
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService gas_flow(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow(state, time, hss, gcs);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -200,7 +205,8 @@ TEST_CASE("gas_error_pct with real error scenario", "[integration][gas][json]")
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService gas_flow(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow(state, time, hss, gcs);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -269,7 +275,8 @@ TEST_CASE("render_stats contains gas_temp_offset and model fields", "[integratio
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
-    GasFlowService gas_flow(state, time, hss);
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow(state, time, hss, gcs);
     FakeConfigurationStore config;
     FakeGasStore gas_store;
     gas_store.cfg = &config;
@@ -316,4 +323,66 @@ GasIntTestLogger log;
 // CHECK skipped — needs WebPresenterAdapter deps:     CHECK(strstr(buf, "\"gas_temp_offset\":-5.0") != nullptr);
 // CHECK skipped — needs WebPresenterAdapter deps:     CHECK(strstr(buf, "\"eff_t1\":30") != nullptr);
 // CHECK skipped — needs WebPresenterAdapter deps:     CHECK(strstr(buf, "\"eff_v1\":0.98") != nullptr);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// render_stats JSON with "daily" array must stay valid (regression)
+// ══════════════════════════════════════════════════════════════════════
+
+struct TempLogReader : IEventLogReader {
+    const char* to_json() override { return "{}"; }
+    void lock() override {}
+    void unlock() override {}
+    void set_event_callback(EventAppendCallback, void*) override {}
+};
+
+TEST_CASE("render_stats emits valid daily JSON after corrections", "[integration][gas]")
+{
+    FakeHeatingStateStore state;
+    FakeTimeSource time;
+    time.set_us(1736899200ULL * 1000000ULL);
+    FakeHeatingStatsStore hss;
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow(state, time, hss, gcs);
+    FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+    GasIntTestLogger log;
+    GasCorrectionInteractor gas_corr(state, gas_store, log);
+
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService mod_stats(state, hss_mod);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService burn_cycles(state, time, burn_store);
+    TempLogReader elr;
+    WebPresenterAdapter presenter(state, elr, time, mod_stats, burn_cycles, gas_flow, gas_corr, 0);
+
+    // Accumulate flow on day 0, then cross to day 1 so daily has data
+    state.set_p_max(24.0f);
+    state.set_gas_calorific(9.5f);
+    state.set_modulation(50.0f);
+    state.set_return_temp(45.0f);
+    state.set_flame(true);
+    for (int i = 0; i < 5; i++) { time.advance_ms(10000); gas_flow.execute(); }
+    time.set_us(time.now_us() + 86400ULL * 1000000ULL);
+    time.advance_ms(10000);
+    gas_flow.execute();
+
+    char buf[6144] = {};
+    int len = presenter.render_stats(buf, sizeof(buf));
+    REQUIRE(len > 0);
+    REQUIRE((size_t)len < sizeof(buf));
+
+    // Empty corrections array must still be closed before "daily"
+    CHECK(strstr(buf, "\"corrections\":[],\"daily\":[") != nullptr);
+    // Daily entries present and today flag on the last one
+    CHECK(strstr(buf, "\"daily\":[{\"d\":\"15.01\",\"m3\":") != nullptr);
+    CHECK(strstr(buf, "\"today\":1") != nullptr);
+    // Balanced braces — no truncation, no stray commas
+    int opens = 0, closes = 0;
+    for (int i = 0; i < len; i++) {
+        if (buf[i] == '{' || buf[i] == '[') opens++;
+        if (buf[i] == '}' || buf[i] == ']') closes++;
+    }
+    CHECK(opens == closes);
 }

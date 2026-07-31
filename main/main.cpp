@@ -123,7 +123,7 @@ extern "C" void app_main(void)
     // ── Phase 5: Application services ────────────────────
     ModulationStatsService mod_stats(ca_state, stores.heating_stats);
     BurnCycleService       burn_cycle_service(ca_state, ca_time, stores.burn_stats);
-    GasFlowService         gas_flow(ca_state, ca_time, stores.heating_stats);
+    GasFlowService         gas_flow(ca_state, ca_time, stores.heating_stats, stores.gas);
     SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time,
                                     &boiler_poll, &pid_poll,
                                     &burn_cycle_service, &mod_stats, &gas_flow);
@@ -140,6 +140,7 @@ extern "C" void app_main(void)
 
     mod_stats.load_from_store();
     gas_flow.load_integral();
+    gas_flow.load_daily();
 
     // Web presenter — все зависимости готовы
     uint32_t total_uptime_base_sec = stores.heating_stats.restore_total_uptime();

@@ -1,11 +1,11 @@
 #pragma once
 
 #include "application/ports/driving/igas_calibration.h"
+#include "application/ports/driven/igas_correction_store.h"
 #include "nvs_config_store.h"  // NvsMeterBlob, NvsCorrLogEntry, CORRECTION_LOG_SIZE
 #include "domain/services/kalman1d.h"
 
 class IHeatingStateStore;
-class IGasCorrectionStore;
 class ILogger;
 class ITimeSource;
 class GasFlowService;
@@ -35,6 +35,8 @@ public:
 
     /// Read-only access to the correction log for web rendering.
     const NvsMeterBlob& meter_blob() const { return meter_blob_; }
+
+    void save_daily_gas(const void* blob) { store_.save_daily_gas(blob); }
 
 private:
     IHeatingStateStore&   state_;

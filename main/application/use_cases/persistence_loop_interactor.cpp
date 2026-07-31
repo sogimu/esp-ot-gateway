@@ -4,6 +4,7 @@
 #include "infrastructure/driven/nvs_config_store.h"  // NvsHistBlob
 #include "infrastructure/driven/heating_stats_nvs_store.h"
 #include "infrastructure/driven/heating_state_adapter.h"
+#include "application/ports/driven/igas_correction_store.h"  // GasDailyBlob
 
 #include "application/services/burn_cycle_service.h"
 #include "application/services/modulation_stats_service.h"
@@ -53,4 +54,8 @@ void PersistenceLoopInteractor::tick()
     heating_stats_.save_total_uptime(total_uptime_base_sec_ +
         (uint32_t)(ca_time_.monotonic_us() / 1000000));
     heating_stats_.save_meter(ca_state_, &gas_corr_.meter_blob());
+
+    GasDailyBlob daily_blob;
+    gas_flow_.pack_daily(daily_blob);
+    gas_corr_.save_daily_gas(&daily_blob);
 }

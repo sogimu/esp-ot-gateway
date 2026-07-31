@@ -340,6 +340,27 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
                 (double)e.prev_k_calib, (double)e.new_k_calib);
         }
     }
+
+    // ── Дневной расход за последнюю неделю (график на вкладке gas-meter) ──
+    // Закрываем массив "corrections" (]) и начинаем "daily"
+    pos += snprintf(buf + pos, size - pos, "],\"daily\":[");
+    if (gas_flow_) {
+        GasFlowService::DailyView dv[GasFlowService::DAILY_SLOTS];
+        int dn = gas_flow_->get_daily_view(dv, GasFlowService::DAILY_SLOTS);
+        for (int i = 0; i < dn && pos < (int)size - 80; i++) {
+            // epoch_day → локальная дата (civil_from_seconds уже учтён tz)
+            int64_t local_start_sec = dv[i].epoch_day * 86400;
+            auto cd = civil_from_seconds(local_start_sec);
+            char datebuf[8];
+            snprintf(datebuf, sizeof(datebuf), "%02d.%02d", cd.day, cd.mon);
+            pos += snprintf(buf + pos, size - pos,
+                "%s{\"d\":\"%s\",\"m3\":%.3f%s}",
+                (i > 0) ? "," : "",
+                datebuf,
+                (double)dv[i].m3,
+                (i == dn - 1) ? ",\"today\":1" : "");
+        }
+    }
     pos += snprintf(buf + pos, size - pos, "]}");
 
     return pos;
