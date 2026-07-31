@@ -77,7 +77,6 @@ bool HttpControllerAdapter::start()
         // OTA API
         { .uri = "/api/ota/status",    .method = HTTP_GET,  .handler = handler_ota_status,    .user_ctx = NULL },
         { .uri = "/api/ota/versions",  .method = HTTP_GET,  .handler = handler_ota_versions,  .user_ctx = NULL },
-        { .uri = "/api/ota/start",     .method = HTTP_POST, .handler = handler_ota_start,     .user_ctx = NULL },
         { .uri = "/api/ota/rollback",  .method = HTTP_POST, .handler = handler_ota_rollback,  .user_ctx = NULL },
         { .uri = "/api/ota/upload",    .method = HTTP_POST, .handler = handler_ota_upload,    .user_ctx = NULL },
 
@@ -707,41 +706,6 @@ esp_err_t HttpControllerAdapter::handler_ota_versions(httpd_req_t* req) {
     return ret;
 }
 
-esp_err_t HttpControllerAdapter::handler_ota_start(httpd_req_t* req) {
-    auto* o = s_self ? s_self->ota_ : nullptr;
-    httpd_resp_set_type(req, "application/json");
-    if (!o) {
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"unavailable\"}");
-    }
-
-    char body[128] = {0};
-    int recv_len = httpd_req_recv(req, body, sizeof(body) - 1);
-    if (recv_len <= 0) {
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"empty body\"}");
-    }
-
-    int tlen = 0;
-    const char* tag = json_get_string(body, "\"tag\"", tlen);
-    if (!tag || tlen == 0) {
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"no tag\"}");
-    }
-    char tag_buf[32] = {0};
-    int n = tlen < 31 ? tlen : 31;
-    memcpy(tag_buf, tag, n);
-    tag_buf[n] = '\0';
-
-    // Отклонить запуск, если уже идёт обновление (состояние не IDLE/DONE/ERROR)
-    OtaStatus s = o->status();
-    if (s.state == OtaStatus::FETCHING ||
-        s.state == OtaStatus::WRITING ||
-        s.state == OtaStatus::VERIFY_PENDING) {
-        return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"update in progress\"}");
-    }
-
-    bool ok = o->begin_update(tag_buf);
-    return httpd_resp_sendstr(req, ok ? "{\"ok\":true}" : "{\"ok\":false}");
-}
-
 esp_err_t HttpControllerAdapter::handler_ota_rollback(httpd_req_t* req) {
     auto* o = s_self ? s_self->ota_ : nullptr;
     // Ответить ДО перезагрузки — паттерн respond-then-reboot
@@ -771,10 +735,6 @@ esp_err_t HttpControllerAdapter::handler_ota_upload(httpd_req_t* req)
             httpd_query_key_value(query, "tag", tag, sizeof(tag));
             if (s_self && s_self->ota_)
                 sha256_expected = s_self->ota_->lookup_sha256(tag);
-            if (sha256_expected) {
-                strncpy(sha_buf, sha256_expected, 64);
-                sha256_expected = sha_buf;
-            }
         }
         free(query);
     }
@@ -850,8 +810,7 @@ esp_err_t HttpControllerAdapter::handler_ota_upload(httpd_req_t* req)
         return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"set_boot failed\"}");
 
     httpd_resp_sendstr(req, "{\"ok\":true}");
-
-    // Сброс статистики и перезагрузка — аналогично ota_flush_and_reboot
+    // Задержка для отправки ответа, затем перезагрузка
     vTaskDelay(pdMS_TO_TICKS(500));
     esp_restart();
     return ESP_OK;

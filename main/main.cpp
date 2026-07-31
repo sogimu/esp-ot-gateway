@@ -43,7 +43,6 @@
 
 // ── OTA ──────────────────────────────────────────────────
 #include "infrastructure/driven/ota_validity_adapter.h"
-#include "infrastructure/driven/esp_ota_adapter.h"
 #include "infrastructure/driven/ota_version_index_adapter.h"
 #include "infrastructure/driving/ota_interactor.h"
 
@@ -62,29 +61,6 @@
 #include "application/services/burn_cycle_service.h"
 #include "application/services/gas_flow_estimator.h"
 #include "application/services/dhw_predict_service.h"
-
-// ── OTA: сброс статистики перед перезагрузкой в новый слот ──────
-static void ota_flush_and_reboot(BurnCycleService& burn_cycle_service,
-                                  ModulationStatsService& mod_stats,
-                                  HeatingStatsNvsStore& heating_stats,
-                                  HeatingStateAdapter& ca_state,
-                                  GasFlowService& gas_flow,
-                                  GasCorrectionInteractor& gas_corr,
-                                  uint32_t& total_uptime_base_sec,
-                                  SntpTimeAdapter& ca_time)
-{
-    OtaValidityAdapter::set_flushing_global(true);
-    burn_cycle_service.save_to_store();
-    NvsHistBlob hb; memset(&hb, 0, sizeof(hb));
-    mod_stats.fill_histogram(hb);
-    heating_stats.save_stats(ca_state, burn_cycle_service.burner_seconds(),
-        gas_flow.integral_m3(), &hb, nullptr, nullptr, nullptr);
-    heating_stats.save_total_uptime(total_uptime_base_sec +
-        (uint32_t)(ca_time.monotonic_us() / 1000000));
-    heating_stats.save_meter(ca_state, &gas_corr.meter_blob());
-    vTaskDelay(pdMS_TO_TICKS(500));
-    esp_restart();
-}
 
 extern "C" void app_main(void)
 {
@@ -210,18 +186,10 @@ extern "C" void app_main(void)
     ca_sensors.init();
     ca_ot_hw.init();
 
-    EspOtaAdapter          ota_downloader;
     OtaVersionIndexAdapter ota_versions;
     auto ota_now_ms = [&]() { return ca_time.monotonic_us() / 1000; };
-    auto ota_spawn  = [](OtaInteractor* self) -> bool {
-        return xTaskCreatePinnedToCore([](void* arg) { static_cast<OtaInteractor*>(arg)->run_download(); vTaskDelete(nullptr); },
-                           "ota_dl", 24*1024, self, 3, nullptr, 1) == pdPASS;  // Core 1 — отдельно от WiFi/LwIP
-    };
-    auto ota_reboot = [&]() { ota_flush_and_reboot(burn_cycle_service, mod_stats,
-        stores.heating_stats, ca_state, gas_flow, gas_corr, total_uptime_base_sec, ca_time); };
-    OtaInteractor ota(ota_validity, ota_downloader, ota_versions,
-                      ota_now_ms, ota_spawn, ota_reboot);
-    control_loop.add(&ota);        // OTA: синхронизация прогресса загрузки
+    OtaInteractor ota(ota_validity, ota_versions, ota_now_ms);
+    control_loop.add(&ota);        // OTA: синхронизация прогресса
 
     ControlLoopTaskAdapter poll_task(control_loop);
     poll_task.start();
