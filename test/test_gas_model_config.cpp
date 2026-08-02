@@ -63,9 +63,9 @@ TEST_CASE("calc_power uses dhw params when dhw_active", "[gas_model][dhw]")
     float power = svc.calc_power(100.0f, 80.0f, 60.0f);
     CHECK(power == Approx(30.0f).margin(0.001f));
 
-    // mod=0% → 0 kW (burner not firing)
+    // mod=0% → dhw_pmin (burner fires at minimum power, not zero)
     power = svc.calc_power(0.0f, 80.0f, 60.0f);
-    CHECK(power == Approx(0.0f).margin(0.001f));
+    CHECK(power == Approx(6.0f).margin(0.001f));
 
     // mod=50% should give midpoint
     power = svc.calc_power(50.0f, 80.0f, 60.0f);
