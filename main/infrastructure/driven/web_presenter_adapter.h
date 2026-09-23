@@ -48,6 +48,9 @@ public:
     /// Render stats JSON into buf, returns length.
     int render_stats(char* buf, size_t size);
 
+    /// Render 2-month daily + 48h hourly gas history JSON into buf, returns length.
+    int render_gas_history(char* buf, size_t size);
+
     /// Render schedule JSON into buf, returns length.
     int render_schedule(char* buf, size_t size);
 

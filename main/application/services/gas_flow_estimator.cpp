@@ -6,20 +6,12 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 
 GasFlowService::GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store,
                                  IGasCorrectionStore& gas_store)
     : state_(state), time_(time), store_(store), gas_store_(gas_store)
 {
-    ring_ = static_cast<Sample*>(malloc(RING_SIZE * sizeof(Sample)));
-    if (ring_) std::memset(ring_, 0, RING_SIZE * sizeof(Sample));
-}
-
-GasFlowService::~GasFlowService()
-{
-    free(ring_);
 }
 
 void GasFlowService::load_integral()
@@ -80,18 +72,11 @@ float GasFlowService::calc_power(float modulation_pct, float /*flow_temp*/, floa
     return pmin + (pmax - pmin) * modulation_pct / 100.0f;
 }
 
-void GasFlowService::update_ema(float& ema, float val, float alpha)
-{
-    if (ema == 0) ema = val;
-    else ema = alpha * val + (1.0f - alpha) * ema;
-}
-
 void GasFlowService::execute()
 {
     uint32_t now_ms = static_cast<uint32_t>(time_.monotonic_ms());
     if (last_update_ms_ == 0) {
         last_update_ms_ = now_ms;
-        ema_start_us_ = time_.monotonic_us();
         return;
     }
 
@@ -163,44 +148,59 @@ void GasFlowService::execute()
         if (dt_ms > 0 && dt_ms < 60000) {
             float dt_h = static_cast<float>(dt_ms) / 3600000.0f;
             integral_m3_ += flow * dt_h;
-            daily_accumulator_ += flow * dt_h;  // daily chart (NOT reset by corrections)
+            daily_accumulator_ += flow * dt_h;   // daily chart (NOT reset by corrections)
+            hourly_accumulator_ += flow * dt_h;  // current hour bucket
         }
     } else {
         latest_flow_ = 0;
     }
     last_update_ms_ = now_ms;
 
-    // Ring buffer for sliding window EMA
-    ring_[ring_idx_].flow = latest_flow_;
-    ring_idx_ = (ring_idx_ + 1) % RING_SIZE;
-    if (ring_count_ < RING_SIZE) ring_count_++;
-
-    // Compute EMAs every ~10 samples
-    ema_tick_++;
-    if (ema_tick_ >= 10 && ring_count_ > 0) {
-        ema_tick_ = 0;
-        // Average over recent samples
-        float avg = 0;
-        int n = ring_count_ < 10 ? ring_count_ : 10;
-        for (int i = 0; i < n; i++) {
-            int idx = (ring_idx_ - 1 - i + RING_SIZE) % RING_SIZE;
-            avg += ring_[idx].flow;
-        }
-        avg /= static_cast<float>(n);
-
-        uint64_t elapsed_us = time_.monotonic_us() - ema_start_us_;
-        float elapsed_h = elapsed_us / 3600000000.0f;
-
-        if (elapsed_h >= 1.0f / 60)  update_ema(ema_1h_,  avg, 0.01f);
-        if (elapsed_h >= 3.0f)       update_ema(ema_3h_,  avg, 0.005f);
-        if (elapsed_h >= 12.0f)      update_ema(ema_12h_, avg, 0.002f);
-        if (elapsed_h >= 24.0f)      update_ema(ema_24h_, avg, 0.001f);
-        if (elapsed_h >= 168.0f)     update_ema(ema_7d_,  avg, 0.0005f);
-    }
-
-    // Daily tracking only once wall clock is synced (NTP/manual)
+    // Time-bucket tracking only once wall clock is synced (NTP/manual).
+    // Hourly runs first: at a day boundary it archives the last hour of the
+    // outgoing day before update_daily_tracking() moves today's hours to
+    // yesterday.
     if (time_.is_synced()) {
+        update_hourly_tracking();
         update_daily_tracking();
+    }
+}
+
+void GasFlowService::update_hourly_tracking()
+{
+    auto local_sec = std::chrono::duration_cast<std::chrono::seconds>(
+        time_.local_now().time_since_epoch()).count();
+    int64_t epoch_hour = local_sec / 3600;
+
+    if (today_epoch_hour_ < 0) {
+        today_epoch_hour_ = epoch_hour;
+        hourly_accumulator_ = 0;
+        return;
+    }
+    if (epoch_hour == today_epoch_hour_) return;
+
+    // Archive the hour we are leaving — only if it belongs to the currently
+    // tracked day (otherwise it is a clock jump already handled by the day
+    // boundary logic below).
+    if (today_epoch_hour_ / 24 == today_epoch_day_) {
+        int idx = static_cast<int>(today_epoch_hour_ % 24);
+        if (idx >= 0 && idx < HOURS_PER_DAY) {
+            today_hours_[idx] += hourly_accumulator_;
+        }
+    }
+    today_epoch_hour_ = epoch_hour;
+    hourly_accumulator_ = 0;
+}
+
+void GasFlowService::push_daily(int64_t epoch_day, float m3)
+{
+    int idx = (daily_head_ + daily_count_) % DAILY_SLOTS;
+    daily_[idx].epoch_day = epoch_day;
+    daily_[idx].m3 = m3;
+    if (daily_count_ < DAILY_SLOTS) {
+        daily_count_++;
+    } else {
+        daily_head_ = (daily_head_ + 1) % DAILY_SLOTS;
     }
 }
 
@@ -218,18 +218,23 @@ void GasFlowService::update_daily_tracking()
 
     if (epoch_day != today_epoch_day_) {
         // Day boundary: archive yesterday's consumption
-        int idx = (daily_head_ + daily_count_) % DAILY_SLOTS;
-        daily_[idx].epoch_day = today_epoch_day_;
-        daily_[idx].m3 = daily_accumulator_;
+        push_daily(today_epoch_day_, daily_accumulator_);
 
-        if (daily_count_ < DAILY_SLOTS - 1) {
-            daily_count_++;
+        if (epoch_day == today_epoch_day_ + 1) {
+            for (int i = 0; i < HOURS_PER_DAY; i++) {
+                yesterday_hours_[i] = today_hours_[i];
+            }
+            yesterday_epoch_day_ = today_epoch_day_;
         } else {
-            daily_head_ = (daily_head_ + 1) % DAILY_SLOTS;
+            // Clock jump over one or more days — do not carry stale hours
+            for (int i = 0; i < HOURS_PER_DAY; i++) yesterday_hours_[i] = 0;
+            yesterday_epoch_day_ = -1;
         }
+        for (int i = 0; i < HOURS_PER_DAY; i++) today_hours_[i] = 0;
 
         today_epoch_day_ = epoch_day;
         daily_accumulator_ = 0;
+        history_dirty_ = true;
     }
 }
 
@@ -237,7 +242,7 @@ int GasFlowService::get_daily_view(DailyView* out, int max) const
 {
     int n = 0;
     for (int i = 0; i < daily_count_ && n < max; i++) {
-        const DailySlot& s = daily_[(daily_head_ + i) % DAILY_SLOTS];
+        const GasDailyEntry& s = daily_[(daily_head_ + i) % DAILY_SLOTS];
         out[n].epoch_day = s.epoch_day;
         out[n].m3 = s.m3;
         n++;
@@ -250,33 +255,93 @@ int GasFlowService::get_daily_view(DailyView* out, int max) const
     return n;
 }
 
-void GasFlowService::pack_daily(GasDailyBlob& blob) const
+int GasFlowService::get_hourly_view(HourlyView* out, int max) const
+{
+    int n = 0;
+    if (yesterday_epoch_day_ >= 0) {
+        for (int h = 0; h < HOURS_PER_DAY && n < max; h++) {
+            out[n].epoch_hour = yesterday_epoch_day_ * 24 + h;
+            out[n].m3 = yesterday_hours_[h];
+            n++;
+        }
+    }
+    if (today_epoch_day_ >= 0) {
+        int cur_hour = -1;
+        if (today_epoch_hour_ >= 0 && today_epoch_hour_ / 24 == today_epoch_day_) {
+            cur_hour = static_cast<int>(today_epoch_hour_ % 24);
+        }
+        for (int h = 0; h < HOURS_PER_DAY && n < max; h++) {
+            out[n].epoch_hour = today_epoch_day_ * 24 + h;
+            out[n].m3 = today_hours_[h] + (h == cur_hour ? hourly_accumulator_ : 0.0f);
+            n++;
+        }
+    }
+    return n;
+}
+
+void GasFlowService::pack_today(GasTodayBlob& blob) const
+{
+    std::memset(&blob, 0, sizeof(blob));
+    blob.today_epoch_day = today_epoch_day_;
+    blob.today_m3 = daily_accumulator_;
+    for (int h = 0; h < HOURS_PER_DAY; h++) blob.today_hours[h] = today_hours_[h];
+    blob.current_hour = -1;
+    if (today_epoch_hour_ >= 0 && today_epoch_hour_ / 24 == today_epoch_day_) {
+        blob.current_hour = static_cast<int>(today_epoch_hour_ % 24);
+    }
+    blob.current_hour_m3 = hourly_accumulator_;
+}
+
+void GasFlowService::pack_history(GasHistoryBlob& blob) const
 {
     std::memset(&blob, 0, sizeof(blob));
     for (int i = 0; i < daily_count_; i++) {
-        const DailySlot& s = daily_[(daily_head_ + i) % DAILY_SLOTS];
-        blob.epoch_days[i] = s.epoch_day;
-        blob.m3_values[i] = s.m3;
+        const GasDailyEntry& s = daily_[(daily_head_ + i) % DAILY_SLOTS];
+        blob.daily[i].epoch_day = s.epoch_day;
+        blob.daily[i].m3 = s.m3;
     }
     blob.head = daily_head_;
     blob.count = daily_count_;
-    blob.today_epoch_day = today_epoch_day_;
-    blob.today_m3 = daily_accumulator_;
+    blob.yesterday_epoch_day = yesterday_epoch_day_;
+    for (int h = 0; h < HOURS_PER_DAY; h++) blob.yesterday_hours[h] = yesterday_hours_[h];
+}
+
+bool GasFlowService::consume_history_dirty()
+{
+    bool d = history_dirty_;
+    history_dirty_ = false;
+    return d;
 }
 
 void GasFlowService::load_daily()
 {
-    GasDailyBlob blob;
-    if (!gas_store_.load_daily_gas(&blob)) return;
+    GasTodayBlob t;
+    if (gas_store_.load_today_gas(&t)) {
+        today_epoch_day_ = t.today_epoch_day;
+        daily_accumulator_ = t.today_m3;
+        for (int h = 0; h < HOURS_PER_DAY; h++) today_hours_[h] = t.today_hours[h];
+        hourly_accumulator_ = 0;
+        today_epoch_hour_ = -1;
+        if (t.today_epoch_day >= 0 && t.current_hour >= 0 && t.current_hour < HOURS_PER_DAY) {
+            today_epoch_hour_ = t.today_epoch_day * 24 + t.current_hour;
+            hourly_accumulator_ = t.current_hour_m3;
+        }
+    }
 
-    daily_head_ = blob.head;
-    daily_count_ = blob.count;
-    today_epoch_day_ = blob.today_epoch_day;
-    daily_accumulator_ = blob.today_m3;
-
-    for (int i = 0; i < blob.count; i++) {
-        daily_[(blob.head + i) % DAILY_SLOTS].epoch_day = blob.epoch_days[i];
-        daily_[(blob.head + i) % DAILY_SLOTS].m3 = blob.m3_values[i];
+    GasHistoryBlob h;
+    if (gas_store_.load_history_gas(&h)) {
+        daily_head_ = h.head % DAILY_SLOTS;
+        if (daily_head_ < 0) daily_head_ += DAILY_SLOTS;
+        daily_count_ = h.count;
+        if (daily_count_ < 0) daily_count_ = 0;
+        if (daily_count_ > DAILY_SLOTS) daily_count_ = DAILY_SLOTS;
+        for (int i = 0; i < daily_count_; i++) {
+            daily_[(daily_head_ + i) % DAILY_SLOTS] = h.daily[i];
+        }
+        yesterday_epoch_day_ = h.yesterday_epoch_day;
+        for (int i = 0; i < HOURS_PER_DAY; i++) {
+            yesterday_hours_[i] = h.yesterday_hours[i];
+        }
     }
 }
 
@@ -284,10 +349,6 @@ void GasFlowService::reset()
 {
     integral_m3_ = 0;
     latest_flow_ = 0;
-    ring_idx_ = 0;
-    ring_count_ = 0;
-    ema_1h_ = ema_3h_ = ema_12h_ = ema_24h_ = ema_7d_ = 0;
-    ema_start_us_ = time_.monotonic_us();
     kalman_mod_.reset(0);
     kalman_ret_.reset(0);
     flame_prev_ = false;
@@ -297,8 +358,20 @@ void GasFlowService::reset()
     outdoor_zero_start_ms_ = 0;
     flow_temp_valid_ = false;
     ret_temp_valid_  = false;
+    for (int i = 0; i < DAILY_SLOTS; i++) {
+        daily_[i].epoch_day = 0;
+        daily_[i].m3 = 0;
+    }
     daily_head_ = 0;
     daily_count_ = 0;
     today_epoch_day_ = -1;
     daily_accumulator_ = 0;
+    history_dirty_ = false;
+    today_epoch_hour_ = -1;
+    hourly_accumulator_ = 0;
+    yesterday_epoch_day_ = -1;
+    for (int i = 0; i < HOURS_PER_DAY; i++) {
+        today_hours_[i] = 0;
+        yesterday_hours_[i] = 0;
+    }
 }

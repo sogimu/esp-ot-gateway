@@ -19,6 +19,5 @@ public:
     virtual void set_sntp_servers(const char* srv0, const char* srv1) = 0;
     virtual void reset_modulation_stats() = 0;
     virtual void reset_cycle_stats() = 0;
-    virtual void reset_gas_stats() = 0;
     virtual ~IConfigureSystem() = default;
 };

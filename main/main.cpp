@@ -126,7 +126,7 @@ extern "C" void app_main(void)
     GasFlowService         gas_flow(ca_state, ca_time, stores.heating_stats, stores.gas);
     SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time,
                                     &boiler_poll, &pid_poll,
-                                    &burn_cycle_service, &mod_stats, &gas_flow);
+                                    &burn_cycle_service, &mod_stats);
     DHWPredictService      dhw_predict(ca_state, stores.predict, ca_time);
     dhw_predict.load_history();
 
