@@ -34,52 +34,6 @@ struct FakeHeatingStatsStore : IHeatingStatsStore {
     bool load_meter(IHeatingStateStore&, void*) override { return false; }
 };
 
-TEST_CASE("GasFlowService: static ema_tick shared across instances", "[gas_flow][bug][critical]")
-{
-    // BUG: ema_tick is declared `static int ema_tick = 0` (line 82).
-    // This means ALL GasFlowService instances share the same counter.
-    // If two instances exist, they interfere with each other's EMA timing.
-
-    FakeHeatingStateStore state1, state2;
-    FakeTimeSource time1, time2;
-    FakeHeatingStatsStore hss;
-    FakeGasCorrectionStore gcs;
-    GasFlowService svc1(state1, time1, hss, gcs);
-    GasFlowService svc2(state2, time2, hss, gcs);
-
-    // Both instances must have valid data to trigger poll
-    state1.set_modulation(50.0f);
-    state1.set_return_temp(45.0f);
-    state1.set_p_max(24.0f);
-    state1.set_gas_calorific(9.5f);
-    state1.set_flame(true);
-
-    state2.set_modulation(50.0f);
-    state2.set_return_temp(45.0f);
-    state2.set_p_max(24.0f);
-    state2.set_gas_calorific(9.5f);
-    state2.set_flame(true);
-
-    // Run 10 polls on svc1 — this should trigger EMA update
-    for (int i = 0; i < 10; i++) {
-        time1.advance_ms(10000);
-        svc1.execute();
-    }
-
-    // BUG: svc2's ema_tick was also incremented because it's static
-    // After 10 polls on svc1, svc2's first EMA update may be delayed
-    // or triggered prematurely
-
-    float flow1 = svc1.instant_flow();
-    float flow2 = svc2.instant_flow();
-
-    INFO("flow1=" << flow1 << " flow2=" << flow2);
-
-    // BUG CONFIRMATION: static ema_tick means two instances share state
-    WARN("BUG: static ema_tick shared across GasFlowService instances");
-    CHECK(true); // documentation test — the bug is in the code
-}
-
 TEST_CASE("GasFlowService: efficiency correction curve", "[gas_flow]")
 {
     FakeHeatingStateStore state;

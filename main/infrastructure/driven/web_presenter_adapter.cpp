@@ -240,7 +240,7 @@ float WebPresenterAdapter::compute_monthly_error_pct() const
     auto m = compute_correction_metrics(
         prev.actual_reading, prev.estimated_total,
         last.actual_reading, last.estimated_total);
-    return m.error_pct;
+    return m.error_signed_pct;
 }
 
 int WebPresenterAdapter::render_stats(char* buf, size_t size)
@@ -261,9 +261,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         "\"inter_session_cnt\":%u,\"modulation_cnt\":%u,"
         "\"burner_h\":%.1f,\"total_pause_h\":%.1f,"
         "\"p90_max\":%.1f,\"p10_p50\":%.1f,\"p99_p90\":%.1f,"
-        "\"instant_flow\":%.4f,\"integral_m3\":%.3f,"
-        "\"avg_1h\":%.4f,\"avg_3h\":%.4f,\"avg_12h\":%.4f,"
-        "\"avg_24h\":%.4f,\"avg_7d\":%.4f,"
+        "\"integral_m3\":%.3f,"
         "\"mod_filt\":%.1f,\"t_ret_filt\":%.1f,"
         "\"k_calib\":%.3f,\"p_max\":%.1f,\"gas_cal\":%.1f,"
         "\"gas_temp_offset\":%.1f,"
@@ -290,10 +288,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         (double)(burn_cycles_->total_pause_seconds() / 3600.0f),
         (double)mod_stats_->p90(), (double)p10p50,
         (double)(mod_stats_->p99() - mod_stats_->p90()),
-        (double)gas_flow_->instant_flow(), (double)gas_flow_->integral_m3(),
-        (double)gas_flow_->avg_1h(), (double)gas_flow_->avg_3h(),
-        (double)gas_flow_->avg_12h(), (double)gas_flow_->avg_24h(),
-        (double)gas_flow_->avg_7d(),
+        (double)gas_flow_->integral_m3(),
         (double)gas_flow_->mod_filtered(), (double)gas_flow_->t_ret_filtered(),
         (double)gas_flow_->k_calib(),
         (double)state_->get_p_max(), (double)state_->get_gas_calorific(),
@@ -341,28 +336,47 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         }
     }
 
-    // ── Дневной расход за последнюю неделю (график на вкладке gas-meter) ──
-    // Закрываем массив "corrections" (]) и начинаем "daily"
-    pos += snprintf(buf + pos, size - pos, "],\"daily\":[");
-    if (gas_flow_) {
-        GasFlowService::DailyView dv[GasFlowService::DAILY_SLOTS];
-        int dn = gas_flow_->get_daily_view(dv, GasFlowService::DAILY_SLOTS);
-        for (int i = 0; i < dn && pos < (int)size - 80; i++) {
-            // epoch_day → локальная дата (civil_from_seconds уже учтён tz)
-            int64_t local_start_sec = dv[i].epoch_day * 86400;
-            auto cd = civil_from_seconds(local_start_sec);
-            char datebuf[8];
-            snprintf(datebuf, sizeof(datebuf), "%02d.%02d", cd.day, cd.mon);
-            pos += snprintf(buf + pos, size - pos,
-                "%s{\"d\":\"%s\",\"m3\":%.3f%s}",
-                (i > 0) ? "," : "",
-                datebuf,
-                (double)dv[i].m3,
-                (i == dn - 1) ? ",\"today\":1" : "");
-        }
-    }
+    // Закрываем массив "corrections"
     pos += snprintf(buf + pos, size - pos, "]}");
 
+    return pos;
+}
+
+int WebPresenterAdapter::render_gas_history(char* buf, size_t size)
+{
+    if (!gas_flow_)
+        return snprintf(buf, size, "{\"days\":[],\"hours\":[],\"today_epoch_day\":-1}");
+
+    int64_t today_day = gas_flow_->today_epoch_day();
+
+    int pos = snprintf(buf, size, "{\"days\":[");
+    GasFlowService::DailyView dv[GasFlowService::DAILY_SLOTS];
+    int dn = gas_flow_->get_daily_view(dv, GasFlowService::DAILY_SLOTS);
+    for (int i = 0; i < dn && pos < (int)size - 128; i++) {
+        // epoch_day → локальная дата (civil_from_seconds уже учтён tz)
+        auto cd = civil_from_seconds(dv[i].epoch_day * 86400);
+        int ym = cd.year * 12 + (cd.mon - 1);
+        pos += snprintf(buf + pos, size - pos,
+            "%s{\"epoch_day\":%lld,\"ym\":%d,\"d\":\"%02d.%02d\",\"m3_total\":%.3f,\"m3_dhw\":%.3f,\"today\":%d}",
+            (i > 0) ? "," : "",
+            (long long)dv[i].epoch_day, ym, cd.day, cd.mon,
+            (double)dv[i].m3_total, (double)dv[i].m3_dhw,
+            (dv[i].epoch_day == today_day) ? 1 : 0);
+    }
+
+    pos += snprintf(buf + pos, size - pos, "],\"hours\":[");
+    GasFlowService::HourlyView hv[2 * GasFlowService::HOURS_PER_DAY];
+    int hn = gas_flow_->get_hourly_view(hv, 2 * GasFlowService::HOURS_PER_DAY);
+    for (int i = 0; i < hn && pos < (int)size - 96; i++) {
+        pos += snprintf(buf + pos, size - pos,
+            "%s{\"epoch_hour\":%lld,\"h\":\"%02d\",\"m3_total\":%.3f,\"m3_dhw\":%.3f}",
+            (i > 0) ? "," : "",
+            (long long)hv[i].epoch_hour,
+            (int)(hv[i].epoch_hour % 24),
+            (double)hv[i].m3_total, (double)hv[i].m3_dhw);
+    }
+
+    pos += snprintf(buf + pos, size - pos, "],\"today_epoch_day\":%lld}", (long long)today_day);
     return pos;
 }
 

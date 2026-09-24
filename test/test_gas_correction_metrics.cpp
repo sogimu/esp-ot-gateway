@@ -41,6 +41,7 @@ TEST_CASE("correction metrics: 50% underestimation", "[domain][gas_metrics]")
     CHECK(m.actual_consumed    == Approx(100.0f));
     CHECK(m.estimated_consumed == Approx(50.0f));
     CHECK(m.error_pct          == Approx(50.0f).margin(0.01f));
+    CHECK(m.error_signed_pct   == Approx(50.0f).margin(0.01f));  // модель занижает
     CHECK(m.k_factor()         == Approx(2.0f).margin(0.01f));
 }
 
@@ -51,6 +52,7 @@ TEST_CASE("correction metrics: perfect estimate", "[domain][gas_metrics]")
     CHECK(m.actual_consumed    == Approx(10.0f));
     CHECK(m.estimated_consumed == Approx(10.0f));
     CHECK(m.error_pct          == Approx(0.0f));
+    CHECK(m.error_signed_pct   == Approx(0.0f));
     CHECK(m.k_factor()         == Approx(1.0f));
 }
 
@@ -64,7 +66,18 @@ TEST_CASE("correction metrics: overestimation", "[domain][gas_metrics]")
     CHECK(m.actual_consumed    == Approx(20.0f));
     CHECK(m.estimated_consumed == Approx(30.0f));
     CHECK(m.error_pct          == Approx(50.0f).margin(0.01f));
+    CHECK(m.error_signed_pct   == Approx(-50.0f).margin(0.01f));  // модель завышает
     CHECK(m.k_factor()         == Approx(0.6667f).margin(0.01f));
+}
+
+TEST_CASE("correction metrics: signed error reflects direction", "[domain][gas_metrics]")
+{
+    // Недооценка: факт 100, расчёт 50 → +50% (модель занижает)
+    CHECK(compute_correction_metrics(0, 0, 100, 50).error_signed_pct
+          == Approx(50.0f).margin(0.01f));
+    // Переоценка: факт 100, расчёт 150 → −50% (модель завышает)
+    CHECK(compute_correction_metrics(0, 0, 100, 150).error_signed_pct
+          == Approx(-50.0f).margin(0.01f));
 }
 
 TEST_CASE("correction metrics: zero consumption — защита от деления на 0", "[domain][gas_metrics]")
@@ -74,6 +87,7 @@ TEST_CASE("correction metrics: zero consumption — защита от делен
     CHECK(m.actual_consumed    == Approx(0.0f));
     CHECK(m.estimated_consumed == Approx(0.0f));
     CHECK(m.error_pct          == Approx(0.0f));
+    CHECK(m.error_signed_pct   == Approx(0.0f));
     CHECK(m.k_factor()         == Approx(1.0f)); // не меняем k
 }
 
@@ -85,6 +99,7 @@ TEST_CASE("correction metrics: handles reading going backwards", "[domain][gas_m
     CHECK(m.actual_consumed    == Approx(-10.0f));
     CHECK(m.estimated_consumed == Approx(-10.0f));
     CHECK(m.error_pct          == Approx(0.0f));   // error_pct не вычисляется при actual_consumed ≤ 0
+    CHECK(m.error_signed_pct   == Approx(0.0f));   // знаковая погрешность тоже
     CHECK(m.k_factor()         == Approx(1.0f));   // k не меняется
 }
 
@@ -130,5 +145,6 @@ TEST_CASE("correction metrics: replicate real Tomsk data [1→2]", "[domain][gas
     CHECK(m.actual_consumed    == Approx(3.695f).margin(0.001f));
     CHECK(m.estimated_consumed == Approx(2.615f).margin(0.001f));
     CHECK(m.error_pct          == Approx(29.2f).margin(0.1f));
+    CHECK(m.error_signed_pct   == Approx(29.2f).margin(0.1f));  // модель занижает
     CHECK(m.k_factor()         == Approx(1.413f).margin(0.01f));
 }
