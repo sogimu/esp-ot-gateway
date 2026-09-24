@@ -240,7 +240,7 @@ float WebPresenterAdapter::compute_monthly_error_pct() const
     auto m = compute_correction_metrics(
         prev.actual_reading, prev.estimated_total,
         last.actual_reading, last.estimated_total);
-    return m.error_pct;
+    return m.error_signed_pct;
 }
 
 int WebPresenterAdapter::render_stats(char* buf, size_t size)
@@ -352,27 +352,28 @@ int WebPresenterAdapter::render_gas_history(char* buf, size_t size)
     int pos = snprintf(buf, size, "{\"days\":[");
     GasFlowService::DailyView dv[GasFlowService::DAILY_SLOTS];
     int dn = gas_flow_->get_daily_view(dv, GasFlowService::DAILY_SLOTS);
-    for (int i = 0; i < dn && pos < (int)size - 96; i++) {
+    for (int i = 0; i < dn && pos < (int)size - 128; i++) {
         // epoch_day → локальная дата (civil_from_seconds уже учтён tz)
         auto cd = civil_from_seconds(dv[i].epoch_day * 86400);
         int ym = cd.year * 12 + (cd.mon - 1);
         pos += snprintf(buf + pos, size - pos,
-            "%s{\"epoch_day\":%lld,\"ym\":%d,\"d\":\"%02d.%02d\",\"m3\":%.3f,\"today\":%d}",
+            "%s{\"epoch_day\":%lld,\"ym\":%d,\"d\":\"%02d.%02d\",\"m3_total\":%.3f,\"m3_dhw\":%.3f,\"today\":%d}",
             (i > 0) ? "," : "",
-            (long long)dv[i].epoch_day, ym, cd.day, cd.mon, (double)dv[i].m3,
+            (long long)dv[i].epoch_day, ym, cd.day, cd.mon,
+            (double)dv[i].m3_total, (double)dv[i].m3_dhw,
             (dv[i].epoch_day == today_day) ? 1 : 0);
     }
 
     pos += snprintf(buf + pos, size - pos, "],\"hours\":[");
     GasFlowService::HourlyView hv[2 * GasFlowService::HOURS_PER_DAY];
     int hn = gas_flow_->get_hourly_view(hv, 2 * GasFlowService::HOURS_PER_DAY);
-    for (int i = 0; i < hn && pos < (int)size - 64; i++) {
+    for (int i = 0; i < hn && pos < (int)size - 96; i++) {
         pos += snprintf(buf + pos, size - pos,
-            "%s{\"epoch_hour\":%lld,\"h\":\"%02d\",\"m3\":%.3f}",
+            "%s{\"epoch_hour\":%lld,\"h\":\"%02d\",\"m3_total\":%.3f,\"m3_dhw\":%.3f}",
             (i > 0) ? "," : "",
             (long long)hv[i].epoch_hour,
             (int)(hv[i].epoch_hour % 24),
-            (double)hv[i].m3);
+            (double)hv[i].m3_total, (double)hv[i].m3_dhw);
     }
 
     pos += snprintf(buf + pos, size - pos, "],\"today_epoch_day\":%lld}", (long long)today_day);

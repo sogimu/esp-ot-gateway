@@ -20,11 +20,13 @@ public:
     /// One entry of the gas consumption chart (for web rendering).
     struct DailyView {
         int64_t epoch_day;   // local day number (local_now().time_since_epoch() / 86400)
-        float   m3;          // gas consumed that day, m3
+        float   m3_total;    // gas consumed that day, m3
+        float   m3_dhw;      // of it, DHW (boiler) mode, m3
     };
     struct HourlyView {
         int64_t epoch_hour;  // local hour number (local_now().time_since_epoch() / 3600)
-        float   m3;          // gas consumed that hour, m3
+        float   m3_total;    // gas consumed that hour, m3
+        float   m3_dhw;      // of it, DHW mode, m3
     };
 
     GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store,
@@ -106,6 +108,7 @@ private:
     int       daily_count_ = 0;
     int64_t   today_epoch_day_ = -1;   // -1 = not initialized (wall clock not synced yet)
     float     daily_accumulator_ = 0;
+    float     daily_accumulator_dhw_ = 0;
     bool      history_dirty_ = false;
 
     // Hourly buckets: completed hours of today, current (partial) hour and
@@ -113,9 +116,12 @@ private:
     // buckets read as 0.
     int64_t   today_epoch_hour_ = -1;  // -1 = not initialized
     float     today_hours_[HOURS_PER_DAY] = {};
+    float     today_hours_dhw_[HOURS_PER_DAY] = {};
     float     hourly_accumulator_ = 0;
+    float     hourly_accumulator_dhw_ = 0;
     int64_t   yesterday_epoch_day_ = -1;
     float     yesterday_hours_[HOURS_PER_DAY] = {};
+    float     yesterday_hours_dhw_[HOURS_PER_DAY] = {};
 
-    void push_daily(int64_t epoch_day, float m3);
+    void push_daily(int64_t epoch_day, float m3_total, float m3_dhw);
 };

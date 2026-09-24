@@ -4,7 +4,7 @@
 #include "application/ports/driven/igas_correction_store.h"
 /// Integration tests for gas flow estimation, correction, and JSON rendering.
 /// Verifies that WebPresenterAdapter::render_stats() produces correct JSON
-/// with gas_error_pct, gas_error_monthly_pct, and gas_meter_total fields.
+/// with signed gas_error_pct and gas_meter_total fields.
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
@@ -156,7 +156,7 @@ GasIntTestLogger log;
 
 TEST_CASE("JSON stats contains gas_error_pct with 2 corrections", "[integration][gas][json]")
 {
-    // gas_error_pct = |diff| / actual_consumed * 100
+    // gas_error_pct = (факт − расчёт) / actual_consumed * 100 (со знаком)
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
@@ -239,7 +239,7 @@ GasIntTestLogger log;
     INFO("JSON output: " << buf);
 
     // CHECK skipped — needs WebPresenterAdapter deps
-    // error_pct = |1| / (104-100) * 100 = 1/4*100 = 25%
+    // error_pct = +(108-104-3) / (108-104) * 100 = +1/4*100 = +25%
     // CHECK skipped — needs WebPresenterAdapter deps
 }
 
@@ -422,6 +422,8 @@ TEST_CASE("render_gas_history emits valid daily and hourly JSON", "[integration]
     CHECK(strstr(buf, "\"days\":[{\"epoch_day\":") != nullptr);
     CHECK(strstr(buf, "\"ym\":") != nullptr);
     CHECK(strstr(buf, "\"d\":\"15.01\"") != nullptr);
+    CHECK(strstr(buf, "\"m3_total\":") != nullptr);
+    CHECK(strstr(buf, "\"m3_dhw\":") != nullptr);
     CHECK(strstr(buf, "\"today\":1") != nullptr);
     // Hourly entries for yesterday + today
     CHECK(strstr(buf, "\"hours\":[{\"epoch_hour\":") != nullptr);

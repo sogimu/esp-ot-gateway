@@ -80,6 +80,7 @@ public:
         free_heap_ = free_heap; largest_free_ = largest_free;
     }
 
-    /// Compute monthly error percentage from the last two corrections.
+    /// Compute signed monthly error percentage from the last two corrections.
+    /// > 0 — модель занижает расход, < 0 — завышает.
     float compute_monthly_error_pct() const;
 };

@@ -142,7 +142,7 @@ TEST_CASE("GasDaily: day change archives yesterday and resets accumulator", "[ga
 
     REQUIRE(h.svc.daily_count_ == 1);
     REQUIRE(h.svc.daily_[0].epoch_day == epoch_day_of(DAY0_US));
-    REQUIRE(h.svc.daily_[0].m3 == Approx(day0_consumption));
+    REQUIRE(h.svc.daily_[0].m3_total == Approx(day0_consumption));
     REQUIRE(h.svc.daily_accumulator_ == 0);
     REQUIRE(h.svc.today_epoch_day_ == epoch_day_of(day1_start_us));
 }
@@ -173,11 +173,11 @@ TEST_CASE("GasDaily: get_daily_view returns completed days + today last", "[gas_
     int n = h.svc.get_daily_view(out, GasFlowService::DAILY_SLOTS);
     REQUIRE(n == 3);  // day0, day1 (archived), today (running)
     REQUIRE(out[0].epoch_day == epoch_day_of(DAY0_US));
-    REQUIRE(out[0].m3 == Approx(day0_m3));
+    REQUIRE(out[0].m3_total == Approx(day0_m3));
     REQUIRE(out[1].epoch_day == epoch_day_of(DAY0_US) + 1);
-    REQUIRE(out[1].m3 == Approx(day1_m3));
+    REQUIRE(out[1].m3_total == Approx(day1_m3));
     REQUIRE(out[2].epoch_day == h.svc.today_epoch_day_);  // today last
-    REQUIRE(out[2].m3 == Approx(today_m3));
+    REQUIRE(out[2].m3_total == Approx(today_m3));
 }
 
 TEST_CASE("GasDaily: ring buffer keeps the most recent 64 completed days", "[gas_daily]")
@@ -304,9 +304,9 @@ TEST_CASE("GasHourly: day change moves today's hours to yesterday", "[gas_hourly
     int n = h.svc.get_hourly_view(out, 2 * GasFlowService::HOURS_PER_DAY);
     REQUIRE(n == 2 * GasFlowService::HOURS_PER_DAY);  // yesterday + today
     REQUIRE(out[0].epoch_hour == epoch_day_of(DAY0_US) * 24);
-    REQUIRE(out[0].m3 == Approx(hour0_m3));
+    REQUIRE(out[0].m3_total == Approx(hour0_m3));
     REQUIRE(out[24].epoch_hour == (epoch_day_of(DAY0_US) + 1) * 24);
-    REQUIRE(out[24].m3 == 0);
+    REQUIRE(out[24].m3_total == 0);
 }
 
 TEST_CASE("GasHourly: view includes running current hour", "[gas_hourly]")
@@ -322,7 +322,7 @@ TEST_CASE("GasHourly: view includes running current hour", "[gas_hourly]")
     int n = h.svc.get_hourly_view(out, 2 * GasFlowService::HOURS_PER_DAY);
     // No completed day yet: only today's 24 hours
     REQUIRE(n == GasFlowService::HOURS_PER_DAY);
-    REQUIRE(out[0].m3 == Approx(running));
+    REQUIRE(out[0].m3_total == Approx(running));
 }
 
 TEST_CASE("GasHourly: reset() clears hourly tracking", "[gas_hourly]")
@@ -358,6 +358,109 @@ TEST_CASE("GasHourly: unsynced wall clock does not initialize hourly tracking", 
     REQUIRE(h.svc.get_hourly_view(out, 2 * GasFlowService::HOURS_PER_DAY) == 0);
     // integral still accumulates normally without wall clock
     REQUIRE(h.svc.integral_m3() > 0);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DHW/heating split
+// ═══════════════════════════════════════════════════════════════
+
+TEST_CASE("GasSplit: heating-only flow leaves DHW accumulators at zero", "[gas_daily][split]")
+{
+    Harness h;
+    h.warmup();
+    h.boiler_on();
+    for (int i = 0; i < 6; i++) h.tick();
+
+    REQUIRE(h.svc.daily_accumulator_ > 0);
+    REQUIRE(h.svc.daily_accumulator_dhw_ == 0);
+    REQUIRE(h.svc.hourly_accumulator_dhw_ == 0);
+}
+
+TEST_CASE("GasSplit: DHW-active flow accumulates in DHW accumulators", "[gas_daily][split]")
+{
+    Harness h;
+    h.warmup();
+    h.boiler_on();
+    h.tick();
+    h.tick();
+
+    float ch_only = h.svc.daily_accumulator_;
+    REQUIRE(ch_only > 0);
+    REQUIRE(h.svc.daily_accumulator_dhw_ == 0);
+
+    h.state.set_dhw_active(true);
+    h.tick();
+    h.tick();
+
+    REQUIRE(h.svc.daily_accumulator_dhw_ > 0);
+    REQUIRE(h.svc.daily_accumulator_ > ch_only);
+    REQUIRE(h.svc.daily_accumulator_dhw_ <= h.svc.daily_accumulator_);
+    REQUIRE(h.svc.hourly_accumulator_dhw_ == Approx(h.svc.daily_accumulator_dhw_));
+    REQUIRE(h.svc.daily_accumulator_dhw_ == Approx(h.svc.daily_accumulator_ - ch_only));
+}
+
+TEST_CASE("GasSplit: daily/hourly views expose the split", "[gas_daily][split]")
+{
+    Harness h;
+    h.warmup();
+    h.boiler_on();
+    for (int i = 0; i < 6; i++) h.tick();
+
+    GasFlowService::DailyView dv[GasFlowService::DAILY_SLOTS];
+    int dn = h.svc.get_daily_view(dv, GasFlowService::DAILY_SLOTS);
+    REQUIRE(dn == 1);
+    REQUIRE(dv[0].m3_dhw == 0);
+    REQUIRE(dv[0].m3_total == Approx(h.svc.daily_accumulator_));
+
+    GasFlowService::HourlyView hv[2 * GasFlowService::HOURS_PER_DAY];
+    int hn = h.svc.get_hourly_view(hv, 2 * GasFlowService::HOURS_PER_DAY);
+    REQUIRE(hn == GasFlowService::HOURS_PER_DAY);
+    REQUIRE(hv[0].m3_dhw == 0);
+    REQUIRE(hv[0].m3_total == Approx(h.svc.hourly_accumulator_));
+}
+
+TEST_CASE("GasSplit: DHW split survives reboot and clears on reset", "[gas_daily][split][persist]")
+{
+    FakeHeatingStateStore state;
+    FakeTimeSource time;
+    FakeHeatingStatsStore hss;
+    FakeGasCorrectionStore gcs;
+
+    {
+        GasFlowService svc1(state, time, hss, gcs);
+        time.set_us(DAY0_US);
+        time.set_synced(true);
+        state.set_p_max(24.0f);
+        state.set_gas_calorific(9.5f);
+        state.set_modulation(50.0f);
+        state.set_return_temp(45.0f);
+        state.set_flame(true);
+        state.set_dhw_active(true);
+        for (int i = 0; i < 60; i++) { time.advance_ms(10000); svc1.execute(); }
+        REQUIRE(svc1.daily_accumulator_dhw_ > 0);
+
+        GasTodayBlob blob;
+        svc1.pack_today(blob);
+        gcs.save_today_gas(&blob);
+    }
+
+    GasFlowService svc2(state, time, hss, gcs);
+    time.set_us(DAY0_US);
+    time.set_synced(true);
+    svc2.load_daily();
+
+    REQUIRE(svc2.daily_accumulator_dhw_ > 0);
+    REQUIRE(svc2.daily_accumulator_dhw_ ==
+            Approx(svc2.today_hours_dhw_[0] + svc2.hourly_accumulator_dhw_));
+    REQUIRE(svc2.hourly_accumulator_dhw_ <= svc2.daily_accumulator_dhw_);
+
+    svc2.reset();
+    REQUIRE(svc2.daily_accumulator_dhw_ == 0);
+    REQUIRE(svc2.hourly_accumulator_dhw_ == 0);
+    for (int i = 0; i < GasFlowService::HOURS_PER_DAY; i++) {
+        REQUIRE(svc2.today_hours_dhw_[i] == 0);
+        REQUIRE(svc2.yesterday_hours_dhw_[i] == 0);
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -448,7 +551,7 @@ TEST_CASE("history persists across day boundary after reboot", "[gas][daily][per
     GasFlowService::DailyView out[GasFlowService::DAILY_SLOTS];
     int n = svc2.get_daily_view(out, GasFlowService::DAILY_SLOTS);
     REQUIRE(n == 2);
-    REQUIRE(out[0].m3 > 0);           // completed day 0
+    REQUIRE(out[0].m3_total > 0);           // completed day 0
     REQUIRE(out[1].epoch_day == out[0].epoch_day + 1); // today is next day
 
     // Yesterday's hours were restored
@@ -481,4 +584,13 @@ TEST_CASE("load_today/load_history return false when no NVS data (never saved)",
     GasHistoryBlob hb;
     REQUIRE(gcs.load_today_gas(&tb) == false);
     REQUIRE(gcs.load_history_gas(&hb) == false);
+}
+
+TEST_CASE("GasDaily: blob sizes lock the on-flash format", "[gas][daily][persist]")
+{
+    // The DHW split changed the blob layout without migration: old records are
+    // rejected by size and history restarts from zero. These expectations pin
+    // the new format so accidental layout drift fails loudly.
+    REQUIRE(sizeof(GasTodayBlob) == 224);
+    REQUIRE(sizeof(GasHistoryBlob) == 1232);
 }

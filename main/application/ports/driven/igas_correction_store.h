@@ -8,27 +8,32 @@ static constexpr int GAS_DAILY_SLOTS   = 64;   // ~2 месяца завершё
 
 struct GasDailyEntry {
     int64_t epoch_day;
-    float   m3;
+    float   m3_total;                          // суммарный расход за сутки
+    float   m3_dhw;                            // из него на ГВС (БКН)
 };
 
 /// «Сегодня» — частый маленький blob (пишется каждые ~10 мин):
 /// переживает ребут без потери текущего часа и завершённых часов сегодня.
 struct GasTodayBlob {
     int64_t today_epoch_day;
-    float   today_m3;                          // накоплено за сегодня
-    float   today_hours[GAS_HOURS_PER_DAY];    // завершённые часы сегодня
-    int32_t current_hour;                      // 0..23, -1 = не инициализировано
-    float   current_hour_m3;                   // текущий (незавершённый) час
+    float   today_m3_total;                          // накоплено за сегодня
+    float   today_m3_dhw;                            // из него на ГВС
+    float   today_hours_total[GAS_HOURS_PER_DAY];    // завершённые часы сегодня
+    float   today_hours_dhw[GAS_HOURS_PER_DAY];      // из них на ГВС
+    int32_t current_hour;                            // 0..23, -1 = не инициализировано
+    float   current_hour_m3_total;                   // текущий (незавершённый) час
+    float   current_hour_m3_dhw;                     // из него на ГВС
 };
 
 /// «История» — редкий большой blob (пишется на границе суток):
 /// завершённые сутки + вчерашние часы.
 struct GasHistoryBlob {
     GasDailyEntry daily[GAS_DAILY_SLOTS];
-    int32_t head;                              // индекс самого старого дня
-    int32_t count;                             // заполнено завершённых дней
+    int32_t head;                                    // индекс самого старого дня
+    int32_t count;                                   // заполнено завершённых дней
     int64_t yesterday_epoch_day;
-    float   yesterday_hours[GAS_HOURS_PER_DAY];
+    float   yesterday_hours_total[GAS_HOURS_PER_DAY];
+    float   yesterday_hours_dhw[GAS_HOURS_PER_DAY];
 };
 
 /// Driven-порт: персистентность данных газовой коррекции (журнал сверки счётчика)
