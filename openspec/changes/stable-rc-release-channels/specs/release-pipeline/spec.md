@@ -35,7 +35,7 @@ The pipeline SHALL classify tags into exactly two channels: `vX.Y.Z` is stable a
 
 ### Requirement: Release notes from tag annotation
 
-The release body SHALL be taken from the annotated tag message via `--notes-from-tag` when the annotation is non-empty. Auto-generated notes SHALL be used only as a fallback when the tag annotation is empty.
+The release body SHALL be taken from the annotated tag message when the annotation is non-empty (passed as a local notes file, because `--notes-from-tag` cannot be combined with `--repo`). Auto-generated notes SHALL be used only as a fallback when the tag annotation is empty.
 
 #### Scenario: Annotated tag provides notes
 
