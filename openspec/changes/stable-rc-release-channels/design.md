@@ -44,6 +44,7 @@
 - stable: `gh release create "$TAG" … --latest`, notes — из аннотации тега (fallback `--generate-notes` при пустой аннотации).
 - test: `gh release create "$TAG" … --prerelease`, notes — из аннотации тега (prerelease не становится latest автоматически).
 - Аннотация передаётся файлом (`--notes-file`): `--notes-from-tag` нельзя комбинировать с `--repo` — gh читает её из локального репозитория (проверено на реальном прогоне).
+- Перед извлечением аннотации делается `git fetch --force origin "+refs/tags/$TAG:refs/tags/$TAG"`: `actions/checkout` при checkout тега перезаписывает локальный ref на коммит, и без этого `%(contents)` вернул бы message коммита вместо аннотации (проверено на реальном прогоне).
 - существующий релиз: только `gh release upload --clobber` (как сейчас), notes не перегенерируются.
 
 Определение пустой аннотации: `git for-each-ref "refs/tags/$TAG" --format='%(contents)'`; пусто или совпадает с именем тега → `--generate-notes`.
