@@ -1,0 +1,101 @@
+name: Promote RC to Stable
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [master]
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: promote-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'master'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Явно базовая ветка: на closed-событии дефолтный checkout может
+          # указывать на merge-ref. Нужны полный граф и теги.
+          ref: master
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Promote test tag to stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          # При squash/rebase коммит head может отсутствовать в локальном
+          # графе — это не «нет rc», а невозможность поиска.
+          if ! git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
+            echo "::warning::HEAD_SHA $HEAD_SHA недоступен локально (squash/rebase?) — промоушен пропущен"
+            exit 0
+          fi
+
+          # Старший rc-тег, достижимый из head PR.
+          RC="$(git tag --merged "$HEAD_SHA" -l 'v*-rc*' \
+                | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$' \
+                | sort -V | tail -1 || true)"
+          if [ -z "$RC" ]; then
+            echo "PR #$PR_NUMBER: rc-тегов нет — промоушен не требуется."
+            exit 0
+          fi
+
+          STABLE="${RC%-rc*}"
+          echo "PR #$PR_NUMBER: rc=$RC → stable=$STABLE, merge=$MERGE_SHA"
+
+          # Не блокируем легитимные патч-релизы (v0.7.1 после v0.8.0), но
+          # предупреждаем о возможном случайном промоушене устаревшего rc.
+          LATEST_STABLE="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' \
+                           | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
+                           | sort -V | tail -1 || true)"
+          if [ -n "$LATEST_STABLE" ]; then
+            HIGHEST="$(printf '%s\n%s\n' "$STABLE" "$LATEST_STABLE" | sort -V | tail -1)"
+            if [ "$HIGHEST" != "$STABLE" ]; then
+              echo "::warning::$STABLE не выше последней стабильной $LATEST_STABLE — проверьте, что релиз намеренный"
+            fi
+          fi
+
+          # Существующий тег не перезатираем; но если тег есть, а релиза нет
+          # (прошлый прогон упал), доводим релиз до конца.
+          if git rev-parse -q --verify "refs/tags/$STABLE" >/dev/null; then
+            if gh release view "$STABLE" -R "$GITHUB_REPOSITORY" &>/dev/null; then
+              echo "Тег и релиз $STABLE уже существуют — пропускаем."
+              exit 0
+            fi
+            echo "Тег $STABLE есть, релиза нет — повторяем релизный прогон."
+            gh workflow run tests.yml --ref "$STABLE" -f source_rc="$RC"
+            exit 0
+          fi
+
+          # Аннотированный stable-тег на merge-коммите, аннотация от rc.
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [ "$(git cat-file -t "refs/tags/$RC")" = tag ]; then
+            git for-each-ref "refs/tags/$RC" --format='%(contents)' > /tmp/annotation.txt
+          else
+            echo "::warning::rc-тег $RC не аннотирован — notes будут автогенерированы"
+            : > /tmp/annotation.txt
+          fi
+          if [ -s /tmp/annotation.txt ]; then
+            git tag -a "$STABLE" "$MERGE_SHA" -F /tmp/annotation.txt
+          else
+            git tag -a "$STABLE" "$MERGE_SHA" -m "$STABLE"
+          fi
+          git push origin "refs/tags/$STABLE"
+
+          # Тег, созданный GITHUB_TOKEN, не триггерит push-воркфлоу
+          # (антирекурсия), поэтому запускаем релизный прогон явно.
+          # workflow_dispatch — документированное исключение.
+          gh workflow run tests.yml --ref "$STABLE" -f source_rc="$RC"

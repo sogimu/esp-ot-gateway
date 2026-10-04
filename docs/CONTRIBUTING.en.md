@@ -15,6 +15,18 @@ Thanks for helping make more boilers smart! Bug reports, boiler-compatibility re
 2. Keep `domain/` free of ESP-IDF dependencies; add unit tests for new logic.
 3. The host test suite and sanitizers must pass (see [docs/build.en.md](build.en.md)).
 
+## Releases
+
+1. A PR branch may publish only a test tag `vX.Y.Z-rcN` (annotated, with a
+   changelog). A stable tag `vX.Y.Z` on an unmerged commit is rejected by CI.
+2. Once a PR is merged, the `promote.yml` workflow automatically creates the
+   stable `vX.Y.Z` on the merge commit (the rc annotation is copied) and starts
+   the build: the GitHub Release and GitHub Pages are published by one run, and
+   the firmware `sha256` lands in `versions.json`. Once the new stable release is
+   created, the rc tag and its release are deleted; if the stable release already
+   existed, the rc is left intact.
+3. Manual release — an annotated `vX.Y.Z` tag on `master` — still works.
+
 ## Contribution license
 
 The project is released under GPL-3.0 (see [LICENSING.en.md](LICENSING.en.md)). Contributions are accepted on an inbound=outbound basis: by submitting a contribution (code, documentation or other material) you agree that it is distributed under the same GPL-3.0 license as the project, and you certify that you have the right to submit it under those terms (you wrote it yourself or otherwise hold the necessary rights, and it does not knowingly infringe third-party rights). You retain your own copyright.

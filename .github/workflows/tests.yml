@@ -7,6 +7,12 @@ on:
     branches: [master]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      source_rc:
+        description: 'RC-тег, который удалить после успешного стабильного релиза'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: write
@@ -68,6 +74,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Полный граф коммитов нужен для guard'а `merge-base --is-ancestor`.
+          fetch-depth: 0
 
       - name: Build firmware (ESP-IDF v5.3.2)
         uses: espressif/esp-idf-ci-action@v1
@@ -75,37 +84,97 @@ jobs:
           esp_idf_version: v5.3.2
           target: esp32
 
+      - name: Stage firmware binaries
+        run: |
+          mkdir -p firmware-artifact
+          cp build/esp-ot-gateway.bin firmware-artifact/
+          cp build/bootloader/bootloader.bin firmware-artifact/
+          cp build/partition_table/partition-table.bin firmware-artifact/
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-binaries
+          path: firmware-artifact
+
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RC: ${{ github.event.inputs.source_rc }}
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF#refs/tags/}"
+
+          # Канал тега: vX.Y.Z — стабильный, vX.Y.Z-rcN — тестовый.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$ ]]; then
+            CHANNEL=test
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            CHANNEL=stable
+          else
+            echo "::error::Недопустимый формат тега: $TAG (ожидается vX.Y.Z или vX.Y.Z-rcN)"
+            exit 1
+          fi
+          echo "Тег $TAG, канал: $CHANNEL"
+
+          # Стабильный тег обязан быть достижим из master (guard).
+          if [ "$CHANNEL" = stable ]; then
+            git fetch origin master
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+              echo "::error::Стабильный тег $TAG указывает на коммит, недостижимый из master"
+              exit 1
+            fi
+          fi
+
+          # Notes — из аннотации тега; пустая аннотация (или совпадающая с
+          # именем тега) → автогенерация.
+          ANNOTATION="$(git for-each-ref "refs/tags/$TAG" --format='%(contents)')"
+          TRIMMED="$(printf '%s' "$ANNOTATION" | tr -d '[:space:]')"
+          if [ -z "$TRIMMED" ] || [ "$TRIMMED" = "$TAG" ]; then
+            NOTES_ARGS=(--generate-notes)
+          else
+            NOTES_ARGS=(--notes-from-tag)
+          fi
+
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" &>/dev/null; then
-            echo "Release exists, uploading assets only"
+            echo "Релиз существует — обновляем только ассеты"
             gh release upload "$TAG" \
               build/esp-ot-gateway.bin \
               build/bootloader/bootloader.bin \
               build/partition_table/partition-table.bin \
               --clobber -R "$GITHUB_REPOSITORY"
           else
-            echo "Creating new release"
+            echo "Создаём новый релиз $TAG"
+            if [ "$CHANNEL" = stable ]; then
+              CHANNEL_ARGS=(--latest)
+            else
+              CHANNEL_ARGS=(--prerelease)
+            fi
             gh release create "$TAG" \
               build/esp-ot-gateway.bin \
               build/bootloader/bootloader.bin \
               build/partition_table/partition-table.bin \
-              --generate-notes \
+              "${CHANNEL_ARGS[@]}" \
+              "${NOTES_ARGS[@]}" \
               -R "$GITHUB_REPOSITORY"
+
+            # Уборка исходного rc — только после успешного создания
+            # стабильного релиза (приходим сюда через workflow_dispatch).
+            if [ "$CHANNEL" = stable ] && [ -n "${SOURCE_RC:-}" ]; then
+              echo "Уборка исходного rc: $SOURCE_RC"
+              gh release delete "$SOURCE_RC" --yes -R "$GITHUB_REPOSITORY" || true
+              git push origin ":refs/tags/$SOURCE_RC" || true
+            fi
           fi
-        env:
-          GH_TOKEN: ${{ github.token }}
 
   # Single GitHub Pages deployment. Publishes the web flasher at the site root,
   # the coverage report (incl. badge.svg) under /coverage/, and per-version
-  # firmware binaries + manifests under /firmware/<tag>/. Replaces the old
-  # split setup where the flasher deployed via Actions but coverage was pushed
-  # to an orphaned gh-pages branch (404 on /coverage/).
+  # firmware binaries + manifests under /firmware/<tag>/. Runs on master pushes
+  # and on release tags (tag runs publish the firmware built by the same run
+  # from its artifact, so Pages is updated without waiting for a master push).
   deploy-pages:
-    needs: [test, coverage]
-    if: github.ref == 'refs/heads/master'
+    needs: [test, coverage, firmware-build]
+    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -113,6 +182,11 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Корень сайта (web-flasher) всегда из master: rc-тег с feature-ветки
+          # не должен публиковать код ветки в прод-фронтенд. Прошивка текущего
+          # тега берётся из артефакта, а не из checkout.
+          ref: master
 
       - name: Download coverage report
         uses: actions/download-artifact@v4
@@ -120,24 +194,86 @@ jobs:
           name: coverage-report
           path: site/coverage
 
+      - name: Download built firmware (tag run)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-binaries
+          path: firmware-current
+
       - name: Assemble site (flasher at root + firmware manifests)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           mkdir -p site
           cp -r web-flasher/. site/
           mkdir -p site/firmware
-          # Полный JSON релизов нужен и для versions.json, и для цикла по тегам.
+
+          # На тег-ране прошивка текущего тега берётся из артефакта этого же
+          # прогона — без гонки с созданием релиза.
+          CURRENT_TAG=""
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            CURRENT_TAG="${GITHUB_REF#refs/tags/}"
+            mkdir -p "site/firmware/$CURRENT_TAG"
+            for f in esp-ot-gateway.bin bootloader.bin partition-table.bin; do
+              if [ ! -f "firmware-current/$f" ]; then
+                echo "::error::В артефакте нет $f"
+                exit 1
+              fi
+              cp "firmware-current/$f" "site/firmware/$CURRENT_TAG/"
+            done
+            echo "Текущий тег: $CURRENT_TAG (бинари из артефакта)"
+          fi
+
           RELEASES_JSON=$(gh release list --limit 50 --json tagName,name,publishedAt,isPrerelease)
-          echo "$RELEASES_JSON" | jq '{versions:[.[]|{tag:.tagName,name:.name,published_at:.publishedAt,prerelease:.isPrerelease}]}' > site/versions.json
-          RELEASES=$(echo "$RELEASES_JSON" | jq -r '.[].tagName')
-          for tag in $RELEASES; do
+
+          # Порядок каталога: стабильные (semver desc), затем тестовые.
+          STABLE_TAGS=$(echo "$RELEASES_JSON" | jq -r '.[] | select(.isPrerelease == false) | .tagName' | sort -V -r)
+          TEST_TAGS=$(echo "$RELEASES_JSON"   | jq -r '.[] | select(.isPrerelease == true)  | .tagName' | sort -V -r)
+          ORDERED=$(printf '%s\n%s\n' "$STABLE_TAGS" "$TEST_TAGS" | sed '/^$/d')
+
+          # Скачиваем .bin прошлых релизов; текущий тег уже из артефакта.
+          for tag in $ORDERED; do
+            [ "$tag" = "$CURRENT_TAG" ] && continue
             DST="site/firmware/$tag"
             mkdir -p "$DST"
             gh release download "$tag" --pattern '*.bin' --dir "$DST" --clobber || echo "Skipping $tag (no assets)"
             find "$DST" -name '*.bin' -not -path "$DST/*.bin" -exec mv {} "$DST/" \; 2>/dev/null || true
             find "$DST" -type d -empty -delete 2>/dev/null || true
           done
+
+          # SHA256 раздаваемых esp-ot-gateway.bin → {tag: sha256}.
+          SHAS_JSON='{}'
+          for tag in $ORDERED; do
+            BIN="site/firmware/$tag/esp-ot-gateway.bin"
+            if [ -f "$BIN" ]; then
+              SHA=$(sha256sum "$BIN" | awk '{print $1}')
+              SHAS_JSON=$(echo "$SHAS_JSON" | jq -c --arg t "$tag" --arg s "$SHA" '. + {($t): $s}')
+            fi
+          done
+
+          ORDERED_JSON=$(printf '%s\n' $ORDERED | jq -R . | jq -s .)
+
+          # versions.json: tag,name,published_at,prerelease,sha256; без записи
+          # для релизов, у которых нет розданного .bin.
+          # ВАЖНО: строго компактный JSON (-c). Прошивка ищет в теле подстроки
+          # вида "tag":"<tag>" / "sha256":"…" — pretty-print с пробелами ломает
+          # проверку контрольной суммы на устройствах.
+          echo "$RELEASES_JSON" | jq -c \
+            --argjson shas "$SHAS_JSON" --argjson order "$ORDERED_JSON" \
+            '{versions: ([ $order[] as $t | .[] | select(.tagName == $t) | {tag: .tagName, name: .name, published_at: .publishedAt, prerelease: .isPrerelease, sha256: $shas[$t]} ] | map(select(.sha256 != null)))}' \
+            > site/versions.json
+          if grep -q '"tag": "' site/versions.json; then
+            echo "::error::versions.json не компактный — прошивка не найдёт sha256"
+            exit 1
+          fi
+          CATALOG_SIZE=$(wc -c < site/versions.json)
+          if [ "$CATALOG_SIZE" -ge 65536 ]; then
+            echo "::error::versions.json ${CATALOG_SIZE} байт — превышает лимит прошивки 64 КиБ"
+            exit 1
+          fi
+
           gen_manifest() {
             printf '{\n'
             printf '  "name": "ESP OpenTherm Gateway",\n'
@@ -156,12 +292,15 @@ jobs:
             printf '  }]\n'
             printf '}\n'
           }
-          for tag in $RELEASES; do
-            DST="site/firmware/$tag"
+          for DST in site/firmware/*/; do
+            tag="$(basename "$DST")"
             if [ -f "$DST/bootloader.bin" ]; then
               gen_manifest "$tag" > "$DST/manifest.json"
             fi
           done
+
+          echo "=== versions.json ==="
+          cat site/versions.json
           echo "=== site tree ==="
           find site -type f | sort
 

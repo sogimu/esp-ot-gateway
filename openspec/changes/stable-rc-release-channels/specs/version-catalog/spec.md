@@ -12,7 +12,7 @@
 #### Scenario: Version without a built binary
 
 - **WHEN** a release has no downloadable firmware assets
-- **THEN** the entry either is absent from `versions.json` or has no `sha256`, and never carries a hash that does not match a distributed binary
+- **THEN** the entry is absent from `versions.json` (entries without `sha256` are never emitted, because the deployed substring lookup cannot distinguish a missing hash from the next entry's hash)
 
 ### Requirement: Version ordering
 
@@ -55,6 +55,11 @@ The catalog SHALL remain consumable by already-deployed firmware that performs s
 
 - **WHEN** the catalog is generated for the current set of releases
 - **THEN** its size is below 64 KiB
+
+#### Scenario: Catalog is compact
+
+- **WHEN** `versions.json` is generated
+- **THEN** it contains no whitespace between JSON separators (e.g. `"tag":"v0.8.0"`, `"sha256":"…"`), so the substring lookups performed by already-deployed firmware match
 
 ### Requirement: Test versions remain listed
 

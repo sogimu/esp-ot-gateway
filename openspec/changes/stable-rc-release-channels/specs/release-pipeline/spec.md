@@ -71,6 +71,11 @@ The Pages deployment SHALL run on pushes of `v*` tags in addition to pushes to `
 - **WHEN** a commit is pushed to `master`
 - **THEN** the Pages deployment runs and publishes the full site as before
 
+#### Scenario: Site root comes from master on a tag run
+
+- **WHEN** the Pages deployment runs for a tag
+- **THEN** the web flasher published at the site root comes from `master` (not from the tagged commit), while the firmware for the pushed tag comes from the build artifact
+
 ### Requirement: Catalog checksum emission
 
 The pipeline SHALL compute the SHA-256 of the exact `esp-ot-gateway.bin` that is published to Pages and SHALL include it in `versions.json` for the corresponding version.
@@ -122,6 +127,11 @@ When a pull request is merged into `master`, the pipeline SHALL create a stable 
 
 - **WHEN** the derived stable tag `vX.Y.Z` already exists
 - **THEN** promotion does not modify the existing tag or release
+
+#### Scenario: Promoted version is not the highest
+
+- **WHEN** the derived stable version is not higher than the highest existing stable tag (e.g. a stale `v0.8.0-rc1` while `v0.9.0` is out)
+- **THEN** promotion still proceeds but emits a warning that the release may be unintentional, so legitimate patch releases are not blocked
 
 ### Requirement: Promotion starts the release run without secrets
 

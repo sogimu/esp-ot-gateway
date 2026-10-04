@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <functional>
 #include <cstring>
+#include <string>
 
 #include "infrastructure/driving/ota_interactor.h"
 #include "fakes/fake_ota_collaborators.h"
@@ -90,4 +91,35 @@ TEST_CASE("OtaInteractor: lookup_sha256 — nullptr если нет", "[ota]") {
     int64_t now = 0;
     OtaInteractor ota(val, ver, [&]{ return now; });
     REQUIRE(ota.lookup_sha256("v0.5.0") == nullptr);
+}
+
+TEST_CASE("OtaInteractor: lookup_sha256 — верный хэш при нескольких версиях", "[ota]") {
+    FakeOtaValidity val; FakeOtaVersionIndex ver;
+    int64_t now = 0;
+
+    const std::string sha_stable(64, 'a');
+    const std::string sha_rc(64, 'b');
+    const std::string sha_old(64, 'c');
+    const std::string body =
+        R"({"versions":[)" 
+        R"({"tag":"v0.8.0","prerelease":false,"sha256":")" + sha_stable +
+        R"("},{"tag":"v0.8.1-rc1","prerelease":true,"sha256":")" + sha_rc +
+        R"("},{"tag":"v0.7.1","prerelease":false,"sha256":")" + sha_old +
+        R"("}]})";
+    ver.next_response = strdup(body.c_str());
+
+    OtaInteractor ota(val, ver, [&]{ return now; });
+    auto* r = ota.fetch_version_list(); REQUIRE(r); free(r);
+
+    // lookup_sha256 отдаёт указатель на статический буфер — копируем сразу.
+    const char* s1 = ota.lookup_sha256("v0.8.0");
+    REQUIRE(s1 != nullptr); const std::string got1(s1);
+    const char* s2 = ota.lookup_sha256("v0.8.1-rc1");
+    REQUIRE(s2 != nullptr); const std::string got2(s2);
+    const char* s3 = ota.lookup_sha256("v0.7.1");
+    REQUIRE(s3 != nullptr); const std::string got3(s3);
+
+    REQUIRE(got1 == sha_stable);
+    REQUIRE(got2 == sha_rc);
+    REQUIRE(got3 == sha_old);
 }
