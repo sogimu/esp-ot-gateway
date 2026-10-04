@@ -550,7 +550,7 @@ TEST_CASE("corrected_calorific fallback when outdoor unknown", "[gas_flow][cv]")
 // calc_power — non-linear modulation with Pmin/Pmax vs MWT
 // ═══════════════════════════════════════════════════════════════
 
-TEST_CASE("calc_power below 1pct returns 0 (burner not firing)", "[gas_flow][calc_power]")
+TEST_CASE("calc_power at 0pct returns Pmin (burner fires at minimum)", "[gas_flow][calc_power]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
@@ -558,11 +558,12 @@ TEST_CASE("calc_power below 1pct returns 0 (burner not firing)", "[gas_flow][cal
     FakeGasCorrectionStore gcs;
     GasFlowService svc(state, time, hss, gcs);
 
-    // Modulation < 1% means gas valve is effectively closed
-    CHECK(svc.calc_power(0.0f, 80.0f, 60.0f) == Approx(0.0f).margin(0.001f));
-    CHECK(svc.calc_power(0.0f, 50.0f, 30.0f) == Approx(0.0f).margin(0.001f));
-    CHECK(svc.calc_power(0.5f, 80.0f, 60.0f) == Approx(0.0f).margin(0.001f));
-    CHECK(svc.calc_power(0.99f, 50.0f, 30.0f) == Approx(0.0f).margin(0.001f));
+    // 0 % modulation with flame on = minimum firing power (default ch_pmin=5.5).
+    // Burner-off is handled by flame-gating in execute(), not by modulation.
+    CHECK(svc.calc_power(0.0f, 80.0f, 60.0f) == Approx(5.5f).margin(0.001f));
+    CHECK(svc.calc_power(0.0f, 50.0f, 30.0f) == Approx(5.5f).margin(0.001f));
+    CHECK(svc.calc_power(0.5f, 80.0f, 60.0f) == Approx(5.5f + 18.5f * 0.005f).margin(0.001f));
+    CHECK(svc.calc_power(0.99f, 50.0f, 30.0f) == Approx(5.5f + 18.5f * 0.0099f).margin(0.001f));
 }
 
 TEST_CASE("calc_power at 1pct or above returns proportional power", "[gas_flow][calc_power]")

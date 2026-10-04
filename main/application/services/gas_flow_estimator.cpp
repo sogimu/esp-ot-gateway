@@ -68,10 +68,9 @@ float GasFlowService::calc_power(float modulation_pct, float /*flow_temp*/, floa
     if (modulation_pct < 0.0f) modulation_pct = 0.0f;
     if (modulation_pct > 100.0f) modulation_pct = 100.0f;
 
-    // Modulation < 1 % means the burner is not actually firing
-    // (gas valve closed or in pre-purge).  Real modulating boilers
-    // never operate below ~20 % in steady state.
-    if (modulation_pct < 1.0f) return 0.0f;
+    // 0 % modulation does NOT mean zero gas — a firing burner always burns
+    // at least at minimum power (pmin). The "burner off" case is handled by
+    // flame-gating in execute() (flame off → latest_flow_ = 0).
 
     // Input (nameplate) power: modulation % is relative to nameplate max.
     // Does not depend on MWT — gas valve delivers the same gas at the same modulation.
