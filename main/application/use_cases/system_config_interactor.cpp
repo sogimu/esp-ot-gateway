@@ -3,7 +3,6 @@
 #include "application/use_cases/pid_poll_interactor.h"
 #include "application/services/modulation_stats_service.h"
 #include "application/services/burn_cycle_service.h"
-#include "application/services/gas_flow_estimator.h"
 #include "domain/value_objects/ch_schedule.h"
 #include "domain/value_objects/ch_mode.h"
 #include "application/ports/driven/iheating_state_store.h"
@@ -21,11 +20,10 @@ SystemConfigInteractor::SystemConfigInteractor(IHeatingStateStore& state, IBoile
                                                  BoilerPollInteractor* boiler_poll,
                                                  PidPollInteractor* pid_poll,
                                                  BurnCycleService* burn_cycles,
-                                                 ModulationStatsService* mod_stats,
-                                                 GasFlowService* gas_flow)
+                                                 ModulationStatsService* mod_stats)
     : state_(state), boiler_(boiler), config_(config), boiler_cfg_(boiler_cfg), log_(log), time_(time),
       boiler_poll_(boiler_poll), pid_poll_(pid_poll),
-      burn_cycles_(burn_cycles), mod_stats_(mod_stats), gas_flow_(gas_flow)
+      burn_cycles_(burn_cycles), mod_stats_(mod_stats)
 {
 }
 
@@ -202,10 +200,4 @@ void SystemConfigInteractor::reset_cycle_stats()
 {
     if (burn_cycles_) burn_cycles_->reset();
     log_.event(ILogger::USER, "Статистика циклов сброшена");
-}
-
-void SystemConfigInteractor::reset_gas_stats()
-{
-    if (gas_flow_) gas_flow_->reset();
-    log_.event(ILogger::USER, "Статистика газа сброшена");
 }

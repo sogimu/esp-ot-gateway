@@ -4,7 +4,7 @@
 #include "infrastructure/driven/nvs_config_store.h"  // NvsHistBlob
 #include "infrastructure/driven/heating_stats_nvs_store.h"
 #include "infrastructure/driven/heating_state_adapter.h"
-#include "application/ports/driven/igas_correction_store.h"  // GasDailyBlob
+#include "application/ports/driven/igas_correction_store.h"  // GasTodayBlob, GasHistoryBlob
 
 #include "application/services/burn_cycle_service.h"
 #include "application/services/modulation_stats_service.h"
@@ -55,7 +55,15 @@ void PersistenceLoopInteractor::tick()
         (uint32_t)(ca_time_.monotonic_us() / 1000000));
     heating_stats_.save_meter(ca_state_, &gas_corr_.meter_blob());
 
-    GasDailyBlob daily_blob;
-    gas_flow_.pack_daily(daily_blob);
-    gas_corr_.save_daily_gas(&daily_blob);
+    // «Сегодня + текущий час» пишем часто (маленький blob), завершённую
+    // историю — раз в сутки на границе дня (большой blob, бережём флеш).
+    GasTodayBlob today_blob;
+    gas_flow_.pack_today(today_blob);
+    gas_corr_.save_today_gas(&today_blob);
+
+    if (gas_flow_.consume_history_dirty()) {
+        GasHistoryBlob history_blob;
+        gas_flow_.pack_history(history_blob);
+        gas_corr_.save_history_gas(&history_blob);
+    }
 }

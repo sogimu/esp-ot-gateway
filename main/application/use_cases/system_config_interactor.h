@@ -15,7 +15,6 @@ class BoilerPollInteractor;
 class PidPollInteractor;
 class ModulationStatsService;
 class BurnCycleService;
-class GasFlowService;
 
 /// Implements all user-facing configuration use cases.
 class SystemConfigInteractor : public IConfigureSystem, public IConfigurePid, public IFaultReset, public IResetStatistics {
@@ -26,8 +25,7 @@ public:
                            BoilerPollInteractor* boiler_poll = nullptr,
                            PidPollInteractor*   pid_poll = nullptr,
                            BurnCycleService*    burn_cycles = nullptr,
-                           ModulationStatsService* mod_stats = nullptr,
-                           GasFlowService*      gas_flow = nullptr);
+                           ModulationStatsService* mod_stats = nullptr);
 
     // IConfigureSystem
     void set_ch_mode(CHMode mode) override;
@@ -53,7 +51,6 @@ public:
     // IResetStatistics
     void reset_modulation_stats() override;
     void reset_cycle_stats() override;
-    void reset_gas_stats() override;
 
 private:
     IHeatingStateStore&  state_;
@@ -66,7 +63,6 @@ private:
     PidPollInteractor*   pid_poll_ = nullptr;
     BurnCycleService*    burn_cycles_ = nullptr;
     ModulationStatsService* mod_stats_ = nullptr;
-    GasFlowService*      gas_flow_ = nullptr;
 
     void save_and_log(const char* msg, ...);
 };

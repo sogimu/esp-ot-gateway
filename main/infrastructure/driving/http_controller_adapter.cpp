@@ -58,6 +58,7 @@ bool HttpControllerAdapter::start()
         { .uri = "/api/control",       .method = HTTP_POST, .handler = handler_control,       .user_ctx = NULL },
         { .uri = "/api/log",           .method = HTTP_GET,  .handler = handler_log,           .user_ctx = NULL },
         { .uri = "/api/stats",         .method = HTTP_GET,  .handler = handler_stats,         .user_ctx = NULL },
+        { .uri = "/api/gas-history",   .method = HTTP_GET,  .handler = handler_gas_history,   .user_ctx = NULL },
         { .uri = "/api/schedule",      .method = HTTP_GET,  .handler = handler_schedule,      .user_ctx = NULL },
         { .uri = "/api/schedule",      .method = HTTP_POST, .handler = handler_schedule,      .user_ctx = NULL },
         { .uri = "/api/pid_schedule",  .method = HTTP_GET,  .handler = handler_pid_schedule,  .user_ctx = NULL },
@@ -173,7 +174,6 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
     if (self->cfg_) {
         v = json_get_int(body, "\"reset_mod_stats\""); if (v > 0) self->cfg_->reset_modulation_stats();
         v = json_get_int(body, "\"reset_cycle_stats\""); if (v > 0) self->cfg_->reset_cycle_stats();
-        v = json_get_int(body, "\"reset_gas_stats\""); if (v > 0) self->cfg_->reset_gas_stats();
     }
     if (self->gas_) {
         v = json_get_int(body, "\"reset_corrections\""); if (v > 0) self->gas_->reset_corrections();
@@ -295,6 +295,16 @@ esp_err_t HttpControllerAdapter::handler_stats(httpd_req_t* req) {
     if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{}"); return ESP_FAIL; }
     static char buf[6144];  // room for stats + 32 correction log entries
     self->presenter_->render_stats(buf, sizeof(buf));
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
+    return httpd_resp_sendstr(req, buf);
+}
+
+esp_err_t HttpControllerAdapter::handler_gas_history(httpd_req_t* req) {
+    auto* self = s_self;
+    if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{}"); return ESP_FAIL; }
+    static char buf[8192];  // 64 daily + 48 hourly entries + labels
+    self->presenter_->render_gas_history(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     return httpd_resp_sendstr(req, buf);

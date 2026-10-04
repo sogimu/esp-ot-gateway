@@ -40,7 +40,6 @@ struct SpySystemConfig : public IConfigureSystem {
     void set_sntp_servers(const char*, const char*) override {}
     void reset_modulation_stats() override {}
     void reset_cycle_stats() override {}
-    void reset_gas_stats() override {}
 
     bool ch_enable_set_ = false, dhw_enable_set_ = false;
     bool ch_enable_ = false, dhw_enable_ = false;

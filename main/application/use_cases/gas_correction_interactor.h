@@ -36,7 +36,8 @@ public:
     /// Read-only access to the correction log for web rendering.
     const NvsMeterBlob& meter_blob() const { return meter_blob_; }
 
-    void save_daily_gas(const void* blob) { store_.save_daily_gas(blob); }
+    void save_today_gas(const void* blob)   { store_.save_today_gas(blob); }
+    void save_history_gas(const void* blob) { store_.save_history_gas(blob); }
 
 private:
     IHeatingStateStore&   state_;

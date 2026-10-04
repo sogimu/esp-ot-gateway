@@ -2,31 +2,35 @@
 
 #include <cstdint>
 #include "application/ports/driving/icontrol_task.h"
+#include "application/ports/driven/igas_correction_store.h"
 #include "domain/services/kalman1d.h"
 
 class IHeatingStateStore;
 class ITimeSource;
 class IHeatingStatsStore;
 class IGasCorrectionStore;
-struct GasDailyBlob;
 
 /// Estimates gas consumption from modulation % and return temperature.
-/// Uses Kalman1D filters on raw inputs, physical model for flow rate,
-/// and EMA accumulators for rolling averages.
+/// Uses Kalman1D filters on raw inputs and a physical model for flow rate.
 class GasFlowService : public IControlTask {
 public:
-    static constexpr int RING_SIZE = 720;     // 2h @ 10s interval
-    static constexpr int DAILY_SLOTS = 8;     // 7 completed days + spare
+    static constexpr int DAILY_SLOTS = 64;    // ~2 месяца завершённых суток
+    static constexpr int HOURS_PER_DAY = 24;
 
-    /// One entry of the weekly gas consumption chart (for web rendering).
+    /// One entry of the gas consumption chart (for web rendering).
     struct DailyView {
         int64_t epoch_day;   // local day number (local_now().time_since_epoch() / 86400)
-        float   m3;          // gas consumed that day, m3
+        float   m3_total;    // gas consumed that day, m3
+        float   m3_dhw;      // of it, DHW (boiler) mode, m3
+    };
+    struct HourlyView {
+        int64_t epoch_hour;  // local hour number (local_now().time_since_epoch() / 3600)
+        float   m3_total;    // gas consumed that hour, m3
+        float   m3_dhw;      // of it, DHW mode, m3
     };
 
     GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store,
                    IGasCorrectionStore& gas_store);
-    ~GasFlowService();
 
     void load_integral();  // restore integral_m3 from NVS
 
@@ -36,11 +40,6 @@ public:
     // Accessors
     float instant_flow()     const { return latest_flow_; }
     float integral_m3()      const { return integral_m3_; }
-    float avg_1h()           const { return ema_1h_; }
-    float avg_3h()           const { return ema_3h_; }
-    float avg_12h()          const { return ema_12h_; }
-    float avg_24h()          const { return ema_24h_; }
-    float avg_7d()           const { return ema_7d_; }
     float mod_filtered_val   = 0;
     float t_ret_filtered_val = 0;
     float mod_filtered()     const { return mod_filtered_val; }
@@ -49,24 +48,19 @@ public:
     void  set_k_calib(float v) { k_calib_ = v; }
     void  set_integral(float v) { integral_m3_ = v; }
 
-
-    // EMA setters for NVS restore
-    void set_ema_1h(float v)  { ema_1h_ = v; }
-    void set_ema_3h(float v)  { ema_3h_ = v; }
-    void set_ema_12h(float v) { ema_12h_ = v; }
-    void set_ema_24h(float v) { ema_24h_ = v; }
-    void set_ema_7d(float v)  { ema_7d_ = v; }
-    uint64_t ema_start_us() const { return ema_start_us_; }
-    void set_ema_start_us(uint64_t v) { ema_start_us_ = v; }
-
     // Public for testability — continuous efficiency curve vs return temp
     float efficiency_continuous(float t_ret) const;
 
-    // ── Daily consumption tracking (NVS-persisted via IHeatingStatsStore) ──
+    // ── Daily/hourly consumption tracking (NVS-persisted via IGasCorrectionStore) ──
     void update_daily_tracking();
+    void update_hourly_tracking();
     int  get_daily_view(DailyView* out, int max) const;
+    int  get_hourly_view(HourlyView* out, int max) const;
+    int64_t today_epoch_day() const { return today_epoch_day_; }
     void load_daily();
-    void pack_daily(GasDailyBlob& blob) const;
+    void pack_today(GasTodayBlob& blob) const;
+    void pack_history(GasHistoryBlob& blob) const;
+    bool consume_history_dirty();
 
 private:
     /// Seasonal correction of calorific value based on outdoor temperature.
@@ -102,29 +96,32 @@ private:
     bool flow_temp_valid_ = false;
     bool ret_temp_valid_  = false;
 
-    // EMA ring + accumulators
-    struct Sample { float flow; };
-    Sample* ring_; // malloc'd
-    int ring_idx_ = 0;
-    int ring_count_ = 0;
-
-    float ema_1h_ = 0, ema_3h_ = 0, ema_12h_ = 0, ema_24h_ = 0, ema_7d_ = 0;
-    uint64_t ema_start_us_ = 0;
-
     uint32_t last_update_ms_ = 0;
     uint32_t outdoor_zero_start_ms_ = 0;
-    int ema_tick_ = 0;
 
-    // ── Daily consumption tracking ──
+    // ── Daily/hourly consumption tracking ──
     // daily_accumulator_ runs in parallel with integral_m3_ but is NOT reset
     // by corrections (set_integral(0) doesn't touch it). Reset only at day
     // boundary and on explicit stats reset.
-    struct DailySlot { int64_t epoch_day; float m3; };
-    DailySlot daily_[DAILY_SLOTS];
+    GasDailyEntry daily_[DAILY_SLOTS];
     int       daily_head_  = 0;
     int       daily_count_ = 0;
     int64_t   today_epoch_day_ = -1;   // -1 = not initialized (wall clock not synced yet)
     float     daily_accumulator_ = 0;
+    float     daily_accumulator_dhw_ = 0;
+    bool      history_dirty_ = false;
 
-    void update_ema(float& ema, float val, float alpha);
+    // Hourly buckets: completed hours of today, current (partial) hour and
+    // yesterday's completed hours. Hour/day arrays are zero-filled, so missing
+    // buckets read as 0.
+    int64_t   today_epoch_hour_ = -1;  // -1 = not initialized
+    float     today_hours_[HOURS_PER_DAY] = {};
+    float     today_hours_dhw_[HOURS_PER_DAY] = {};
+    float     hourly_accumulator_ = 0;
+    float     hourly_accumulator_dhw_ = 0;
+    int64_t   yesterday_epoch_day_ = -1;
+    float     yesterday_hours_[HOURS_PER_DAY] = {};
+    float     yesterday_hours_dhw_[HOURS_PER_DAY] = {};
+
+    void push_daily(int64_t epoch_day, float m3_total, float m3_dhw);
 };

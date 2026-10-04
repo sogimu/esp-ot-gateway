@@ -3,15 +3,37 @@
 
 class IHeatingStateStore;
 
-static constexpr int GAS_DAILY_SLOTS = 8;
+static constexpr int GAS_HOURS_PER_DAY = 24;
+static constexpr int GAS_DAILY_SLOTS   = 64;   // ~2 месяца завершённых суток
 
-struct GasDailyBlob {
-    int64_t epoch_days[GAS_DAILY_SLOTS];
-    float   m3_values[GAS_DAILY_SLOTS];
-    int32_t head;
-    int32_t count;
+struct GasDailyEntry {
+    int64_t epoch_day;
+    float   m3_total;                          // суммарный расход за сутки
+    float   m3_dhw;                            // из него на ГВС (БКН)
+};
+
+/// «Сегодня» — частый маленький blob (пишется каждые ~10 мин):
+/// переживает ребут без потери текущего часа и завершённых часов сегодня.
+struct GasTodayBlob {
     int64_t today_epoch_day;
-    float   today_m3;
+    float   today_m3_total;                          // накоплено за сегодня
+    float   today_m3_dhw;                            // из него на ГВС
+    float   today_hours_total[GAS_HOURS_PER_DAY];    // завершённые часы сегодня
+    float   today_hours_dhw[GAS_HOURS_PER_DAY];      // из них на ГВС
+    int32_t current_hour;                            // 0..23, -1 = не инициализировано
+    float   current_hour_m3_total;                   // текущий (незавершённый) час
+    float   current_hour_m3_dhw;                     // из него на ГВС
+};
+
+/// «История» — редкий большой blob (пишется на границе суток):
+/// завершённые сутки + вчерашние часы.
+struct GasHistoryBlob {
+    GasDailyEntry daily[GAS_DAILY_SLOTS];
+    int32_t head;                                    // индекс самого старого дня
+    int32_t count;                                   // заполнено завершённых дней
+    int64_t yesterday_epoch_day;
+    float   yesterday_hours_total[GAS_HOURS_PER_DAY];
+    float   yesterday_hours_dhw[GAS_HOURS_PER_DAY];
 };
 
 /// Driven-порт: персистентность данных газовой коррекции (журнал сверки счётчика)
@@ -36,6 +58,11 @@ public:
     /// Сохранить котловую конфигурацию (калибровку) — делегирует IBoilerConfigStore.
     virtual void save_boiler_config(const IHeatingStateStore& state) = 0;
 
-    virtual void save_daily_gas(const void* blob)  { (void)blob; }
-    virtual bool load_daily_gas(void* blob)        { (void)blob; return false; }
+    /// «Сегодня + текущий час» — частое сохранение.
+    virtual void save_today_gas(const void* blob)   { (void)blob; }
+    virtual bool load_today_gas(void* blob)         { (void)blob; return false; }
+
+    /// Завершённая история (сутки + вчерашние часы) — раз в сутки.
+    virtual void save_history_gas(const void* blob) { (void)blob; }
+    virtual bool load_history_gas(void* blob)       { (void)blob; return false; }
 };

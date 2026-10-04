@@ -6,7 +6,10 @@
 struct GasCorrectionMetrics {
     float actual_consumed    = 0;  // м³ — реальное потребление за период
     float estimated_consumed = 0;  // м³ — оценённое потребление за период
-    float error_pct          = 0;  // %   — |оценка − факт| / факт × 100
+    float error_pct          = 0;  // %   — |оценка − факт| / факт × 100 (модуль)
+    float error_signed_pct   = 0;  // %   — (факт − оценка) / факт × 100
+                                   //       > 0 — модель занижает расход
+                                   //       < 0 — модель завышает расход
 
     /// Рекомендованный корректирующий множитель.
     /// k_calib_new = k_calib_prev × k_factor()
@@ -39,8 +42,11 @@ inline GasCorrectionMetrics compute_correction_metrics(
     GasCorrectionMetrics m;
     m.actual_consumed    = last_actual  - prev_actual;
     m.estimated_consumed = last_estimated - prev_actual;
-    if (m.actual_consumed > 0.001f)
-        m.error_pct = fabsf(m.actual_consumed - m.estimated_consumed)
-                     / m.actual_consumed * 100.0f;
+    if (m.actual_consumed > 0.001f) {
+        // Знак: > 0 — факт больше оценки (модель занижает), < 0 — завышает.
+        m.error_signed_pct = (m.actual_consumed - m.estimated_consumed)
+                           / m.actual_consumed * 100.0f;
+        m.error_pct = fabsf(m.error_signed_pct);
+    }
     return m;
 }

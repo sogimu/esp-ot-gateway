@@ -4,7 +4,7 @@
 #include "application/ports/driven/igas_correction_store.h"
 /// Integration tests for gas flow estimation, correction, and JSON rendering.
 /// Verifies that WebPresenterAdapter::render_stats() produces correct JSON
-/// with gas_error_pct, gas_error_monthly_pct, and gas_meter_total fields.
+/// with signed gas_error_pct and gas_meter_total fields.
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
@@ -156,7 +156,7 @@ GasIntTestLogger log;
 
 TEST_CASE("JSON stats contains gas_error_pct with 2 corrections", "[integration][gas][json]")
 {
-    // gas_error_pct = |diff| / actual_consumed * 100
+    // gas_error_pct = (факт − расчёт) / actual_consumed * 100 (со знаком)
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
@@ -239,7 +239,7 @@ GasIntTestLogger log;
     INFO("JSON output: " << buf);
 
     // CHECK skipped — needs WebPresenterAdapter deps
-    // error_pct = |1| / (104-100) * 100 = 1/4*100 = 25%
+    // error_pct = +(108-104-3) / (108-104) * 100 = +1/4*100 = +25%
     // CHECK skipped — needs WebPresenterAdapter deps
 }
 
@@ -326,7 +326,7 @@ GasIntTestLogger log;
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// render_stats JSON with "daily" array must stay valid (regression)
+// render_stats stays valid; history moved to render_gas_history
 // ══════════════════════════════════════════════════════════════════════
 
 struct TempLogReader : IEventLogReader {
@@ -336,7 +336,20 @@ struct TempLogReader : IEventLogReader {
     void set_event_callback(EventAppendCallback, void*) override {}
 };
 
-TEST_CASE("render_stats emits valid daily JSON after corrections", "[integration][gas]")
+static void gas_history_fixture(FakeHeatingStateStore& state, FakeTimeSource& time,
+                                GasFlowService& gas_flow) {
+    state.set_p_max(24.0f);
+    state.set_gas_calorific(9.5f);
+    state.set_modulation(50.0f);
+    state.set_return_temp(45.0f);
+    state.set_flame(true);
+    for (int i = 0; i < 5; i++) { time.advance_ms(10000); gas_flow.execute(); }
+    time.set_us(time.now_us() + 86400ULL * 1000000ULL);
+    time.advance_ms(10000);
+    gas_flow.execute();
+}
+
+TEST_CASE("render_stats emits valid JSON without daily array", "[integration][gas]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
@@ -357,27 +370,66 @@ TEST_CASE("render_stats emits valid daily JSON after corrections", "[integration
     TempLogReader elr;
     WebPresenterAdapter presenter(state, elr, time, mod_stats, burn_cycles, gas_flow, gas_corr, 0);
 
-    // Accumulate flow on day 0, then cross to day 1 so daily has data
-    state.set_p_max(24.0f);
-    state.set_gas_calorific(9.5f);
-    state.set_modulation(50.0f);
-    state.set_return_temp(45.0f);
-    state.set_flame(true);
-    for (int i = 0; i < 5; i++) { time.advance_ms(10000); gas_flow.execute(); }
-    time.set_us(time.now_us() + 86400ULL * 1000000ULL);
-    time.advance_ms(10000);
-    gas_flow.execute();
+    gas_history_fixture(state, time, gas_flow);
 
     char buf[6144] = {};
     int len = presenter.render_stats(buf, sizeof(buf));
     REQUIRE(len > 0);
     REQUIRE((size_t)len < sizeof(buf));
 
-    // Empty corrections array must still be closed before "daily"
-    CHECK(strstr(buf, "\"corrections\":[],\"daily\":[") != nullptr);
-    // Daily entries present and today flag on the last one
-    CHECK(strstr(buf, "\"daily\":[{\"d\":\"15.01\",\"m3\":") != nullptr);
+    // Daily history moved to /api/gas-history — no daily key in stats
+    CHECK(strstr(buf, "\"daily\"") == nullptr);
+    // Empty corrections array must still be closed
+    CHECK(strstr(buf, "\"corrections\":[]}") != nullptr);
+    // Balanced braces — no truncation, no stray commas
+    int opens = 0, closes = 0;
+    for (int i = 0; i < len; i++) {
+        if (buf[i] == '{' || buf[i] == '[') opens++;
+        if (buf[i] == '}' || buf[i] == ']') closes++;
+    }
+    CHECK(opens == closes);
+}
+
+TEST_CASE("render_gas_history emits valid daily and hourly JSON", "[integration][gas]")
+{
+    FakeHeatingStateStore state;
+    FakeTimeSource time;
+    time.set_us(1736899200ULL * 1000000ULL);
+    FakeHeatingStatsStore hss;
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow(state, time, hss, gcs);
+    FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+    GasIntTestLogger log;
+    GasCorrectionInteractor gas_corr(state, gas_store, log);
+
+    FakeHeatingStatsStore hss_mod;
+    ModulationStatsService mod_stats(state, hss_mod);
+    FakeBurnStatsStore burn_store;
+    BurnCycleService burn_cycles(state, time, burn_store);
+    TempLogReader elr;
+    WebPresenterAdapter presenter(state, elr, time, mod_stats, burn_cycles, gas_flow, gas_corr, 0);
+
+    gas_history_fixture(state, time, gas_flow);
+
+    char buf[8192] = {};
+    int len = presenter.render_gas_history(buf, sizeof(buf));
+    REQUIRE(len > 0);
+    REQUIRE((size_t)len < sizeof(buf));
+
+    // Daily entries: completed day 0 plus running today
+    CHECK(strstr(buf, "\"days\":[{\"epoch_day\":") != nullptr);
+    CHECK(strstr(buf, "\"ym\":") != nullptr);
+    CHECK(strstr(buf, "\"d\":\"15.01\"") != nullptr);
+    CHECK(strstr(buf, "\"m3_total\":") != nullptr);
+    CHECK(strstr(buf, "\"m3_dhw\":") != nullptr);
     CHECK(strstr(buf, "\"today\":1") != nullptr);
+    // Hourly entries for yesterday + today
+    CHECK(strstr(buf, "\"hours\":[{\"epoch_hour\":") != nullptr);
+    CHECK(strstr(buf, "\"h\":\"00\"") != nullptr);
+    CHECK(strstr(buf, "\"today_epoch_day\":") != nullptr);
+
     // Balanced braces — no truncation, no stray commas
     int opens = 0, closes = 0;
     for (int i = 0; i < len; i++) {

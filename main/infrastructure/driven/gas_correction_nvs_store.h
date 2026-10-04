@@ -20,8 +20,10 @@ public:
     void save_integral(float value) override;
     void save_boiler_config(const IHeatingStateStore& state) override;
 
-    void save_daily_gas(const void* blob) override;
-    bool load_daily_gas(void* blob) override;
+    void save_today_gas(const void* blob) override;
+    bool load_today_gas(void* blob) override;
+    void save_history_gas(const void* blob) override;
+    bool load_history_gas(void* blob) override;
 
 private:
     IBoilerConfigStore* boiler_ = nullptr;
