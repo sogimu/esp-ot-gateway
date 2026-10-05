@@ -182,12 +182,18 @@ jobs:
               "${NOTES_ARGS[@]}" \
               -R "$GITHUB_REPOSITORY"
 
-            # Уборка исходного rc — только после успешного создания
-            # стабильного релиза (приходим сюда через workflow_dispatch).
+            # Уборка всех rc промоутируемой версии — только после успешного
+            # создания стабильного релиза (приходим сюда через workflow_dispatch).
+            # Соседи выводятся из стабильного тега; rc других версий не трогаем.
             if [ "$CHANNEL" = stable ] && [ -n "${SOURCE_RC:-}" ]; then
-              echo "Уборка исходного rc: $SOURCE_RC"
-              gh release delete "$SOURCE_RC" --yes -R "$GITHUB_REPOSITORY" || true
-              git push origin ":refs/tags/$SOURCE_RC" || true
+              SIBLINGS="$(git ls-remote --tags origin "refs/tags/${TAG}-rc*" \
+                          | awk '{print $2}' | sed 's#^refs/tags/##' \
+                          | grep -E "^${TAG}-rc[0-9]+$" || true)"
+              for RC_TAG in $SIBLINGS; do
+                echo "Уборка rc: $RC_TAG"
+                gh release delete "$RC_TAG" --yes -R "$GITHUB_REPOSITORY" || true
+                git push origin ":refs/tags/$RC_TAG" || true
+              done
             fi
           fi
 
