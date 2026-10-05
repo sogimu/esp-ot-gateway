@@ -51,9 +51,9 @@
 - [x] 7.2 Собрать и прогнать host-тесты (`cmake -B build -S test && cmake --build build -j && ./build/run_tests`) — без регрессий.
 - [x] 7.3 Локально проверить shell-логику классификации тегов, guard, сортировки и подсчёта `sha256` на фейковом наборе тегов (включая `vX.Y.Z` и `vX.Y.Z-rcN`).
 - [x] 7.4 Локально проверить логику промоушена: поиск старшего rc (несколько rc, разные базовые версии), снятие `-rcN`, пропуск при существующем stable.
-- [ ] 7.5 После влития в `master`: убедиться, что Pages пересобрал `versions.json` с `sha256` и stable-first порядком; проверить deep-link и fallback манифеста на Pages.
-- [ ] 7.6 Проверить тег-ран на `-rcN`: `firmware/<tag>/` и `versions.json` обновились без пуша в `master`.
-- [ ] 7.7 E2E-промоушен на реальном PR: merge PR с `vX.Y.Z-rcN` → stable-тег на merge-коммите, запуск `workflow_dispatch`, релиз создан, rc-релиз/тег удалены.
+- [x] 7.5 После влития в `master`: убедиться, что Pages пересобрал `versions.json` с `sha256` и stable-first порядком; проверить deep-link и fallback манифеста на Pages.
+- [x] 7.6 Проверить тег-ран на `-rcN`: `firmware/<tag>/` и `versions.json` обновились без пуша в `master`.
+- [x] 7.7 E2E-промоушен на реальном PR: merge PR с `vX.Y.Z-rcN` → stable-тег на merge-коммите, запуск `workflow_dispatch`, релиз создан, rc-релиз/тег удалены.
 
 ## 8. Безопасность обкатки (дополнения после ревью)
 
