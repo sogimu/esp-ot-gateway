@@ -184,6 +184,13 @@ jobs:
   deploy-pages:
     needs: [test, coverage, firmware-build]
     if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+    # Сериализуем деплои Pages. Merge-пуш и авто-промоушен запускают два
+    # деплоя почти одновременно; без очереди прод может остаться на раннем
+    # (устаревшем) состоянии каталога. cancel-in-progress: false — второй
+    # деплой ждёт и публикуется последним.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       pages: write

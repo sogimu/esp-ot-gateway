@@ -76,6 +76,11 @@ The Pages deployment SHALL run on pushes of `v*` tags in addition to pushes to `
 - **WHEN** the Pages deployment runs for a tag
 - **THEN** the web flasher published at the site root comes from `master` (not from the tagged commit), while the firmware for the pushed tag comes from the build artifact
 
+#### Scenario: Concurrent deployments are serialized
+
+- **WHEN** a merge triggers both the master deployment and the promoted release deployment
+- **THEN** the deployments are queued rather than racing, and the published site reflects the later (promoted) deployment's catalog
+
 ### Requirement: Catalog checksum emission
 
 The pipeline SHALL compute the SHA-256 of the exact `esp-ot-gateway.bin` that is published to Pages and SHALL include it in `versions.json` for the corresponding version.
