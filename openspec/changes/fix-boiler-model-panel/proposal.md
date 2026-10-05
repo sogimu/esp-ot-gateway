@@ -8,6 +8,7 @@
 - **Защита правок**: поля модели получают sticky dirty-флаг (`dirtyFields.model`). Пока флаг установлен, `pollStats()` не перезаписывает поля; флаг сбрасывается только при успешном применении.
 - **Кнопка**: «Сохранить модель» заменяется на «Применить» в стиле соседних панелей (тот же класс `.btn` + span сообщения рядом); после успеха — «Применено», при ошибке — сообщение об ошибке.
 - **Кривая КПД**: три строки ввода кривой КПД (T1/T2/T3) удаляются из панели; `eff_*` убираются из payload применения и из опроса.
+- **Layout**: устраняется обрезка низа страницы (`body{overflow:hidden}` + `.container{height:100vh}` при шапке ~82px), из-за которой кнопка «Применить» — последний элемент самой длинной вкладки — была видна полоской ~3px. Тело становится flex-колонкой, `.container` — `flex:1;min-height:0`.
 - **Не входит**: удаление мёртвого бэкенд-кода КПД (state-поля, NVS-blob, `efficiency_continuous()`, `set_efficiency_points`) — отдельным изменением, чтобы не менять формат NVS-blob и не терять настройки модели при апгрейде; смена дефолтов 5.5/24 → 3.5/24.7 — отдельное решение (после фикса значения можно ввести через панель).
 
 ## Capabilities
@@ -23,6 +24,6 @@
 ## Impact
 
 - `main/infrastructure/driving/http_controller_adapter.cpp` — `handler_control`: парсинг и применение 5 полей модели; при необходимости увеличить буфер `body[256]`.
-- `main/infrastructure/driving/web_page.h` — панель «Модель котла»: dirty-флаг, кнопка «Применить», удаление кривой КПД, guard в `pollStats()` (строки 1406–1417), очистка payload в `saveModel()`/`applyModel()`.
+- `main/infrastructure/driving/web_page.h` — панель «Модель котла»: dirty-флаг, кнопка «Применить», удаление кривой КПД, guard в `pollStats()` (строки 1406–1417), очистка payload в `saveModel()`/`applyModel()`; layout-фикс контейнера (CSS `body`/`.container`).
 - `main/application/use_cases/gas_correction_interactor.{h,cpp}`, `main/application/ports/driving/igas_calibration.h` — без изменений: сеттеры уже существуют и начинают вызываться.
 - Тесты: `test/test_gas_model_config.cpp` и `test/test_boiler_model_config.cpp` покрывают сами сеттеры и остаются валидными; HTTP-обработчик тестами не покрыт — проверка сборкой и вручную.

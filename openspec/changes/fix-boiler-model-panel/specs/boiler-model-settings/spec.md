@@ -38,6 +38,11 @@ The boiler-model panel SHALL provide a single action button that submits all its
 - **WHEN** the user presses the apply button and the request fails or is rejected
 - **THEN** the panel shows an error message
 
+#### Scenario: Apply button is fully visible
+
+- **WHEN** the user opens the boiler-model panel at the bottom of the longest tab
+- **THEN** the apply button is fully visible and clickable, not clipped by the page layout
+
 ### Requirement: Model panel edits are protected from polling
 
 While the boiler-model panel has unsaved edits, the periodic statistics poll SHALL NOT overwrite its input fields. An edit SHALL mark the panel dirty; the dirty state SHALL be cleared only after a successful apply.
