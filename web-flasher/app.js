@@ -14,6 +14,66 @@ const releaseNotes = document.getElementById('release-notes');
 const releaseBody = document.getElementById('release-body');
 
 let installButton = null;
+let sortedReleases = [];
+
+function isTestTag(tag) {
+    return /-rc\d+$/i.test(tag);
+}
+
+// Источник правды о канале — суффикс тега; флаг GitHub API учитываем тоже
+// (на случай вручную снятого флага у старого релиза).
+function isTest(release) {
+    return !!release.prerelease || isTestTag(release.tag_name);
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+}
+
+function semverParts(tag) {
+    const m = /^v?(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/.exec(tag);
+    if (!m) return null;
+    return { major: +m[1], minor: +m[2], patch: +m[3], pre: m[4] || '' };
+}
+
+// Убывание: v0.10.0 перед v0.9.0, стабильная перед rc той же версии.
+function compareSemverDesc(a, b) {
+    const pa = semverParts(a), pb = semverParts(b);
+    if (!pa && !pb) return 0;
+    if (!pa) return 1;
+    if (!pb) return -1;
+    if (pa.major !== pb.major) return pb.major - pa.major;
+    if (pa.minor !== pb.minor) return pb.minor - pa.minor;
+    if (pa.patch !== pb.patch) return pb.patch - pa.patch;
+    if (!pa.pre && pb.pre) return -1;
+    if (pa.pre && !pb.pre) return 1;
+    return pb.pre.localeCompare(pa.pre, undefined, { numeric: true });
+}
+
+function sortReleases(list) {
+    return list.slice().sort((a, b) => {
+        const at = isTest(a), bt = isTest(b);
+        if (at !== bt) return at ? 1 : -1;
+        return compareSemverDesc(a.tag_name, b.tag_name);
+    });
+}
+
+function releaseOption(release) {
+    const date = release.published_at ? release.published_at.slice(0, 10) : '';
+    const label = isTestTag(release.tag_name) ? ' (тестовая)' : '';
+    return `<option value="${escapeHtml(release.tag_name)}">${escapeHtml(release.tag_name)} — ${escapeHtml(date)}${label}</option>`;
+}
+
+async function manifestExists(tag) {
+    try {
+        const r = await fetch(`firmware/${tag}/manifest.json`, { method: 'HEAD' });
+        return r.ok;
+    } catch {
+        return false;
+    }
+}
 
 function createButton(tag) {
     if (installButton) {
@@ -76,6 +136,39 @@ async function updateManifest(tag) {
     }
 }
 
+// Выбирает версию только если её манифест есть на Pages. При авто-выборе
+// откатывается к следующей стабильной с манифестом; при явном — показывает
+// ошибку и не включает прошивку.
+async function selectVersion(tag, { auto = false } = {}) {
+    if (await manifestExists(tag)) {
+        versionSelect.value = tag;
+        await updateManifest(tag);
+        return true;
+    }
+
+    if (auto) {
+        const start = sortedReleases.findIndex(r => r.tag_name === tag);
+        for (let i = start + 1; i < sortedReleases.length; i++) {
+            const candidate = sortedReleases[i];
+            if (isTest(candidate)) continue;
+            if (await manifestExists(candidate.tag_name)) {
+                versionSelect.value = candidate.tag_name;
+                await updateManifest(candidate.tag_name);
+                statusMsg.textContent = `${tag} не опубликована на Pages, выбрана ${candidate.tag_name}`;
+                return true;
+            }
+        }
+    }
+
+    if (installButton) {
+        installButton.remove();
+        installButton = null;
+    }
+    buttonContainer.innerHTML = '';
+    statusMsg.textContent = `Версия ${tag}: manifest.json не найден на Pages (HTTP 404)`;
+    return false;
+}
+
 // Load available versions from GitHub Releases
 async function loadVersions() {
     try {
@@ -94,25 +187,33 @@ async function loadVersions() {
             return;
         }
 
-        releases.forEach(release => {
-            const option = document.createElement('option');
-            option.value = release.tag_name;
-            const date = release.published_at.slice(0, 10);
-            const prerelease = release.prerelease ? ' [pre]' : '';
-            option.textContent = `${release.tag_name} — ${date}${prerelease}`;
-            versionSelect.appendChild(option);
-        });
+        sortedReleases = sortReleases(releases);
+        const stable = sortedReleases.filter(r => !isTest(r));
+        const test = sortedReleases.filter(r => isTest(r));
+
+        let html = stable.map(releaseOption).join('');
+        if (test.length) {
+            html += `<optgroup label="Тестовые (на свой риск)">${test.map(releaseOption).join('')}</optgroup>`;
+        }
+        versionSelect.innerHTML = html;
 
         versionSelect.disabled = false;
         versionLoading.textContent = '';
 
-        // Auto-select latest non-prerelease
-        const latestStable = releases.find(r => !r.prerelease);
-        versionSelect.value = latestStable ? latestStable.tag_name : releases[0].tag_name;
+        // Deep-link ?tag=<tag>: преселект, включая тестовую версию.
+        const wanted = new URLSearchParams(location.search).get('tag');
+        const wantedExists = !!wanted && sortedReleases.some(r => r.tag_name === wanted);
+        const defaultStable = stable[0];
 
-        await updateManifest(versionSelect.value);
-        statusMsg.textContent = `${releases.length} versions available`;
+        if (!wantedExists && !defaultStable) {
+            versionSelect.insertAdjacentHTML('afterbegin', '<option value="" disabled>— выберите версию —</option>');
+            versionSelect.value = '';
+            statusMsg.textContent = 'Нет стабильных версий — выберите тестовую вручную';
+            return;
+        }
 
+        const initialTag = wantedExists ? wanted : defaultStable.tag_name;
+        await selectVersion(initialTag, { auto: !wantedExists });
     } catch (err) {
         versionLoading.textContent = 'Error loading';
         statusMsg.textContent = err.message;
@@ -121,7 +222,7 @@ async function loadVersions() {
 }
 
 versionSelect.addEventListener('change', () => {
-    updateManifest(versionSelect.value).catch(err => {
+    selectVersion(versionSelect.value).catch(err => {
         statusMsg.textContent = err.message;
     });
 });

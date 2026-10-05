@@ -15,7 +15,7 @@
 
 ## 1. Что проверяется
 
-Сценарии покрытыют полный цикл A/B-обновления и связаны с компонентами D1–D11:
+Сценарии покрывают полный цикл A/B-обновления и связаны с компонентами D1–D11:
 
 | Компонент | Роль в тесте |
 |---|---|
@@ -137,44 +137,48 @@ ota_validity.set_http_server_up(false);  // health=false
 
 ## 4. Публикация тега через CI
 
-CI (`.github/workflows/tests.yml`) реагирует на теги `v*` заданием
-`firmware-build`: собирает прошивку и создаёт **GitHub Release** с артефактами
-`esp-ot-gateway.bin`, `bootloader.bin`, `partition-table.bin`.
+Тестовый канал — теги `vX.Y.Z-rcN` (один бакет тестовых). Тег можно ставить с
+feature-ветки: guard достижимости из `master` применяется только к стабильным
+`vX.Y.Z`, поэтому `-rcN` публикуется откуда угодно.
 
-Сам по себе тег кладёт бинарник **только в Release**. Устройство же качает
-образ с GitHub Pages: `https://sogimu.github.io/esp-ot-gateway/firmware/<tag>/esp-ot-gateway.bin`
-(см. `EspOtaAdapter::download`). Каталог `/firmware/<tag>/` наполняется
-заданием `deploy-pages`, которое跑ит по всем релизам и копирует их `.bin`
-на Pages. `deploy-pages` запускается на push в `master`.
+CI (`.github/workflows/tests.yml`) на тег `v*`:
+- `firmware-build` собирает прошивку и создаёт **GitHub Release** (`--prerelease`
+  для `-rcN`, `--latest` для `vX.Y.Z`) с артефактами `esp-ot-gateway.bin`,
+  `bootloader.bin`, `partition-table.bin`;
+- `deploy-pages` (теперь и на тегах) сразу публикует `firmware/<tag>/` на GitHub
+  Pages из артефакта этого же прогона и обновляет `versions.json` — без ожидания
+  пуша в `master` и без ручного `gh workflow run`.
 
 ```bash
 # На ветке ota-test/bad-crash (см. §3):
-git tag v0.0.0-ota-bad-crash-test          # prerelease-тег
+git tag -a v0.0.0-rc1 -m "bad-image для проверки авто-отката OTA"
 git push origin ota-test/bad-crash
-git push origin v0.0.0-ota-bad-crash-test  # → триггерит firmware-build + Release
-
-# Чтобы bad-образ появился на Pages по OTA-URL:
-#   вариант 1 — дождаться ближайшего push в master; ИЛИ
-#   вариант 2 — запустить workflow вручную на master (github.ref == master):
-gh workflow run tests.yml --ref master
+git push origin v0.0.0-rc1   # → firmware-build + deploy-pages (тег-ран)
 ```
 
-После `deploy-pages` bad-образ доступен по адресу:
-`https://sogimu.github.io/esp-ot-gateway/firmware/v0.0.0-ota-bad-crash-test/esp-ot-gateway.bin`
+После прогона bad-образ доступен по адресу:
+`https://sogimu.github.io/esp-ot-gateway/firmware/v0.0.0-rc1/esp-ot-gateway.bin`
 
 Проверить `[HOST]` (с компьютера, до теста на устройстве):
 
 ```bash
-curl -sI https://sogimu.github.io/esp-ot-gateway/firmware/v0.0.0-ota-bad-crash-test/esp-ot-gateway.bin
+curl -sI https://sogimu.github.io/esp-ot-gateway/firmware/v0.0.0-rc1/esp-ot-gateway.bin
 # Ожидание: HTTP/2 200
 curl -s https://sogimu.github.io/esp-ot-gateway/versions.json | \
-  python3 -c 'import sys,json;print([v["tag"] for v in json.load(sys.stdin)["versions"]])'
-# Ожидание: тег v0.0.0-ota-bad-crash-test присутствует в списке
+  python3 -c 'import sys,json;vs=json.load(sys.stdin)["versions"];print([(v["tag"],v["prerelease"],v["sha256"][:8]) for v in vs])'
+# Ожидание: v0.0.0-rc1 присутствует, prerelease=true, sha256 совпадает с
+# `sha256sum` скачанного .bin; стабильные версии идут раньше тестовых.
 ```
 
-> Не публикуйте bad-тег с тем же именем, что и релизная версия. Используйте
-> явно предрелизные имена (`v0.0.0-…-test`) и удаляйте тег/релиз после теста:
-> `gh release delete v0.0.0-ota-bad-crash-test --yes; git push origin :v0.0.0-ota-bad-crash-test`.
+> Тестовый тег — только `vX.Y.Z-rcN`; произвольные имена CI отклонит. Не
+> вливайте ветку с bad-image: при merge промоушен создал бы стабильный тег
+> `v0.0.0`. Удаляйте тег/релиз после теста:
+> `gh release delete v0.0.0-rc1 --yes; git push origin :v0.0.0-rc1`.
+
+Выпуск стабильной версии: после merge PR с `vX.Y.Z-rcN` workflow
+`promote.yml` автоматически создаёт `vX.Y.Z` на merge-коммите (копируя
+аннотацию rc) и запускает релиз; после успеха rc удаляется. Ручной путь —
+аннотированный тег `vX.Y.Z` на `master` — тоже работает (guard + релиз).
 
 ---
 
@@ -226,9 +230,10 @@ UI — вкладка «Обновление ПО». Запишите **верс
 `[HW]` Шаги:
 
 1. Устройство на хорошей **v1** в слоте `ota_0`. Bad-образ
-   `v0.0.0-ota-bad-crash-test` уже опубликован на Pages (§4).
-2. На вкладке «Обновление ПО» выберите тег `v0.0.0-ota-bad-crash-test`,
-   нажмите «Обновить». Дождитесь 100 % и ребута в bad-слот (`ota_1`).
+   `v0.0.0-rc1` уже опубликован на Pages (§4).
+2. На вкладке «Обновление ПО» выберите тег `v0.0.0-rc1` (в группе
+   «Тестовые», с подтверждением), нажмите «Обновить». Дождитесь 100 % и
+   ребута в bad-слот (`ota_1`).
 
 Ожидаемый результат (краш-путь через `CrashDiagnosticsAdapter`):
 
@@ -290,7 +295,7 @@ UI — вкладка «Обновление ПО». Запишите **верс
 - [ ] `[HW]` Предусловие 0: новый макет партиций прошит по USB, устройство
       грузится из `ota_0`/`ota_1` (не factory).
 - [ ] `[HOST]` bad-image собирается; main чист после реверса патча.
-- [ ] `[HOST]` bad-тег опубликован, `curl …/firmware/<bad-tag>/esp-ot-gateway.bin` → 200.
+- [ ] `[HOST]` bad-тег опубликован, `curl …/firmware/v0.0.0-rc1/esp-ot-gateway.bin` → 200.
 - [ ] `[HW]` **A:** апдейт до 100 %, ребут, `mark_valid < 90 с`, новая версия,
       прежний/новый слот корректен, NVS цел.
 - [ ] `[HW]` **Б:** bad-образ → краш → авто-откат в прежний слот, прежняя
@@ -310,12 +315,12 @@ rollback via the UI "Откатить" button. Each expects: device boots the pr
 slot, previous version, **NVS intact** (D9 freezes NVS writes during
 `PENDING_VERIFY`, D10 hardens loaders — this is the T2 integrity link).
 
-**Bad-image recipe is safe:** `scripts/ota-bad-image.patch` is an inert file
-that never touches the `main` build. Apply it on a throwaway branch
-(`ota-test/bad-crash`), build, tag (`v0.0.0-ota-bad-crash-test`), push the tag
-to trigger the `firmware-build` CI job (creates a GitHub Release with the bin),
-then run `gh workflow run tests.yml --ref master` so `deploy-pages` copies the
-bin to `https://sogimu.github.io/esp-ot-gateway/firmware/<tag>/esp-ot-gateway.bin`.
+**Bad-image recipe is safe:** the patch is not stored in the repo — create it on
+a throwaway branch (`ota-test/bad-crash`) per §3, build, tag (`v0.0.0-rc1`), push
+the tag to trigger the `firmware-build` and `deploy-pages` CI jobs in one run —
+the release is created and the bin is published to
+`https://sogimu.github.io/esp-ot-gateway/firmware/v0.0.0-rc1/esp-ot-gateway.bin`
+with no manual `gh workflow run` and no wait for a master push.
 
 **Mandatory one-time USB flash:** the bootloader cannot replace its own
 partition table over OTA, so the first migration from the old `factory` layout
