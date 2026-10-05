@@ -187,6 +187,18 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
                 return httpd_resp_sendstr(req, "{\"ok\":false,\"err\":\"rejected\"}");
             }
         }
+        f = json_get_float(body, "\"gas_temp_offset\"");
+        if (f > -1e37f) self->gas_->set_gas_temp_offset(f);
+        {
+            float pmin = json_get_float(body, "\"ch_pmin\"");
+            float pmax = json_get_float(body, "\"ch_pmax\"");
+            if (pmin > -1e37f && pmax > -1e37f) self->gas_->set_ch_power(pmin, pmax);
+        }
+        {
+            float pmin = json_get_float(body, "\"dhw_pmin\"");
+            float pmax = json_get_float(body, "\"dhw_pmax\"");
+            if (pmin > -1e37f && pmax > -1e37f) self->gas_->set_dhw_power(pmin, pmax);
+        }
     }
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, "{\"ok\":true}");
