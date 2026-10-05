@@ -71,12 +71,27 @@ jobs:
 
   firmware-build:
     runs-on: ubuntu-latest
+    outputs:
+      promotion_pending: ${{ steps.promo.outputs.pending }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           # Полный граф коммитов нужен для guard'а `merge-base --is-ancestor`.
           fetch-depth: 0
+
+      - name: Check promotion pending
+        id: promo
+        run: |
+          set -euo pipefail
+          pending=false
+          if [ "$GITHUB_REF" = "refs/heads/master" ] && [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            if git tag --merged "$GITHUB_SHA" -l 'v*-rc*' \
+               | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-rc[0-9]+$'; then
+              pending=true
+            fi
+          fi
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
 
       - name: Build firmware (ESP-IDF v5.3.2)
         uses: espressif/esp-idf-ci-action@v1
@@ -183,11 +198,16 @@ jobs:
   # from its artifact, so Pages is updated without waiting for a master push).
   deploy-pages:
     needs: [test, coverage, firmware-build]
-    if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
-    # Сериализуем деплои Pages. Merge-пуш и авто-промоушен запускают два
-    # деплоя почти одновременно; без очереди прод может остаться на раннем
-    # (устаревшем) состоянии каталога. cancel-in-progress: false — второй
-    # деплой ждёт и публикуется последним.
+    # Если на пушимом в master коммите есть достижимый -rcN, деплой сделает
+    # промоушен (tag-прогон). Оба деплоя шли бы для одного коммита, а значит
+    # с одинаковым pages_build_version — Pages не принимает второй артефакт
+    # для того же version. Ручной workflow_dispatch деплоит всегда (recovery).
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.ref == 'refs/heads/master' &&
+       !(github.event_name == 'push' && needs.firmware-build.outputs.promotion_pending == 'true'))
+    # Дополнительно сериализуем деплои Pages, чтобы соседние запуски
+    # (tag-раны, ручные dispatch) не переплетались.
     concurrency:
       group: pages
       cancel-in-progress: false

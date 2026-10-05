@@ -81,6 +81,11 @@ The Pages deployment SHALL run on pushes of `v*` tags in addition to pushes to `
 - **WHEN** a merge triggers both the master deployment and the promoted release deployment
 - **THEN** the deployments are queued rather than racing, and the published site reflects the later (promoted) deployment's catalog
 
+#### Scenario: Master run defers to promotion
+
+- **WHEN** a commit with a reachable test tag is pushed to `master` and promotion will run
+- **THEN** the master run does not deploy Pages, and the promoted release run performs the deployment (one deployment per commit, because Pages rejects a second artifact for the same build version)
+
 ### Requirement: Catalog checksum emission
 
 The pipeline SHALL compute the SHA-256 of the exact `esp-ot-gateway.bin` that is published to Pages and SHALL include it in `versions.json` for the corresponding version.
