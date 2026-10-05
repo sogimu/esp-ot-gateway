@@ -16,6 +16,7 @@ class GasFlowService : public IControlTask {
 public:
     static constexpr int DAILY_SLOTS = 64;    // ~2 месяца завершённых суток
     static constexpr int HOURS_PER_DAY = 24;
+    static constexpr float FIRING_EPS = 0.5f; // % модуляции: ниже — горелка не горит
 
     /// One entry of the gas consumption chart (for web rendering).
     struct DailyView {
@@ -85,8 +86,8 @@ private:
     float integral_m3_ = 0;
     float latest_flow_ = 0;
 
-    // Flame-gating state
-    bool flame_prev_ = false;
+    // Firing-gating state (modulation-based, not the flame bit)
+    bool firing_prev_ = false;
     uint32_t ignition_start_ms_ = 0;
 
     // DHW mode flag

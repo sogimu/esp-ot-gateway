@@ -167,15 +167,16 @@ TEST_CASE("GasFlow: integral_m3 accumulates across poll cycles", "[gas][regressi
 
     float before = gfs.integral_m3();
 
-    // Poll without flame — should not accumulate
-    state.set_flame(false);
+    // Poll with zero modulation (burner off) — should not accumulate,
+    // even with the flame bit stuck at 1.
+    state.set_flame(true);
     state.set_modulation(0);
     for (int i = 0; i < 10; i++) {
         time.advance_ms(1100);
         gfs.execute();
     }
 
-    // No flame → no gas flow → integral unchanged
+    // No firing (mod=0) → no gas flow → integral unchanged
     REQUIRE(gfs.integral_m3() == Approx(before));
 }
 
