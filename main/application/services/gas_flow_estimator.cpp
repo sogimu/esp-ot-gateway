@@ -60,9 +60,10 @@ float GasFlowService::calc_power(float modulation_pct, float /*flow_temp*/, floa
     if (modulation_pct < 0.0f) modulation_pct = 0.0f;
     if (modulation_pct > 100.0f) modulation_pct = 100.0f;
 
-    // 0 % modulation does NOT mean zero gas — a firing burner always burns
-    // at least at minimum power (pmin). The "burner off" case is handled by
-    // flame-gating in execute() (flame off → latest_flow_ = 0).
+    // The burner-off case (modulation at/below FIRING_EPS) is handled by
+    // firing-gating in execute() (→ latest_flow_ = 0), so this mapping is
+    // only reached for a firing burner: power runs from pmin at the smallest
+    // reported modulation up to pmax.
 
     // Input (nameplate) power: modulation % is relative to nameplate max.
     // Does not depend on MWT — gas valve delivers the same gas at the same modulation.
@@ -85,7 +86,6 @@ void GasFlowService::execute()
     float t_flow  = state_.get_ch_temp();
     float gas_cal = state_.get_gas_calorific();
     float t_out   = state_.get_outside_temp();
-    bool flame    = state_.is_flame_on();
     bool dhw      = state_.is_dhw_active();
     state_.unlock_shared();
 
@@ -114,14 +114,16 @@ void GasFlowService::execute()
         outdoor_zero_start_ms_ = 0;
     }
 
-    // ── Flame-gating ──────────────────────────────────────
-    if (!flame_prev_ && flame) {
+    // ── Firing-gating: modulation, not the (unreliable) flame bit ──
+    bool firing = mod_raw > FIRING_EPS;
+    if (!firing_prev_ && firing) {
         ignition_start_ms_ = now_ms;
+        kalman_mod_.reset(mod_raw);
     }
-    flame_prev_ = flame;
+    firing_prev_ = firing;
 
-    if (flame) {
-        // Kalman filter raw inputs (only while flame is on — prevents filter drift on zeros)
+    if (firing) {
+        // Kalman filter raw inputs (only while firing — prevents filter drift on zeros)
         float mod_f = kalman_mod_.update(mod_raw);
         float ret_f = kalman_ret_.update(t_ret);
         mod_filtered_val = mod_f;
@@ -142,7 +144,7 @@ void GasFlowService::execute()
         if (flow < 0) flow = 0;
         latest_flow_ = flow;
 
-        // Integrate flow (only while flame is on)
+        // Integrate flow (only while firing)
         uint32_t dt_ms = now_ms - last_update_ms_;
         if (dt_ms > 0 && dt_ms < 60000) {
             float dt_h = static_cast<float>(dt_ms) / 3600000.0f;
@@ -388,7 +390,7 @@ void GasFlowService::reset()
     latest_flow_ = 0;
     kalman_mod_.reset(0);
     kalman_ret_.reset(0);
-    flame_prev_ = false;
+    firing_prev_ = false;
     ignition_start_ms_ = 0;
     dhw_active_ = false;
     outdoor_temp_valid_ = false;

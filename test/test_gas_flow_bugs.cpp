@@ -65,20 +65,21 @@ TEST_CASE("GasFlowService: efficiency correction curve", "[gas_flow]")
     CHECK(flow < 10.0f); // sanity: shouldn't exceed reasonable range
 }
 
-TEST_CASE("GasFlowService: no flame produces zero flow", "[gas_flow]")
+TEST_CASE("GasFlowService: no modulation produces zero flow", "[gas_flow]")
 {
-    // With flame-gating, when is_flame_on() is false, latest_flow_ must be 0.
+    // With firing-gating, when modulation is zero (burner off) latest_flow_ must be 0,
+    // even if the boiler reports flame=1.
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
     FakeGasCorrectionStore gcs;
     GasFlowService svc(state, time, hss, gcs);
 
-    state.set_modulation(50.0f);
+    state.set_modulation(0.0f);
     state.set_return_temp(30.0f);
     state.set_p_max(24.0f);
     state.set_gas_calorific(9.5f);
-    state.set_flame(false);
+    state.set_flame(true);
 
     svc.execute(); // first poll sets up timing
 
@@ -86,7 +87,7 @@ TEST_CASE("GasFlowService: no flame produces zero flow", "[gas_flow]")
     svc.execute();
 
     float flow = svc.instant_flow();
-    INFO("flow with flame=false, mod=50%: " << flow);
+    INFO("flow with flame=true, mod=0%: " << flow);
     CHECK(flow == 0.0f);
 }
 
@@ -194,7 +195,7 @@ TEST_CASE("GasFlowService: physical model sanity — flow vs modulation", "[gas_
     // Reset and measure at 75% modulation
     svc.reset();
     state.set_modulation(75.0f);
-    state.set_flame(true); // reset clears flame_prev_, need to re-set
+    state.set_flame(true); // reset clears firing_prev_; mod=75% so it re-fires
     svc.execute(); // setup
     for (int i = 0; i < 15; i++) { time.advance_ms(10000); svc.execute(); }
     float flow75 = svc.instant_flow();
@@ -504,7 +505,7 @@ TEST_CASE("corrected_calorific fallback when outdoor unknown", "[gas_flow][cv]")
 // calc_power — non-linear modulation with Pmin/Pmax vs MWT
 // ═══════════════════════════════════════════════════════════════
 
-TEST_CASE("calc_power at 0pct returns Pmin (burner fires at minimum)", "[gas_flow][calc_power]")
+TEST_CASE("calc_power clamps low modulation to Pmin (pure mapping)", "[gas_flow][calc_power]")
 {
     FakeHeatingStateStore state;
     FakeTimeSource time;
@@ -512,8 +513,8 @@ TEST_CASE("calc_power at 0pct returns Pmin (burner fires at minimum)", "[gas_flo
     FakeGasCorrectionStore gcs;
     GasFlowService svc(state, time, hss, gcs);
 
-    // 0 % modulation with flame on = minimum firing power (default ch_pmin=5.5).
-    // Burner-off is handled by flame-gating in execute(), not by modulation.
+    // calc_power is a pure mapping. execute() only calls it above FIRING_EPS,
+    // so the 0% branch is unreachable in production (mod==0 → zero flow).
     CHECK(svc.calc_power(0.0f, 80.0f, 60.0f) == Approx(5.5f).margin(0.001f));
     CHECK(svc.calc_power(0.0f, 50.0f, 30.0f) == Approx(5.5f).margin(0.001f));
     CHECK(svc.calc_power(0.5f, 80.0f, 60.0f) == Approx(5.5f + 18.5f * 0.005f).margin(0.001f));
@@ -594,9 +595,9 @@ TEST_CASE("calc_power monotonic with modulation", "[gas_flow][calc_power]")
 // Flame-gated integration and warmup
 // ═══════════════════════════════════════════════════════════════
 
-TEST_CASE("flame off integral unchanged", "[gas_flow][flame]")
+TEST_CASE("zero modulation integral unchanged", "[gas_flow][flame]")
 {
-    // Integration should only happen when flame is on
+    // Integration should only happen while modulation is above zero
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
@@ -608,7 +609,7 @@ TEST_CASE("flame off integral unchanged", "[gas_flow][flame]")
     state.set_p_max(24.0f);
     state.set_gas_calorific(9.5f);
 
-    // First with flame=true to accumulate some integral
+    // First with modulation>0 to accumulate some integral
     state.set_flame(true);
     svc.execute(); // setup
     for (int i = 0; i < 30; i++) {
@@ -616,22 +617,22 @@ TEST_CASE("flame off integral unchanged", "[gas_flow][flame]")
         svc.execute();
     }
     float integral_after_burn = svc.integral_m3();
-    INFO("integral after 30 polls with flame=true: " << integral_after_burn);
+    INFO("integral after 30 polls with mod=50%: " << integral_after_burn);
     REQUIRE(integral_after_burn > 0.0f);
 
-    // Now with flame=false — integral must NOT change
-    state.set_flame(false);
+    // Now with modulation=0 — integral must NOT change
+    state.set_modulation(0.0f);
     time.advance_ms(10000);
     svc.execute();
     float integral_after_off = svc.integral_m3();
-    INFO("integral after flame=false: " << integral_after_off);
+    INFO("integral after mod=0: " << integral_after_off);
     CHECK(integral_after_off == integral_after_burn);
     CHECK(svc.instant_flow() == 0.0f);
 }
 
-TEST_CASE("flame on integral increases", "[gas_flow][flame]")
+TEST_CASE("firing integral increases", "[gas_flow][flame]")
 {
-    // When flame is on and there's non-zero modulation, integral must increase
+    // When modulation is above zero, integral must increase
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
@@ -656,24 +657,51 @@ TEST_CASE("flame on integral increases", "[gas_flow][flame]")
     CHECK(integral_after > integral_before);
 }
 
-TEST_CASE("warmup factor 0.85 immediately after ignition", "[gas_flow][flame][warmup]")
+TEST_CASE("stuck flame bit with zero modulation accumulates nothing", "[gas_flow][flame]")
 {
-    // Immediately after flame transitions false→true, warmup should be 0.85
+    // Regression (Baxi Duo-tec): the boiler reports flame=1 while the burner is
+    // off (modulation=0). No volume must be accumulated in that state.
     FakeHeatingStateStore state;
     FakeTimeSource time;
     FakeHeatingStatsStore hss;
     FakeGasCorrectionStore gcs;
     GasFlowService svc(state, time, hss, gcs);
 
-    state.set_modulation(50.0f);
+    state.set_modulation(0.0f);
+    state.set_return_temp(45.0f);
+    state.set_p_max(24.0f);
+    state.set_gas_calorific(9.5f);
+    state.set_flame(true);
+
+    svc.execute(); // setup
+    for (int i = 0; i < 60; i++) {
+        time.advance_ms(10000);
+        svc.execute();
+    }
+
+    CHECK(svc.integral_m3() == 0.0f);
+    CHECK(svc.instant_flow() == 0.0f);
+}
+
+TEST_CASE("warmup factor below 1 immediately after ignition", "[gas_flow][flame][warmup]")
+{
+    // Immediately after firing starts (modulation 0→>0), warmup should be below 1.0
+    FakeHeatingStateStore state;
+    FakeTimeSource time;
+    FakeHeatingStatsStore hss;
+    FakeGasCorrectionStore gcs;
+    GasFlowService svc(state, time, hss, gcs);
+
+    state.set_modulation(0.0f);
     state.set_return_temp(45.0f);
     state.set_p_max(24.0f);
     state.set_gas_calorific(9.5f);
 
-    // First poll with flame=false (default) to set up timing
+    // First poll with modulation=0 (burner off) to set up timing
     svc.execute();
 
-    // Now set flame=true — ignition detected, warmup = 0.85
+    // Now start firing — ignition detected on this tick, warmup < 1.0
+    state.set_modulation(50.0f);
     state.set_flame(true);
     time.advance_ms(10000);
     svc.execute();
@@ -705,15 +733,16 @@ TEST_CASE("warmup factor 1.0 after 60 seconds", "[gas_flow][flame][warmup]")
     FakeGasCorrectionStore gcs;
     GasFlowService svc(state, time, hss, gcs);
 
-    state.set_modulation(50.0f);
+    state.set_modulation(0.0f);
     state.set_return_temp(45.0f);
     state.set_p_max(24.0f);
     state.set_gas_calorific(9.5f);
 
-    // Setup poll with flame=false
+    // Setup poll with modulation=0
     svc.execute();
 
-    // Ignition
+    // Ignition: modulation rises above zero
+    state.set_modulation(50.0f);
     state.set_flame(true);
     time.advance_ms(10000);
     svc.execute();

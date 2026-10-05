@@ -52,6 +52,7 @@ struct Harness {
     }
 
     void boiler_off() {
+        state.set_modulation(0.0f);
         state.set_flame(false);
     }
 
