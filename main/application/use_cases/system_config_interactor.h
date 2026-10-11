@@ -65,4 +65,6 @@ private:
     ModulationStatsService* mod_stats_ = nullptr;
 
     void save_and_log(const char* msg, ...);
+    float clamp_ch(float sp);
+    float clamp_dhw(float sp);
 };

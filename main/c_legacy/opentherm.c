@@ -494,7 +494,7 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
  *   READ  ID=125 (SlaveVersion)
  *   WRITE ID=126 (MasterVersion)
  *   READ  ID=3   (SlaveConfig)
- *   WRITE ID=2   (MasterConfig — эхо slave member ID)
+ *   WRITE ID=2   (MasterConfig — эхо slave member ID; workaround Baxi)
  *
  * Без этого некоторые котлы Baxi не разрешают DHW управление.
  */
@@ -546,7 +546,8 @@ static void ot_handshake(void)
                  (flags >> 3) & 1,   /* bit 3: DHW storage (vs instantaneous) */
                  (flags >> 5) & 1);  /* bit 5: CH2 present */
 
-        /* WRITE ID=2 — эхо slave member ID (как делает OTGateway) */
+        /* WRITE ID=2 — эхо slave member ID (workaround Baxi: без этого котёл
+         * не разрешает DHW управление / переключение 3-ход. клапана). */
         memset(&req, 0, sizeof(req));
         memset(&rsp, 0, sizeof(rsp));
         req.msg_type = OT_MSG_WRITE_DATA;

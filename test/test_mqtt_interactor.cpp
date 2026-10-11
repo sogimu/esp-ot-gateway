@@ -200,44 +200,46 @@ TEST_CASE("MqttInteractor: handle_control dhw_setpoint", "[mqtt][interactor][con
     REQUIRE(f.spy.dhw_setpoint_ == Approx(60.0f));
 }
 
-TEST_CASE("MqttInteractor: handle_control clamping значений", "[mqtt][interactor][control]") {
+TEST_CASE("MqttInteractor: handle_control передаёт уставки без обрезки", "[mqtt][interactor][control]") {
+    // Обрезка уставок — ответственность SystemConfigInteractor (единый источник истины),
+    // MQTT лишь передаёт полученное значение.
     MqttTestFixture f;
     f.cfg.preset("h", 1883, "", "", "gw", true, false);
     f.interactor.init();
     f.mqtt.inject_connected();
     f.interactor.execute();
 
-    // ch_setpoint выше максимума → clamp to 80
+    // ch_setpoint выше максимума → передаётся как есть
     IMqttMessageSink::Message cmd;
     snprintf(cmd.topic, sizeof(cmd.topic), "gw/cmd/control");
     snprintf(cmd.payload, sizeof(cmd.payload), "{\"ch_setpoint\":999}");
     cmd.payload_len = (int)strlen(cmd.payload);
     f.sink.push(cmd);
     f.interactor.execute();
-    REQUIRE(f.spy.ch_setpoint_ == Approx(80.0f));
+    REQUIRE(f.spy.ch_setpoint_ == Approx(999.0f));
 
-    // ch_setpoint ниже минимума → clamp to 20
+    // ch_setpoint ниже минимума → передаётся как есть
     f.spy.ch_setpoint_set_ = false;
     snprintf(cmd.payload, sizeof(cmd.payload), "{\"ch_setpoint\":-5}");
     cmd.payload_len = (int)strlen(cmd.payload);
     f.sink.push(cmd);
     f.interactor.execute();
-    REQUIRE(f.spy.ch_setpoint_ == Approx(20.0f));
+    REQUIRE(f.spy.ch_setpoint_ == Approx(-5.0f));
 
-    // dhw_setpoint ниже минимума → clamp to 35
+    // dhw_setpoint ниже минимума → передаётся как есть
     snprintf(cmd.payload, sizeof(cmd.payload), "{\"dhw_setpoint\":10}");
     cmd.payload_len = (int)strlen(cmd.payload);
     f.sink.push(cmd);
     f.interactor.execute();
-    REQUIRE(f.spy.dhw_setpoint_ == Approx(35.0f));
+    REQUIRE(f.spy.dhw_setpoint_ == Approx(10.0f));
 
-    // dhw_setpoint выше максимума → clamp to 80
+    // dhw_setpoint выше максимума → передаётся как есть
     f.spy.dhw_setpoint_set_ = false;
     snprintf(cmd.payload, sizeof(cmd.payload), "{\"dhw_setpoint\":999}");
     cmd.payload_len = (int)strlen(cmd.payload);
     f.sink.push(cmd);
     f.interactor.execute();
-    REQUIRE(f.spy.dhw_setpoint_ == Approx(80.0f));
+    REQUIRE(f.spy.dhw_setpoint_ == Approx(999.0f));
 }
 
 TEST_CASE("MqttInteractor: handle_control все поля в одном сообщении", "[mqtt][interactor][control]") {
