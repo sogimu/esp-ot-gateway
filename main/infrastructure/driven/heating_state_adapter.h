@@ -151,8 +151,6 @@ public:
     // Hysteresis
     void  set_dhw_hysteresis(float v) override;
     float get_dhw_hysteresis() const override;
-    void  set_ch_hysteresis(float v) override;
-    float get_ch_hysteresis() const override;
 
     // Timezone & SNTP
     void set_tz_offset(int v) override;
@@ -248,7 +246,6 @@ private:
         float pid_schedule_temps_[24] = {};
         // Hysteresis
         float dhw_hysteresis_ = 2.0f;
-        float ch_hysteresis_ = 0.0f;
         // Timezone
         int   tz_offset_ = 3;
         // SNTP

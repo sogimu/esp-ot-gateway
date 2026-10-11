@@ -49,7 +49,6 @@ idf_component_register(
         "application/services/burn_cycle_service.cpp"
         "application/services/gas_flow_estimator.cpp"
         "application/services/dhw_hysteresis_service.cpp"
-        "application/services/ch_hysteresis_service.cpp"
 	    "application/services/dhw_predict_service.cpp"
         "application/services/pid_quality_assessor.cpp"
         "application/services/fopdt_estimator.cpp"

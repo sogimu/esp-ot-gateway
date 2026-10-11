@@ -59,7 +59,6 @@ The Control tab maps to these fields. GET returns the full state; POST accepts a
 | `dhw_enable` | bool | Бойлер БКН → Разрешение |
 | `dhw_setpoint` | °C, clamped to boiler-reported bounds (35–60 °C on the tested Baxi) | Уставка БКН |
 | `dhw_hysteresis` | °C (e.g. 2.0) | Гистерезис БКН |
-| `ch_hysteresis` | °C (0 = disabled, e.g. 2.0) | CH hysteresis (manual mode) |
 
 The red **"Выключить котёл"** button is the emergency stop — `TODO(verify): its endpoint/field (e.g. POST /api/control {"boiler_off":true})`.
 
@@ -76,8 +75,6 @@ curl -s -X POST http://192.168.0.37/api/control \
 ```
 
 Out-of-range values are clamped to the boiler-reported bounds (CH — `ID 49`, DHW — `ID 48`), which are the single source of truth for every entry point (HTTP, MQTT, schedule); malformed JSON is rejected and logged to the event journal.
-
-CH hysteresis (`ch_hysteresis > 0`) switches manual mode to on/off control on the flow temperature: `CH_ENABLE` is raised when the flow drops below `ch_setpoint − ch_hysteresis` and cleared when it reaches `ch_setpoint`, letting the boiler stop the burner and run pump overrun between cycles. With `0` the gateway keeps `CH_ENABLE` set (the boiler modulates continuously).
 
 ## `GET/POST /api/schedule` — the 24-hour grid
 

@@ -34,7 +34,6 @@ public:
     void set_ch_setpoint(float) override;
     void set_dhw_setpoint(float) override;
     void set_dhw_hysteresis(float) override;
-    void set_ch_hysteresis(float) override;
     void set_schedule(const CH_Schedule&) override;
     void set_pid_schedule(const PID_Schedule&) override;
     void set_timezone(int offset) override;

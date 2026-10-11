@@ -113,16 +113,6 @@ void SystemConfigInteractor::set_dhw_hysteresis(float v)
     save_and_log("Гистерезис ГВС: %.1f C", (double)v);
 }
 
-void SystemConfigInteractor::set_ch_hysteresis(float v)
-{
-    if (v < 0.0f) v = 0.0f;
-    if (v > 10.0f) v = 10.0f;
-    state_.lock_exclusive();
-    state_.set_ch_hysteresis(v);
-    state_.unlock_exclusive();
-    save_and_log("Гистерезис CH: %.1f C", (double)v);
-}
-
 void SystemConfigInteractor::set_schedule(const CH_Schedule& sched)
 {
     CH_Schedule clamped = sched;

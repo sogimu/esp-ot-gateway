@@ -4,9 +4,7 @@
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/services/dhw_hysteresis_service.h"
-#include "application/services/ch_hysteresis_service.h"
 #include "domain/value_objects/fault_codes.h"
-#include "domain/value_objects/ch_mode.h"
 #include <cmath>
 
 // OpenTherm data IDs (mirrored from opentherm.h to avoid dependency)
@@ -123,7 +121,6 @@ void BoilerPollInteractor::execute()
 {
     do_handshake();
     do_dhw_hysteresis();
-    do_ch_hysteresis();
     do_status();
     do_extra_step();
     check_connectivity();
@@ -260,40 +257,6 @@ void BoilerPollInteractor::do_dhw_hysteresis()
 }
 
 // ================================================================
-// CH hysteresis — toggles CH demand (bang-bang on flow temperature)
-// ================================================================
-
-void BoilerPollInteractor::do_ch_hysteresis()
-{
-    state_.lock_shared();
-    bool   ch_enabled  = state_.is_ch_enabled();
-    float  ch_flow     = state_.get_ch_temp();
-    float  ch_setpoint = state_.get_ch_setpoint();
-    float  hysteresis  = state_.get_ch_hysteresis();
-    CHMode ch_mode     = state_.get_ch_mode();
-    state_.unlock_shared();
-
-    // Hysteresis applies to manual mode only. In PID mode the PID modulates the
-    // setpoint and expects CH_ENABLE to stay set; also when hysteresis is disabled
-    // (0) the CH demand simply follows ch_enable.
-    if (hysteresis <= 0.0f || is_pid_mode(ch_mode)) {
-        ch_hysteresis_on_ = true;
-        return;
-    }
-    if (!ch_enabled) {
-        ch_hysteresis_on_ = false;
-        return;
-    }
-
-    if (CHHysteresisService::should_heat(ch_flow, ch_setpoint, hysteresis, ch_enabled)) {
-        ch_hysteresis_on_ = true;
-    } else if (CHHysteresisService::should_stop(ch_flow, ch_setpoint)) {
-        ch_hysteresis_on_ = false;
-    }
-    // else: dead band — keep current state
-}
-
-// ================================================================
 // Status — read/write boiler status flags
 // ================================================================
 
@@ -304,11 +267,6 @@ uint8_t BoilerPollInteractor::build_master_byte()
     // Use pending value if set, otherwise read current state (e.g. from NVS load)
     bool ch_en = pending_ch_enable_ ? pending_ch_enable_val_ : state_.is_ch_enabled();
     bool dhw_en = pending_dhw_enable_ ? pending_dhw_enable_val_ : state_.is_dhw_enabled();
-
-    // CH hysteresis (manual mode only): when enabled (>0), the hysteresis decision
-    // gates the CH demand. In PID mode the PID owns CH_ENABLE.
-    if (ch_en && state_.get_ch_hysteresis() > 0.0f && !is_pid_mode(state_.get_ch_mode()))
-        ch_en = ch_hysteresis_on_;
 
     if (ch_en) m |= MASTER_CH_ENABLE;
     if (dhw_en && dhw_priority_) {

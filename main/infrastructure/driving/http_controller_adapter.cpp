@@ -145,7 +145,6 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
         f = json_get_float(body, "\"dhw_setpoint\"");
         if (f > -1e37f) self->cfg_->set_dhw_setpoint(f);
         f = json_get_float(body, "\"dhw_hysteresis\""); if (f > -1e37f) self->cfg_->set_dhw_hysteresis(f);
-        f = json_get_float(body, "\"ch_hysteresis\"");  if (f > -1e37f) self->cfg_->set_ch_hysteresis(f);
         f = json_get_float(body, "\"tz_offset\"");
         if (f > -1e37f) { int tz = (int)f; if (tz >= -12 && tz <= 14) self->cfg_->set_timezone(tz); }
     }
