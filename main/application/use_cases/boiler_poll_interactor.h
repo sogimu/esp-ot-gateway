@@ -50,6 +50,9 @@ private:
     uint32_t dhw_session_start_ms_ = 0;
     float dhw_session_min_temp_ = 0;
 
+    // CH hysteresis
+    bool  ch_hysteresis_on_ = false;
+
     // Previous status for change detection
     bool last_fault_ = false, last_flame_ = false;
     bool last_ch_active_ = false, last_dhw_active_ = false;
@@ -57,6 +60,7 @@ private:
     // Sub-steps
     void do_handshake();
     void do_dhw_hysteresis();
+    void do_ch_hysteresis();
     void do_status();
     void do_extra_step();
     void check_connectivity();

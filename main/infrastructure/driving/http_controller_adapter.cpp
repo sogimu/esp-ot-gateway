@@ -141,10 +141,11 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
         v = json_get_int(body, "\"ch_mode\"");   if (v >= 0) self->cfg_->set_ch_mode(static_cast<CHMode>(v));
         v = json_get_int(body, "\"dhw_enable\""); if (v >= 0) self->cfg_->set_dhw_enable(v != 0);
         f = json_get_float(body, "\"ch_setpoint\"");
-        if (f > -1e37f) { if (f < 20) f = 20; if (f > 80) f = 80; self->cfg_->set_ch_setpoint(f); }
+        if (f > -1e37f) self->cfg_->set_ch_setpoint(f);
         f = json_get_float(body, "\"dhw_setpoint\"");
-        if (f > -1e37f) { if (f < 35) f = 35; if (f > 65) f = 65; self->cfg_->set_dhw_setpoint(f); }
+        if (f > -1e37f) self->cfg_->set_dhw_setpoint(f);
         f = json_get_float(body, "\"dhw_hysteresis\""); if (f > -1e37f) self->cfg_->set_dhw_hysteresis(f);
+        f = json_get_float(body, "\"ch_hysteresis\"");  if (f > -1e37f) self->cfg_->set_ch_hysteresis(f);
         f = json_get_float(body, "\"tz_offset\"");
         if (f > -1e37f) { int tz = (int)f; if (tz >= -12 && tz <= 14) self->cfg_->set_timezone(tz); }
     }
@@ -239,8 +240,6 @@ esp_err_t HttpControllerAdapter::handler_schedule(httpd_req_t* req) {
                 for (int h = 0; h < 24; h++) {
                     while (*p == ' ' || *p == ',') p++;
                     float v = static_cast<float>(atof(p));
-                    if (v < 20) v = 20;
-                    if (v > 80) v = 80;
                     sched.temps[h] = v;
                     while (*p && *p != ',' && *p != ']') p++;
                     if (*p == ']') break;

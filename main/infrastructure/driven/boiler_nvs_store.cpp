@@ -46,6 +46,12 @@ void BoilerNvsStore::load_boiler_config(IHeatingStateStore& s)
         { s.lock_exclusive(); s.set_dhw_hysteresis(v); s.unlock_exclusive(); }
     }
 
+    // CH hysteresis
+    if (nvs_get_u8(h, "ch_hyst", &u8) == ESP_OK) {
+        float v = u8 / 10.0f; if (v >= 0.0f && v <= 10.0f)
+        { s.lock_exclusive(); s.set_ch_hysteresis(v); s.unlock_exclusive(); }
+    }
+
     // Setpoints (validated)
     if (nvs_get_i16(h, "ch_sp", &i16) == ESP_OK && i16 >= 20 && i16 <= 80)
         { s.lock_exclusive(); s.set_ch_setpoint((float)i16); s.unlock_exclusive(); }
@@ -155,6 +161,7 @@ void BoilerNvsStore::save_boiler_config(const IHeatingStateStore& s)
     nvs_set_i16(h, "ch_sp", (int16_t)s.get_ch_setpoint());
     nvs_set_i16(h, "dhw_sp", (int16_t)s.get_dhw_setpoint());
     nvs_set_u8(h, "dhw_hyst", (uint8_t)(s.get_dhw_hysteresis() * 10.0f + 0.5f));
+    nvs_set_u8(h, "ch_hyst", (uint8_t)(s.get_ch_hysteresis() * 10.0f + 0.5f));
     nvs_set_i32(h, "ch_mode", static_cast<int32_t>(s.get_ch_mode()));
 
     // PID

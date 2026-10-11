@@ -85,8 +85,7 @@ void SystemConfigInteractor::set_dhw_enable(bool en)
 
 void SystemConfigInteractor::set_ch_setpoint(float sp)
 {
-    if (sp < 20.0f) sp = 20.0f;
-    if (sp > 80.0f) sp = 80.0f;
+    sp = clamp_ch(sp);
     state_.lock_exclusive();
     state_.set_ch_setpoint(sp);
     state_.unlock_exclusive();
@@ -96,8 +95,7 @@ void SystemConfigInteractor::set_ch_setpoint(float sp)
 
 void SystemConfigInteractor::set_dhw_setpoint(float sp)
 {
-    if (sp < 35.0f) sp = 35.0f;
-    if (sp > 80.0f) sp = 80.0f;
+    sp = clamp_dhw(sp);
     state_.lock_exclusive();
     state_.set_dhw_setpoint(sp);
     state_.unlock_exclusive();
@@ -115,10 +113,22 @@ void SystemConfigInteractor::set_dhw_hysteresis(float v)
     save_and_log("Гистерезис ГВС: %.1f C", (double)v);
 }
 
+void SystemConfigInteractor::set_ch_hysteresis(float v)
+{
+    if (v < 0.0f) v = 0.0f;
+    if (v > 10.0f) v = 10.0f;
+    state_.lock_exclusive();
+    state_.set_ch_hysteresis(v);
+    state_.unlock_exclusive();
+    save_and_log("Гистерезис CH: %.1f C", (double)v);
+}
+
 void SystemConfigInteractor::set_schedule(const CH_Schedule& sched)
 {
+    CH_Schedule clamped = sched;
+    for (int h = 0; h < 24; h++) clamped.temps[h] = clamp_ch(clamped.temps[h]);
     state_.lock_exclusive();
-    state_.set_schedule(&sched);
+    state_.set_schedule(&clamped);
     state_.unlock_exclusive();
     save_and_log("Расписание: %s", sched.enabled ? "вкл" : "выкл");
 }
@@ -200,4 +210,28 @@ void SystemConfigInteractor::reset_cycle_stats()
 {
     if (burn_cycles_) burn_cycles_->reset();
     log_.event(ILogger::USER, "Статистика циклов сброшена");
+}
+
+float SystemConfigInteractor::clamp_ch(float sp)
+{
+    state_.lock_shared();
+    float lo = state_.get_ch_sp_min();
+    float hi = state_.get_ch_sp_max();
+    state_.unlock_shared();
+    if (!(lo > 0.0f && hi > lo)) { lo = 25.0f; hi = 80.0f; }  // fallback until ID 49 read
+    if (sp < lo) sp = lo;
+    if (sp > hi) sp = hi;
+    return sp;
+}
+
+float SystemConfigInteractor::clamp_dhw(float sp)
+{
+    state_.lock_shared();
+    float lo = state_.get_dhw_sp_min();
+    float hi = state_.get_dhw_sp_max();
+    state_.unlock_shared();
+    if (!(lo > 0.0f && hi > lo)) { lo = 35.0f; hi = 60.0f; }  // fallback until ID 48 read
+    if (sp < lo) sp = lo;
+    if (sp > hi) sp = hi;
+    return sp;
 }

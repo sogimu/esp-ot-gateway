@@ -59,6 +59,7 @@ The Control tab maps to these fields. GET returns the full state; POST accepts a
 | `dhw_enable` | bool | Бойлер БКН → Разрешение |
 | `dhw_setpoint` | °C, clamped to boiler-reported bounds (35–60 °C on the tested Baxi) | Уставка БКН |
 | `dhw_hysteresis` | °C (e.g. 2.0) | Гистерезис БКН |
+| `ch_hysteresis` | °C (0 = disabled, e.g. 2.0) | CH hysteresis (manual mode) |
 
 The red **"Выключить котёл"** button is the emergency stop — `TODO(verify): its endpoint/field (e.g. POST /api/control {"boiler_off":true})`.
 
@@ -74,7 +75,9 @@ curl -s -X POST http://192.168.0.37/api/control \
   -d '{"ch_enable":true,"ch_mode":"pid","ch_submode":"schedule"}'
 ```
 
-Out-of-range values are clamped to the boiler-reported bounds from `/api/info`; malformed JSON is rejected and logged to the event journal.
+Out-of-range values are clamped to the boiler-reported bounds (CH — `ID 49`, DHW — `ID 48`), which are the single source of truth for every entry point (HTTP, MQTT, schedule); malformed JSON is rejected and logged to the event journal.
+
+CH hysteresis (`ch_hysteresis > 0`) switches manual mode to on/off control on the flow temperature: `CH_ENABLE` is raised when the flow drops below `ch_setpoint − ch_hysteresis` and cleared when it reaches `ch_setpoint`, letting the boiler stop the burner and run pump overrun between cycles. With `0` the gateway keeps `CH_ENABLE` set (the boiler modulates continuously).
 
 ## `GET/POST /api/schedule` — the 24-hour grid
 
@@ -162,6 +165,8 @@ The values the gateway exchanges with the boiler over the OpenTherm protocol. R/
 | 126 | Master firmware version | W | |
 
 > ⚠️ **ID 56 (DHW setpoint).** Per the OpenTherm spec this is a writable parameter, but on the tested **Baxi Duo-tec Compact** the write is rejected (NO_RESP / `DATA_INVALID` response) and the boiler holds its own internal setpoint (~60 °C set from the front panel). That is why ID 56 is marked **R** (effectively read-only) in the table. Do not expect a successful write to ID 56; the gateway regulates DHW through the `DHW_ENABLE` flag in STATUS (ID 0) with hysteresis — the `dhw_setpoint` from `/api/control` is enforced by the gateway itself.
+
+> ℹ️ **ID 2 (master configuration).** On handshake the gateway writes its own master configuration to ID 2 (Smart Power = 0, own Member ID), not an echo of the boiler configuration (ID 3). ID 2 and ID 3 bits have different meanings; the boiler's flags (DHW present, storage tank, CH2) are read from ID 3 for diagnostics only.
 
 ## `GET /api/log`
 

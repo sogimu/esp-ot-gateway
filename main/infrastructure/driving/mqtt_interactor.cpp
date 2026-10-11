@@ -379,8 +379,6 @@ void MqttInteractor::handle_control(const char* body, int /*len*/)
 
     f = json_get_float(body, "\"ch_setpoint\"");
     if (f > -1e37f) {
-        if (f < 20) f = 20;
-        if (f > 80) f = 80;
         cfg_sys_.set_ch_setpoint(f);
         log_.event(ILogger::USER, "MQTT: уставка СО = %.1f°C", (double)f);
         changed = true;
@@ -388,8 +386,6 @@ void MqttInteractor::handle_control(const char* body, int /*len*/)
 
     f = json_get_float(body, "\"dhw_setpoint\"");
     if (f > -1e37f) {
-        if (f < 35) f = 35;
-        if (f > 80) f = 80;
         cfg_sys_.set_dhw_setpoint(f);
         log_.event(ILogger::USER, "MQTT: уставка ГВС = %.1f°C", (double)f);
         changed = true;

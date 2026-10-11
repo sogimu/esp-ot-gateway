@@ -34,6 +34,7 @@ public:
         pid_schedule_enabled_ = false;
         for (int i = 0; i < 24; i++) pid_schedule_temps_[i] = 0;
         dhw_hysteresis_ = 2.0f;
+        ch_hysteresis_ = 0.0f;
         tz_offset_ = 3;
         sntp_srv0_.clear(); sntp_srv1_.clear();
         k_calib_ = 1.0f; p_max_ = 24.0f; gas_calorific_ = 9.5f; gas_meter_base_ = 0;
@@ -198,6 +199,8 @@ public:
     // Hysteresis
     void  set_dhw_hysteresis(float v) override { dhw_hysteresis_ = v; }
     float get_dhw_hysteresis() const override { return dhw_hysteresis_; }
+    void  set_ch_hysteresis(float v) override { ch_hysteresis_ = v; }
+    float get_ch_hysteresis() const override { return ch_hysteresis_; }
 
     // Timezone & SNTP
     void set_tz_offset(int v) override { tz_offset_ = v; }
@@ -276,6 +279,7 @@ public:
     bool   pid_schedule_enabled_ = false;
     float  pid_schedule_temps_[24] = {};
     float  dhw_hysteresis_ = 2.0f;
+    float  ch_hysteresis_ = 0.0f;
     int    tz_offset_ = 3;
     std::string sntp_srv0_, sntp_srv1_;
     float  k_calib_ = 1.0f, p_max_ = 24.0f, gas_calorific_ = 9.5f, gas_meter_base_ = 0;

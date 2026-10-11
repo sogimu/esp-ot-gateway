@@ -146,6 +146,8 @@ public:
     // ── Hysteresis ─────────────────────────────────────
     virtual void  set_dhw_hysteresis(float v) = 0;
     virtual float get_dhw_hysteresis() const = 0;
+    virtual void  set_ch_hysteresis(float v) = 0;
+    virtual float get_ch_hysteresis() const = 0;
 
     // ── Timezone & SNTP ────────────────────────────────
     virtual void set_tz_offset(int v) = 0;

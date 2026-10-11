@@ -41,6 +41,7 @@ set(TEST_SRCS
 
     # Application services
     test_dhw_hysteresis.cpp
+    test_ch_hysteresis.cpp
     test_schedule_service.cpp
     test_modulation_stats.cpp
     test_burn_cycle.cpp
@@ -52,6 +53,7 @@ set(TEST_SRCS
     test_control_loop.cpp
     test_pid_poll_interactor.cpp
     test_reset_statistics.cpp
+    test_setpoint_bounds.cpp
 
     # Bug-focused tests (calculation edge cases)
     test_burn_cycle_bugs.cpp
@@ -126,6 +128,7 @@ set(STUB_SRCS
 # ── Application .cpp files (compiled into test binary) ────
 set(APP_SRCS
     ${MAIN_DIR}/application/services/dhw_hysteresis_service.cpp
+    ${MAIN_DIR}/application/services/ch_hysteresis_service.cpp
     ${MAIN_DIR}/application/services/schedule_service.cpp
     ${MAIN_DIR}/application/services/modulation_stats_service.cpp
     ${MAIN_DIR}/application/services/burn_cycle_service.cpp
