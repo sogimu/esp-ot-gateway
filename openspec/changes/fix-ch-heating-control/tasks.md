@@ -21,10 +21,10 @@
 - [x] 2.8 Update `build_master_byte()`: `ch_on = ch_enable && (ch_hysteresis == 0 || ch_hysteresis_on_)`
 - [x] 2.9 Expose `ch_hysteresis` in `web_presenter_adapter.cpp` status JSON and add a control input in `web_page.h`
 
-## 3. Master Configuration (ID 2) fix
+## 3. Master Configuration (ID 2)
 
-- [x] 3.1 Fix `do_handshake()` in `boiler_poll_interactor.cpp`: write ID 2 with master's own config (HB Smart Power = 0, LB = master member id constant), keep reading ID 3 for logging only
-- [x] 3.2 Mirror the fix in legacy `ot_handshake()` in `c_legacy/opentherm.c` if that path is still reachable
+- [x] 3.1 Revert `do_handshake()` in `boiler_poll_interactor.cpp` to echo ID 3 into ID 2 (Baxi workaround: без эха котёл не разрешает DHW-управление)
+- [x] 3.2 Revert legacy `ot_handshake()` in `c_legacy/opentherm.c` to echo ID 3 into ID 2
 
 ## 4. Docs & verification
 

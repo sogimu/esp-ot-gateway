@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Корректное управление отоплением CH в ручном режиме: уставки обрезаются по границам, сообщённым котлом (единый источник истины), реализован гистерезис включения/выключения отопления, при рукопожатии в Master Configuration записывается собственная конфигурация мастера.
+Корректное управление отоплением CH в ручном режиме: уставки обрезаются по границам, сообщённым котлом (единый источник истины), реализован гистерезис включения/выключения отопления. Master Configuration (ID 2) сохраняет эхо slave-конфигурации — это эмпирический workaround для Baxi.
 
 ## ADDED Requirements
 
@@ -54,21 +54,16 @@ In manual mode, the system SHALL implement an on/off control loop on the CH flow
 - **WHEN** the user disables CH (`ch_enable=false`)
 - **THEN** the hysteresis loop SHALL NOT re-enable CH until the user re-enables it
 
-### Requirement: Master Configuration is written correctly on handshake
+### Requirement: Master Configuration echoes slave configuration as a Baxi workaround
 
-During handshake, the system SHALL write to Master Configuration (OpenTherm ID 2) the master's own flags and Member ID, and SHALL NOT echo the Slave Configuration (ID 3) value into ID 2. The slave configuration read from ID 3 SHALL be retained internally for control decisions (e.g. DHW presence, storage tank) but not written back to ID 2.
+During handshake, the system SHALL write the Slave Configuration (ID 3) value verbatim into Master Configuration (ID 2). This is an empirical workaround required by the Baxi Duo-tec Compact to allow DHW control (three-way valve switching to the cylinder); writing the master's own config instead breaks DHW on this boiler.
 
-#### Scenario: Master config carries master identity
-
-- **WHEN** handshake completes
-- **THEN** ID 2 contains the master's own Member ID and configuration flags, not the boiler's
-
-#### Scenario: Slave config is not echoed to master config
+#### Scenario: Slave config is echoed to master config
 
 - **WHEN** handshake reads Slave Configuration (ID 3)
-- **THEN** the raw ID 3 value is not written to ID 2; the slave's flags are stored separately for control logic
+- **THEN** the raw ID 3 value is written to ID 2
 
-#### Scenario: Smart Power flag reflects master capability
+#### Scenario: DHW control remains functional
 
-- **WHEN** the master does not support Smart Power
-- **THEN** the Smart Power bit in ID 2 is clear, regardless of the boiler's DHW-present flag
+- **WHEN** the echo workaround is in place and DHW is enabled
+- **THEN** the boiler permits DHW control and switches the three-way valve to the cylinder when DHW priority is active

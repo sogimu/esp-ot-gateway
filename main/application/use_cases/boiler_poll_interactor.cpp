@@ -57,10 +57,6 @@ static constexpr uint32_t HANDSHAKE_INTERVAL_MS = 3600000;
 static constexpr uint32_t HANDSHAKE_RETRY_MS    = 10000;   // retry failed handshake after 10s
 static constexpr uint32_t CONNECTIVITY_TIMEOUT_MS = 10000;
 
-// Master Configuration (ID 2): HB = flags (Smart Power not supported → 0),
-// LB = this master's Member ID. Written on handshake, NOT an echo of Slave Config (ID 3).
-static constexpr uint16_t MASTER_CONFIG_VALUE = 0x003F;
-
 BoilerPollInteractor::BoilerPollInteractor(IBoilerHardware& boiler, IHeatingStateStore& state, ILogger& log, ITimeSource& time)
     : boiler_(boiler), state_(state), log_(log), time_(time)
 {
@@ -203,10 +199,12 @@ void BoilerPollInteractor::do_handshake()
     auto cfg = boiler_.read(OT_ID_SLAVE_CONFIG);
     if (cfg.success) {
         any_success = true;
-        // Slave Configuration (ID 3) is read for handshake success detection only.
-        // Master Configuration (ID 2) carries the master's own config (Smart Power = 0,
-        // own Member ID), not an echo of the slave config.
-        boiler_.write(OT_ID_MASTER_CONFIG, MASTER_CONFIG_VALUE);
+        // Echo the slave configuration into Master Configuration (ID 2).
+        // This is an empirical Baxi workaround: without it, the boiler does not
+        // allow DHW control (three-way valve switching). The bit meanings of ID 2
+        // and ID 3 differ per spec, but the boiler expects this echo in practice.
+        uint16_t cv = float_to_f88(cfg.value_f88);
+        boiler_.write(OT_ID_MASTER_CONFIG, cv);
     }
 
     auto otv = boiler_.read(OT_ID_OT_VERSION_S);

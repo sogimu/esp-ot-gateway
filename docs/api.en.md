@@ -166,7 +166,7 @@ The values the gateway exchanges with the boiler over the OpenTherm protocol. R/
 
 > ⚠️ **ID 56 (DHW setpoint).** Per the OpenTherm spec this is a writable parameter, but on the tested **Baxi Duo-tec Compact** the write is rejected (NO_RESP / `DATA_INVALID` response) and the boiler holds its own internal setpoint (~60 °C set from the front panel). That is why ID 56 is marked **R** (effectively read-only) in the table. Do not expect a successful write to ID 56; the gateway regulates DHW through the `DHW_ENABLE` flag in STATUS (ID 0) with hysteresis — the `dhw_setpoint` from `/api/control` is enforced by the gateway itself.
 
-> ℹ️ **ID 2 (master configuration).** On handshake the gateway writes its own master configuration to ID 2 (Smart Power = 0, own Member ID), not an echo of the boiler configuration (ID 3). ID 2 and ID 3 bits have different meanings; the boiler's flags (DHW present, storage tank, CH2) are read from ID 3 for diagnostics only.
+> ⚠️ **ID 2 (master configuration).** On handshake the gateway writes an echo of the boiler configuration (ID 3) into ID 2. Per spec ID 2 and ID 3 bits have different meanings, but on the **Baxi Duo-tec Compact** this is an empirical workaround: without it the boiler does not allow DHW control (three-way valve switching to the cylinder).
 
 ## `GET /api/log`
 

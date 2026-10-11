@@ -494,8 +494,7 @@ static bool ot_transaction(const OT_Frame *req, OT_Frame *rsp)
  *   READ  ID=125 (SlaveVersion)
  *   WRITE ID=126 (MasterVersion)
  *   READ  ID=3   (SlaveConfig)
- *   WRITE ID=2   (MasterConfig — собственная конфигурация мастера,
- *                 НЕ эхо slave config: биты ID 2 и ID 3 имеют разный смысл)
+ *   WRITE ID=2   (MasterConfig — эхо slave member ID; workaround Baxi)
  *
  * Без этого некоторые котлы Baxi не разрешают DHW управление.
  */
@@ -547,15 +546,15 @@ static void ot_handshake(void)
                  (flags >> 3) & 1,   /* bit 3: DHW storage (vs instantaneous) */
                  (flags >> 5) & 1);  /* bit 5: CH2 present */
 
-        /* WRITE ID=2 — собственная конфигурация мастера (не эхо slave config).
-         * HB = 0 (Smart Power не поддерживаем), LB = Member ID мастера. */
+        /* WRITE ID=2 — эхо slave member ID (workaround Baxi: без этого котёл
+         * не разрешает DHW управление / переключение 3-ход. клапана). */
         memset(&req, 0, sizeof(req));
         memset(&rsp, 0, sizeof(rsp));
         req.msg_type = OT_MSG_WRITE_DATA;
         req.data_id  = OT_ID_MASTER_CONFIG;
-        req.data_value = 0x003F;
+        req.data_value = (uint16_t)((flags << 8) | member_id);
         ot_transaction(&req, &rsp);
-        ESP_LOGI(TAG, "Handshake: MasterConfig written 0x003F (own member id)");
+        ESP_LOGI(TAG, "Handshake: MasterConfig written flags=0x%02X id=%d", flags, member_id);
     }
 
     /* READ ID=124 — версия протокола OT котла */
