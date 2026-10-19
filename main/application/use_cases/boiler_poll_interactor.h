@@ -45,9 +45,6 @@ private:
     float pending_ch_sp_ = 30.0f;  bool pending_ch_sp_dirty_ = false;
     float pending_dhw_sp_ = 55.0f; bool pending_dhw_sp_dirty_ = false;
 
-    // Schedule application (Manual_Sched) — последний применённый локальный час
-    int last_applied_hour_ = -1;
-
     // DHW hysteresis
     bool  dhw_priority_ = false;
     uint32_t dhw_session_start_ms_ = 0;
@@ -60,7 +57,6 @@ private:
     // Sub-steps
     void do_handshake();
     void do_dhw_hysteresis();
-    void do_schedule();
     void do_status();
     void do_extra_step();
     void check_connectivity();

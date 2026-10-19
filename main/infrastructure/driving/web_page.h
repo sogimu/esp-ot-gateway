@@ -556,7 +556,7 @@ static const char WEB_PAGE[] =
 "<div id='pnl_sched' style='display:none'>"
 "<div id='sched_grid' style='display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin:4px 0'></div>"
 "<div class='ctrl-row' style='margin-top:6px'>"
-"<label>Уставка CH <span class='tip'><span class='tip-icon'>&#9432;</span><span class='tiptext'>Температура воды в системе отопления (подача) для установки на выбранные часы. Диапазон ограничен котлом — границы указаны на вкладке Инфо (CH bound). Выделите часы в сетке, выберите температуру этим ползунком, нажмите &laquo;Установить&raquo;, затем &laquo;Сохранить&raquo;.</span></span></label>"
+"<label>Температура <span class='tip'><span class='tip-icon'>&#9432;</span><span class='tiptext'>Температура подачи CH для установки на выбранные часы. Выделите часы в сетке, выберите температуру этим ползунком, нажмите &laquo;Установить&raquo;, затем &laquo;Сохранить&raquo;.</span></span></label>"
 "<button class='pm' onclick='adj(\"sched_t\",-1)'>−</button>"
 "<input type='range' id='sched_t' min='20' max='80' step='1' value='30' "
 "oninput='updateLabel(\"sched_t_v\",this.value)'>"

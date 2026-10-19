@@ -42,7 +42,6 @@ set(TEST_SRCS
     # Application services
     test_dhw_hysteresis.cpp
     test_schedule_service.cpp
-    test_schedule_persistence.cpp
     test_modulation_stats.cpp
     test_burn_cycle.cpp
     test_dhw_predict.cpp
