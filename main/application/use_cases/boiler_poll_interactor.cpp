@@ -267,20 +267,27 @@ void BoilerPollInteractor::do_dhw_hysteresis()
 
 void BoilerPollInteractor::do_schedule()
 {
-    if (state_.get_ch_mode() != CHMode::Manual_Sched) {
-        last_applied_hour_ = -1;
+    state_.lock_shared();
+    CHMode mode = state_.get_ch_mode();
+    state_.unlock_shared();
+
+    if (mode != CHMode::Manual_Sched) {
+        last_applied_setpoint_ = -1.0f;
         return;
     }
 
     CH_Schedule sched;
+    state_.lock_shared();
     state_.get_schedule(&sched);
+    state_.unlock_shared();
+
     if (!sched.enabled) {
-        last_applied_hour_ = -1;
+        last_applied_setpoint_ = -1.0f;
         return;
     }
 
     if (!time_.is_synced()) {
-        last_applied_hour_ = -1;
+        last_applied_setpoint_ = -1.0f;
         return;
     }
 
@@ -289,13 +296,13 @@ void BoilerPollInteractor::do_schedule()
     int hour = static_cast<int>(hours.count() % 24);
     if (hour < 0) hour += 24;
 
-    if (hour == last_applied_hour_) return;
-
     ScheduleService::Result r = ScheduleService::evaluate(sched.enabled, sched.temps, hour);
     if (!r.has_setpoint) return;
 
+    if (r.setpoint == last_applied_setpoint_) return;
+
     set_ch_setpoint(r.setpoint);
-    last_applied_hour_ = hour;
+    last_applied_setpoint_ = r.setpoint;
     log_.event(ILogger::MODE, "Расписание CH: час %d, уставка %.0f C", hour, (double)r.setpoint);
 }
 
