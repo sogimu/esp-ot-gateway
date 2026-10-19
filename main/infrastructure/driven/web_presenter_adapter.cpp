@@ -166,7 +166,16 @@ int WebPresenterAdapter::render_schedule(char* buf, size_t size)
     CH_Schedule sched;
     state_->get_schedule(&sched);
 
-    int pos = snprintf(buf, size, "{\"enabled\":%d,\"temps\":[", sched.enabled ? 1 : 0);
+    // Current local hour from ITimeSource
+    int hour = -1;
+    if (time_ && time_->is_synced()) {
+        auto local = time_->local_now().time_since_epoch();
+        hour = (int)(std::chrono::duration_cast<std::chrono::hours>(local).count() % 24);
+        if (hour < 0) hour += 24;
+    }
+
+    int pos = snprintf(buf, size, "{\"enabled\":%d,\"hour\":%d,\"temps\":[",
+                       sched.enabled ? 1 : 0, hour);
     for (int h = 0; h < 24 && pos < (int)size - 10; h++) {
         pos += snprintf(buf + pos, size - pos, "%.1f%s",
                         (double)sched.temps[h], (h < 23) ? "," : "");
