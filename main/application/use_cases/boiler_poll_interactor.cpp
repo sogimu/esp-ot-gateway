@@ -196,6 +196,10 @@ void BoilerPollInteractor::do_handshake()
     auto cfg = boiler_.read(OT_ID_SLAVE_CONFIG);
     if (cfg.success) {
         any_success = true;
+        // Echo the slave configuration into Master Configuration (ID 2).
+        // This is an empirical Baxi workaround: without it, the boiler does not
+        // allow DHW control (three-way valve switching). The bit meanings of ID 2
+        // and ID 3 differ per spec, but the boiler expects this echo in practice.
         uint16_t cv = float_to_f88(cfg.value_f88);
         boiler_.write(OT_ID_MASTER_CONFIG, cv);
     }
@@ -346,14 +350,19 @@ void BoilerPollInteractor::do_extra_step()
         break;
     }
     case 1: case 10: {
-        float sp;
+        float sp, sp_max;
         if (pending_ch_sp_dirty_) {
             sp = pending_ch_sp_;
+            state_.lock_shared();
+            sp_max = state_.get_ch_sp_max();
+            state_.unlock_shared();
         } else {
             state_.lock_shared();
             sp = state_.get_ch_setpoint();
+            sp_max = state_.get_ch_sp_max();
             state_.unlock_shared();
         }
+        if (sp_max > 0 && sp > sp_max) sp = sp_max;
         auto w = boiler_.write(OT_ID_CH_SETPOINT, float_to_f88(sp));
         if (w.success) {
             pending_ch_sp_dirty_ = false;

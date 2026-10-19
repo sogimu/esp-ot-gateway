@@ -52,6 +52,7 @@ set(TEST_SRCS
     test_control_loop.cpp
     test_pid_poll_interactor.cpp
     test_reset_statistics.cpp
+    test_setpoint_bounds.cpp
 
     # Bug-focused tests (calculation edge cases)
     test_burn_cycle_bugs.cpp
