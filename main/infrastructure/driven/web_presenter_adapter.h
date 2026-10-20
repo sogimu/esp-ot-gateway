@@ -30,7 +30,6 @@ public:
     // Для тестов, где не нужны все зависимости
     void set_state(IHeatingStateStore* s) { state_ = s; }
     void set_logger(ILogger* l)           { logger_ = l; }
-    void set_time(class ITimeSource* t)   { time_ = t; }
     void set_pid_quality(const PidQualityAssessor* q) { pid_quality_ = q; }
     void set_fopdt_estimator(const FopdtEstimator* e) { fopdt_ = e; }
 

@@ -4,11 +4,7 @@
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/services/dhw_hysteresis_service.h"
-#include "application/services/schedule_service.h"
 #include "domain/value_objects/fault_codes.h"
-#include "domain/value_objects/ch_mode.h"
-#include "domain/value_objects/ch_schedule.h"
-#include <chrono>
 #include <cmath>
 
 // OpenTherm data IDs (mirrored from opentherm.h to avoid dependency)
@@ -125,7 +121,6 @@ void BoilerPollInteractor::execute()
 {
     do_handshake();
     do_dhw_hysteresis();
-    do_schedule();
     do_status();
     do_extra_step();
     check_connectivity();
@@ -259,51 +254,6 @@ void BoilerPollInteractor::do_dhw_hysteresis()
     } else {
         dhw_priority_ = false;
     }
-}
-
-// ================================================================
-// Schedule — apply hourly CH setpoint in Manual_Sched mode
-// ================================================================
-
-void BoilerPollInteractor::do_schedule()
-{
-    state_.lock_shared();
-    CHMode mode = state_.get_ch_mode();
-    state_.unlock_shared();
-
-    if (mode != CHMode::Manual_Sched) {
-        last_applied_setpoint_ = -1.0f;
-        return;
-    }
-
-    CH_Schedule sched;
-    state_.lock_shared();
-    state_.get_schedule(&sched);
-    state_.unlock_shared();
-
-    if (!sched.enabled) {
-        last_applied_setpoint_ = -1.0f;
-        return;
-    }
-
-    if (!time_.is_synced()) {
-        last_applied_setpoint_ = -1.0f;
-        return;
-    }
-
-    auto hours = std::chrono::duration_cast<std::chrono::hours>(
-        time_.local_now().time_since_epoch());
-    int hour = static_cast<int>(hours.count() % 24);
-    if (hour < 0) hour += 24;
-
-    ScheduleService::Result r = ScheduleService::evaluate(sched.enabled, sched.temps, hour);
-    if (!r.has_setpoint) return;
-
-    if (r.setpoint == last_applied_setpoint_) return;
-
-    set_ch_setpoint(r.setpoint);
-    last_applied_setpoint_ = r.setpoint;
-    log_.event(ILogger::MODE, "Расписание CH: час %d, уставка %.0f C", hour, (double)r.setpoint);
 }
 
 // ================================================================
