@@ -223,13 +223,6 @@ bool OT_Transaction(const OT_Frame *request, OT_Frame *response)
     return ot_transaction(request, response);
 }
 
-float OT_f88_to_float(uint16_t v)
-{
-    int8_t  i = (int8_t)(v >> 8);
-    uint8_t f = (uint8_t)(v & 0xFF);
-    return (float)i + (float)f / 256.0f;
-}
-
 uint16_t OT_float_to_f88(float f)
 {
     int16_t  i   = (int16_t)f;

@@ -69,11 +69,6 @@ uint32_t BoilerPollInteractor::now_ms() const
     return static_cast<uint32_t>(time_.monotonic_ms());
 }
 
-float BoilerPollInteractor::f88_to_float(uint16_t v)
-{
-    return static_cast<float>(v) / 256.0f;
-}
-
 uint16_t BoilerPollInteractor::float_to_f88(float f)
 {
     if (f < 0) return 0;
@@ -423,7 +418,7 @@ void BoilerPollInteractor::do_extra_step()
         break;
     }
     case 2: case 8: case 12: {
-        auto r = boiler_.read(OT_ID_DHW_TEMP);
+        auto r = boiler_.read_temperature(OT_ID_DHW_TEMP);
         if (r.success && !std::isnan(r.value_f88)) {
             state_.lock_exclusive();
             state_.set_dhw_temp(r.value_f88);
@@ -432,7 +427,7 @@ void BoilerPollInteractor::do_extra_step()
         break;
     }
     case 4: {
-        auto r = boiler_.read(OT_ID_OUTSIDE_TEMP);
+        auto r = boiler_.read_temperature(OT_ID_OUTSIDE_TEMP);
         if (r.success && !std::isnan(r.value_f88)) {
             state_.lock_exclusive();
             state_.set_outside_temp(r.value_f88);
@@ -484,7 +479,7 @@ void BoilerPollInteractor::do_extra_step()
         break;
     }
     case 7: {
-        auto r = boiler_.read(OT_ID_CH_TEMP);
+        auto r = boiler_.read_temperature(OT_ID_CH_TEMP);
         if (r.success && !std::isnan(r.value_f88)) {
             state_.lock_exclusive();
             state_.set_ch_temp(r.value_f88);
@@ -493,7 +488,7 @@ void BoilerPollInteractor::do_extra_step()
         break;
     }
     case 13: {
-        auto r = boiler_.read(OT_ID_RETURN_TEMP);
+        auto r = boiler_.read_temperature(OT_ID_RETURN_TEMP);
         if (r.success && !std::isnan(r.value_f88)) {
             state_.lock_exclusive();
             state_.set_return_temp(r.value_f88);
