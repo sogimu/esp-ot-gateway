@@ -73,6 +73,18 @@ void BoilerNvsStore::load_boiler_config(IHeatingStateStore& s)
                      pid_trg / 10.0f, (int)pid_lockout);
     s.set_pid_hysteresis(pid_hys_u8 / 10.0f);
 
+    // CH schedule — двухшаговый запрос размера (D10)
+    {
+        CH_Schedule cs;
+        memset(&cs, 0, sizeof(cs));
+        sz = 0;
+        if (nvs_get_blob(h, "ch_sched", nullptr, &sz) == ESP_OK && sz == sizeof(cs)) {
+            if (nvs_get_blob(h, "ch_sched", &cs, &sz) == ESP_OK) {
+                s.set_schedule(&cs);
+            }
+        }
+    }
+
     // PID schedule — двухшаговый запрос размера (D10)
     {
         PID_Schedule ps;
@@ -166,6 +178,13 @@ void BoilerNvsStore::save_boiler_config(const IHeatingStateStore& s)
     nvs_set_i16(h, "pid_trg", (int16_t)(s.get_pid_target_room() * 10.0f + 0.5f));
     nvs_set_i32(h, "pid_lck", (int32_t)s.get_pid_lockout_sec());
     nvs_set_u8(h,  "pid_hys", (uint8_t)(s.get_pid_hysteresis() * 10.0f + 0.5f));
+
+    // CH schedule
+    {
+        CH_Schedule cs;
+        s.get_schedule(&cs);
+        nvs_set_blob(h, "ch_sched", &cs, sizeof(cs));
+    }
 
     // PID schedule
     {
