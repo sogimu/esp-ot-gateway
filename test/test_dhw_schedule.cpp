@@ -78,6 +78,15 @@ TEST_CASE("DHW mode round-trips through state store", "[dhw][schedule]") {
     REQUIRE(state.get_dhw_mode() == DHWMode::Static);
 }
 
+TEST_CASE("DHW effective permission round-trips through state store", "[dhw][schedule]") {
+    FakeHeatingStateStore state;
+    state.reset_to_defaults();
+    REQUIRE(state.is_dhw_heat_allowed() == false);
+
+    state.set_dhw_heat_allowed(true);
+    REQUIRE(state.is_dhw_heat_allowed() == true);
+}
+
 // ── Persistence (state-store round-trip + blob size) ──────
 
 TEST_CASE("DHW_Schedule blob size is stable for NVS", "[dhw][schedule][persistence]") {
@@ -164,4 +173,39 @@ TEST_CASE("render_dhw_schedule: unsynced time -> hour=-1", "[dhw][schedule][rend
     std::string json(buf, len);
 
     REQUIRE(json.find("\"hour\":-1") != std::string::npos);
+}
+
+// ── render_status: effective DHW heating permission ────────
+// The permission is derived once by the control loop and stored in the state;
+// the presenter only renders it.
+
+TEST_CASE("render_status: exposes dhw_heat_allowed=1 from state", "[dhw][schedule][render]") {
+    FakeHeatingStateStore state;
+    state.reset_to_defaults();
+    state.set_dhw_heat_allowed(true);
+
+    WebPresenterAdapter presenter;
+    presenter.set_state(&state);
+
+    char buf[4096];
+    int len = presenter.render_status(buf, sizeof(buf));
+    REQUIRE(len > 0);
+    REQUIRE(len < 2048);  // must fit production handler buffer
+    std::string json(buf, len);
+    REQUIRE(json.find("\"dhw_heat_allowed\":1") != std::string::npos);
+}
+
+TEST_CASE("render_status: exposes dhw_heat_allowed=0 from state", "[dhw][schedule][render]") {
+    FakeHeatingStateStore state;
+    state.reset_to_defaults();
+    state.set_dhw_heat_allowed(false);
+
+    WebPresenterAdapter presenter;
+    presenter.set_state(&state);
+
+    char buf[4096];
+    int len = presenter.render_status(buf, sizeof(buf));
+    REQUIRE(len > 0);
+    std::string json(buf, len);
+    REQUIRE(json.find("\"dhw_heat_allowed\":0") != std::string::npos);
 }

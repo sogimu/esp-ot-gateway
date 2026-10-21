@@ -80,6 +80,9 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
                  (int)uh.count(), (int)um.count(), (int)us.count());
     }
 
+    // Effective DHW heating permission, derived by the control loop
+    bool dhw_heat_allowed = state_->is_dhw_heat_allowed();
+
     // Prepare fault descriptions
     char asf_text_buf[256];
     FaultCodes::asf_flags_text(state_->get_asf_flags(), asf_text_buf, sizeof(asf_text_buf));
@@ -91,7 +94,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"modulation\":%.1f,"
         "\"ch_setpoint\":%.0f,\"dhw_setpoint\":%.0f,"
         "\"dhw_sp_min\":%.0f,\"dhw_sp_max\":%.0f,\"ch_sp_min\":%.0f,\"ch_sp_max\":%.0f,"
-        "\"ch_enable\":%d,\"ch_mode\":%d,\"dhw_enable\":%d,\"dhw_mode\":%d,"
+        "\"ch_enable\":%d,\"ch_mode\":%d,\"dhw_enable\":%d,\"dhw_mode\":%d,\"dhw_heat_allowed\":%d,"
         "\"dhw_pred_active\":%d,\"dhw_pred_remaining\":%d,\"dhw_pred_uncertainty\":%d,"
         "\"dhw_pred_elapsed\":%d,\"dhw_pred_rate\":%.4f,\"dhw_last_session_sec\":%d,"
         "\"asf_flags\":%d,\"oem_fault\":%d,\"oem_diag\":%d,"
@@ -125,6 +128,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         (double)state_->get_ch_sp_min(), (double)state_->get_ch_sp_max(),
         state_->is_ch_enabled() ? 1 : 0, static_cast<int>(state_->get_ch_mode()),
         state_->is_dhw_enabled() ? 1 : 0, static_cast<int>(state_->get_dhw_mode()),
+        dhw_heat_allowed ? 1 : 0,
         state_->get_dhw_pred_active() ? 1 : 0,
         state_->get_dhw_pred_remaining_sec(), state_->get_dhw_pred_uncertainty_sec(),
         state_->get_dhw_pred_elapsed_sec(), (double)state_->get_dhw_pred_rate_cps(),

@@ -264,6 +264,10 @@ void BoilerPollInteractor::do_dhw_hysteresis()
         }
     }
 
+    state_.lock_exclusive();
+    state_.set_dhw_heat_allowed(dhw_allowed);
+    state_.unlock_exclusive();
+
     if (dhw_allowed && dhw_temp > 5.0f) {
         float hyst = hysteresis;
         if (hyst < 0.5f) hyst = 2.0f;

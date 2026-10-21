@@ -139,6 +139,10 @@ public:
     virtual void set_dhw_mode(DHWMode v) = 0;
     virtual DHWMode get_dhw_mode() const = 0;
 
+    // ── DHW effective heating permission (derived by control loop) ──
+    virtual void set_dhw_heat_allowed(bool v) = 0;
+    virtual bool is_dhw_heat_allowed() const = 0;
+
     // ── Schedule ───────────────────────────────────────
     virtual void set_schedule(const void* sched) = 0; // CH_Schedule*
     virtual void get_schedule(void* sched) const = 0;

@@ -96,6 +96,8 @@ void HeatingStateAdapter::set_ch_mode(CHMode v) { state_.ch_mode_ = v; }
 CHMode HeatingStateAdapter::get_ch_mode() const { return state_.ch_mode_; }
 void HeatingStateAdapter::set_dhw_mode(DHWMode v) { state_.dhw_mode_ = v; }
 DHWMode HeatingStateAdapter::get_dhw_mode() const { return state_.dhw_mode_; }
+void HeatingStateAdapter::set_dhw_heat_allowed(bool v) { state_.dhw_heat_allowed_ = v; }
+bool HeatingStateAdapter::is_dhw_heat_allowed() const { return state_.dhw_heat_allowed_; }
 IMPL_GETSET_I(int, tz_offset)
 
 // Fault codes

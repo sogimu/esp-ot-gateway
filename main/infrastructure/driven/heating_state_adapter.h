@@ -144,6 +144,10 @@ public:
     void set_dhw_mode(DHWMode v) override;
     DHWMode get_dhw_mode() const override;
 
+    // DHW effective heating permission (derived by control loop)
+    void set_dhw_heat_allowed(bool v) override;
+    bool is_dhw_heat_allowed() const override;
+
     // Schedule (opaque implementation — casts to CH_Schedule in .cpp)
     void set_schedule(const void* sched) override;
     void get_schedule(void* sched) const override;
@@ -246,6 +250,7 @@ private:
         float  pid_hysteresis_ = 0.5f;
         CHMode ch_mode_ = CHMode::Manual_Static;
         DHWMode dhw_mode_ = DHWMode::Static;
+        bool   dhw_heat_allowed_ = false;
         // Schedule
         bool  schedule_enabled_ = false;
         float schedule_temps_[24] = {};

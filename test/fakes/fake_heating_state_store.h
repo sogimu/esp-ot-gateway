@@ -30,6 +30,7 @@ public:
         pid_dt_sec_ = 60; pid_room_sensor_ = 0; pid_lockout_sec_ = 300; pid_hysteresis_ = 0.5f;
         ch_mode_ = CHMode::Manual_Static;
         dhw_mode_ = DHWMode::Static;
+        dhw_heat_allowed_ = false;
         schedule_enabled_ = false;
         for (int i = 0; i < 24; i++) schedule_temps_[i] = 0;
         pid_schedule_enabled_ = false;
@@ -172,6 +173,8 @@ public:
     CHMode get_ch_mode() const override { return ch_mode_; }
     void set_dhw_mode(DHWMode v) override { dhw_mode_ = v; }
     DHWMode get_dhw_mode() const override { return dhw_mode_; }
+    void set_dhw_heat_allowed(bool v) override { dhw_heat_allowed_ = v; }
+    bool is_dhw_heat_allowed() const override { return dhw_heat_allowed_; }
 
     // Schedule
     void set_schedule(const void* sched) override {
@@ -286,6 +289,7 @@ public:
     float  pid_hysteresis_ = 0.5f;
     CHMode ch_mode_ = CHMode::Manual_Static;
     DHWMode dhw_mode_ = DHWMode::Static;
+    bool   dhw_heat_allowed_ = false;
     bool   schedule_enabled_ = false;
     float  schedule_temps_[24] = {};
     bool   pid_schedule_enabled_ = false;
