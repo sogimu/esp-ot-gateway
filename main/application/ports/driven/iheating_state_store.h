@@ -143,6 +143,10 @@ public:
     virtual void set_pid_schedule(const void* sched) = 0; // PID_Schedule*
     virtual void get_pid_schedule(void* sched) const = 0;
 
+    // ── DHW Schedule ───────────────────────────────────
+    virtual void set_dhw_schedule(const void* sched) = 0; // DHW_Schedule*
+    virtual void get_dhw_schedule(void* sched) const = 0;
+
     // ── Hysteresis ─────────────────────────────────────
     virtual void  set_dhw_hysteresis(float v) = 0;
     virtual float get_dhw_hysteresis() const = 0;

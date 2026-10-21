@@ -131,6 +131,14 @@ void SystemConfigInteractor::set_pid_schedule(const PID_Schedule& sched)
     save_and_log("PID расписание: %s", sched.enabled ? "вкл" : "выкл");
 }
 
+void SystemConfigInteractor::set_dhw_schedule(const DHW_Schedule& sched)
+{
+    state_.lock_exclusive();
+    state_.set_dhw_schedule(&sched);
+    state_.unlock_exclusive();
+    save_and_log("Расписание ГВС: %s", sched.enabled ? "вкл" : "выкл");
+}
+
 void SystemConfigInteractor::set_timezone(int offset)
 {
     state_.lock_exclusive();

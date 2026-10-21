@@ -63,6 +63,8 @@ bool HttpControllerAdapter::start()
         { .uri = "/api/schedule",      .method = HTTP_POST, .handler = handler_schedule,      .user_ctx = NULL },
         { .uri = "/api/pid_schedule",  .method = HTTP_GET,  .handler = handler_pid_schedule,  .user_ctx = NULL },
         { .uri = "/api/pid_schedule",  .method = HTTP_POST, .handler = handler_pid_schedule,  .user_ctx = NULL },
+        { .uri = "/api/dhw_schedule",  .method = HTTP_GET,  .handler = handler_dhw_schedule,  .user_ctx = NULL },
+        { .uri = "/api/dhw_schedule",  .method = HTTP_POST, .handler = handler_dhw_schedule,  .user_ctx = NULL },
         { .uri = "/api/pid_quality",  .method = HTTP_GET,  .handler = handler_pid_quality,  .user_ctx = NULL },
 
         // WiFi API
@@ -296,6 +298,46 @@ esp_err_t HttpControllerAdapter::handler_pid_schedule(httpd_req_t* req) {
 
     static char buf[512];
     self->presenter_->render_pid_schedule(buf, sizeof(buf));
+    httpd_resp_set_type(req, "application/json");
+    return httpd_resp_sendstr(req, buf);
+}
+
+esp_err_t HttpControllerAdapter::handler_dhw_schedule(httpd_req_t* req) {
+    auto* self = s_self;
+    if (!self || !self->presenter_) { httpd_resp_sendstr(req, "{}"); return ESP_FAIL; }
+
+    if (req->method == HTTP_POST) {
+        char body[512] = {0};
+        int recv_len = httpd_req_recv(req, body, sizeof(body)-1);
+        if (recv_len <= 0) {
+            httpd_resp_sendstr(req, "{\"ok\":false}");
+            return ESP_FAIL;
+        }
+        int en = json_get_int(body, "\"enabled\"");
+        if (en < 0) en = 1;
+        DHW_Schedule sched;
+        sched.enabled = (en != 0);
+        const char* p = strstr(body, "\"on\"");
+        if (p) {
+            p = strchr(p, '[');
+            if (p) {
+                p++;
+                for (int h = 0; h < 24; h++) {
+                    while (*p == ' ' || *p == ',') p++;
+                    sched.on[h] = (*p == '1' || *p == 't' || *p == 'T');
+                    while (*p && *p != ',' && *p != ']') p++;
+                    if (*p == ']') break;
+                    if (*p == ',') p++;
+                }
+            }
+        }
+        if (self->cfg_) self->cfg_->set_dhw_schedule(sched);
+        httpd_resp_set_type(req, "application/json");
+        return httpd_resp_sendstr(req, "{\"ok\":true}");
+    }
+
+    static char buf[512];
+    self->presenter_->render_dhw_schedule(buf, sizeof(buf));
     httpd_resp_set_type(req, "application/json");
     return httpd_resp_sendstr(req, buf);
 }

@@ -37,3 +37,11 @@ struct PID_Schedule {
         return temps[hour];
     }
 };
+
+/// 24-hour DHW heating on/off schedule — domain value object.
+/// on[h] == true  → heating allowed (decision via hysteresis)
+/// on[h] == false → heating forbidden
+struct DHW_Schedule {
+    bool enabled = false;
+    bool on[24] = {};
+};

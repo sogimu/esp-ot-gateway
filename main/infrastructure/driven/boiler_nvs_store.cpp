@@ -96,6 +96,18 @@ void BoilerNvsStore::load_boiler_config(IHeatingStateStore& s)
             }
         }
     }
+
+    // DHW schedule — двухшаговый запрос размера (D10)
+    {
+        DHW_Schedule ds;
+        memset(&ds, 0, sizeof(ds));
+        sz = 0;
+        if (nvs_get_blob(h, "dhw_sched", nullptr, &sz) == ESP_OK && sz == sizeof(ds)) {
+            if (nvs_get_blob(h, "dhw_sched", &ds, &sz) == ESP_OK) {
+                s.set_dhw_schedule(&ds);
+            }
+        }
+    }
     s.unlock_exclusive();
 
     // Boiler model config — calibration blob (with migration)
@@ -191,6 +203,13 @@ void BoilerNvsStore::save_boiler_config(const IHeatingStateStore& s)
         PID_Schedule ps;
         s.get_pid_schedule(&ps);
         nvs_set_blob(h, "pid_sched", &ps, sizeof(ps));
+    }
+
+    // DHW schedule
+    {
+        DHW_Schedule ds;
+        s.get_dhw_schedule(&ds);
+        nvs_set_blob(h, "dhw_sched", &ds, sizeof(ds));
     }
 
     // Boiler model config

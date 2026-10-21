@@ -36,6 +36,7 @@ struct SpySystemConfig : public IConfigureSystem {
     void set_dhw_hysteresis(float) override {}
     void set_schedule(const CH_Schedule&) override {}
     void set_pid_schedule(const PID_Schedule&) override {}
+    void set_dhw_schedule(const DHW_Schedule&) override {}
     void set_timezone(int) override {}
     void set_sntp_servers(const char*, const char*) override {}
     void reset_modulation_stats() override {}

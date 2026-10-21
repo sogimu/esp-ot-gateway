@@ -33,6 +33,8 @@ public:
         for (int i = 0; i < 24; i++) schedule_temps_[i] = 0;
         pid_schedule_enabled_ = false;
         for (int i = 0; i < 24; i++) pid_schedule_temps_[i] = 0;
+        dhw_schedule_enabled_ = false;
+        for (int i = 0; i < 24; i++) dhw_schedule_on_[i] = false;
         dhw_hysteresis_ = 2.0f;
         tz_offset_ = 3;
         sntp_srv0_.clear(); sntp_srv1_.clear();
@@ -194,6 +196,18 @@ public:
         s.enabled = pid_schedule_enabled_;
         std::memcpy(s.temps, pid_schedule_temps_, 24 * sizeof(float));
     }
+    void set_dhw_schedule(const void* sched) override {
+        struct DHW_Schedule { bool enabled; bool on[24]; };
+        const auto& s = *static_cast<const DHW_Schedule*>(sched);
+        dhw_schedule_enabled_ = s.enabled;
+        std::memcpy(dhw_schedule_on_, s.on, 24 * sizeof(bool));
+    }
+    void get_dhw_schedule(void* sched) const override {
+        struct DHW_Schedule { bool enabled; bool on[24]; };
+        auto& s = *static_cast<DHW_Schedule*>(sched);
+        s.enabled = dhw_schedule_enabled_;
+        std::memcpy(s.on, dhw_schedule_on_, 24 * sizeof(bool));
+    }
 
     // Hysteresis
     void  set_dhw_hysteresis(float v) override { dhw_hysteresis_ = v; }
@@ -273,9 +287,11 @@ public:
     CHMode ch_mode_ = CHMode::Manual_Static;
     bool   schedule_enabled_ = false;
     float  schedule_temps_[24] = {};
-    bool   pid_schedule_enabled_ = false;
-    float  pid_schedule_temps_[24] = {};
-    float  dhw_hysteresis_ = 2.0f;
+        bool   pid_schedule_enabled_ = false;
+        float  pid_schedule_temps_[24] = {};
+        bool   dhw_schedule_enabled_ = false;
+        bool   dhw_schedule_on_[24] = {};
+        float  dhw_hysteresis_ = 2.0f;
     int    tz_offset_ = 3;
     std::string sntp_srv0_, sntp_srv1_;
     float  k_calib_ = 1.0f, p_max_ = 24.0f, gas_calorific_ = 9.5f, gas_meter_base_ = 0;

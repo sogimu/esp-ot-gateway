@@ -46,6 +46,7 @@ private:
     static esp_err_t handler_gas_history(httpd_req_t* req);
     static esp_err_t handler_schedule(httpd_req_t* req);
     static esp_err_t handler_pid_schedule(httpd_req_t* req);
+    static esp_err_t handler_dhw_schedule(httpd_req_t* req);
     static esp_err_t handler_pid_quality(httpd_req_t* req);
     static esp_err_t handler_wifi_status(httpd_req_t* req);
     static esp_err_t handler_wifi_scan(httpd_req_t* req);

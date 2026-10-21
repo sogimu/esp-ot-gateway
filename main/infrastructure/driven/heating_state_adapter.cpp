@@ -206,6 +206,16 @@ void HeatingStateAdapter::get_pid_schedule(void* sched) const {
     s.enabled = state_.pid_schedule_enabled_;
     memcpy(s.temps, state_.pid_schedule_temps_, 24 * sizeof(float));
 }
+void HeatingStateAdapter::set_dhw_schedule(const void* sched) {
+    const DHW_Schedule& s = *static_cast<const DHW_Schedule*>(sched);
+    state_.dhw_schedule_enabled_ = s.enabled;
+    memcpy(state_.dhw_schedule_on_, s.on, 24 * sizeof(bool));
+}
+void HeatingStateAdapter::get_dhw_schedule(void* sched) const {
+    DHW_Schedule& s = *static_cast<DHW_Schedule*>(sched);
+    s.enabled = state_.dhw_schedule_enabled_;
+    memcpy(s.on, state_.dhw_schedule_on_, 24 * sizeof(bool));
+}
 
 // SNTP
 void HeatingStateAdapter::set_sntp_server0(const char* v) { strncpy(state_.sntp_srv0_, v, 63); }

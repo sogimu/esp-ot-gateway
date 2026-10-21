@@ -58,6 +58,9 @@ public:
     /// Render PID schedule JSON into buf, returns length.
     int render_pid_schedule(char* buf, size_t size);
 
+    /// Render DHW schedule JSON into buf, returns length.
+    int render_dhw_schedule(char* buf, size_t size);
+
     /// Render PID quality JSON into buf, returns length.
     int render_pid_quality(char* buf, size_t size);
 

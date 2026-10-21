@@ -4,6 +4,7 @@
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/services/dhw_hysteresis_service.h"
+#include "application/services/dhw_schedule_service.h"
 #include "application/services/schedule_service.h"
 #include "domain/value_objects/fault_codes.h"
 #include "domain/value_objects/ch_mode.h"
@@ -232,11 +233,36 @@ void BoilerPollInteractor::do_dhw_hysteresis()
     float hysteresis   = state_.get_dhw_hysteresis();
     state_.unlock_shared();
 
-    if (dhw_enabled && dhw_temp > 5.0f) {
+    // DHW schedule — gate heating by local hour (fail-safe: allow when unsynced)
+    bool dhw_allowed = dhw_enabled;
+    {
+        DHW_Schedule sched;
+        state_.lock_shared();
+        state_.get_dhw_schedule(&sched);
+        state_.unlock_shared();
+
+        int hour = -1;
+        if (time_.is_synced()) {
+            auto local = time_.local_now().time_since_epoch();
+            hour = static_cast<int>(std::chrono::duration_cast<std::chrono::hours>(local).count() % 24);
+            if (hour < 0) hour += 24;
+        }
+
+        bool schedule_ok = DhwScheduleService::is_allowed(sched.enabled, sched.on, hour);
+        dhw_allowed = dhw_enabled && schedule_ok;
+
+        if (sched.enabled && hour != last_dhw_schedule_hour_) {
+            last_dhw_schedule_hour_ = hour;
+            log_.event(ILogger::MODE, "Расписание ГВС: час %d, нагрев %s",
+                       hour, schedule_ok ? "разрешён" : "запрещён");
+        }
+    }
+
+    if (dhw_allowed && dhw_temp > 5.0f) {
         float hyst = hysteresis;
         if (hyst < 0.5f) hyst = 2.0f;
 
-        if (!dhw_priority_ && DHWHysteresisService::should_heat(dhw_temp, dhw_setpoint, hyst, dhw_enabled)) {
+        if (!dhw_priority_ && DHWHysteresisService::should_heat(dhw_temp, dhw_setpoint, hyst, dhw_allowed)) {
             dhw_priority_ = true;
             dhw_session_start_ms_ = now_ms();
             dhw_session_min_temp_ = dhw_temp;

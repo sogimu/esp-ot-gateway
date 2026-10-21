@@ -148,6 +148,10 @@ public:
     void set_pid_schedule(const void* sched) override;
     void get_pid_schedule(void* sched) const override;
 
+    // DHW Schedule
+    void set_dhw_schedule(const void* sched) override;
+    void get_dhw_schedule(void* sched) const override;
+
     // Hysteresis
     void  set_dhw_hysteresis(float v) override;
     float get_dhw_hysteresis() const override;
@@ -244,6 +248,9 @@ private:
 
         bool  mqtt_connected_ = false;
         float pid_schedule_temps_[24] = {};
+        // DHW Schedule
+        bool  dhw_schedule_enabled_ = false;
+        bool  dhw_schedule_on_[24] = {};
         // Hysteresis
         float dhw_hysteresis_ = 2.0f;
         // Timezone

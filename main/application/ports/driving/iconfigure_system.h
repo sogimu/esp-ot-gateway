@@ -15,6 +15,7 @@ public:
     virtual void set_dhw_hysteresis(float value) = 0;      // validated 0.5–10
     virtual void set_schedule(const CH_Schedule&) = 0;
     virtual void set_pid_schedule(const PID_Schedule&) = 0;
+    virtual void set_dhw_schedule(const DHW_Schedule&) = 0;
     virtual void set_timezone(int offset) = 0;
     virtual void set_sntp_servers(const char* srv0, const char* srv1) = 0;
     virtual void reset_modulation_stats() = 0;
