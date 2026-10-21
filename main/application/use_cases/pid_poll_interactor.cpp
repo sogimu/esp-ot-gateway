@@ -158,14 +158,11 @@ void PidPollInteractor::execute()
 
     if (!room_valid) return;
 
-    // Compute PID
-    compute_pid();
-
-    float output = state_.get_pid_output();
     float target = state_.get_pid_target_room();
     float hysteresis = state_.get_pid_hysteresis();
 
     // Hysteresis for CH enable — deadband memory is PID's own decision.
+    // Computed before the PID step so integration can be gated by ch_on.
     bool ch_on;
     if (room > target + hysteresis) {
         ch_on = false;
@@ -174,6 +171,11 @@ void PidPollInteractor::execute()
     } else {
         ch_on = state_.get_pid_ch_enabled_by_pid();
     }
+
+    // Compute PID; integrate only while CH is actually heating.
+    compute_pid(ch_on);
+
+    float output = state_.get_pid_output();
 
     state_.lock_exclusive();
     state_.set_pid_state(enabled, true, output,
@@ -211,7 +213,7 @@ void PidPollInteractor::load_config()
                         ? state_.get_ch_sp_max() : 75.0f;
 }
 
-void PidPollInteractor::compute_pid()
+void PidPollInteractor::compute_pid(bool integrate)
 {
     int sensor_id = state_.get_pid_room_sensor();
     state_.lock_shared();
@@ -223,9 +225,19 @@ void PidPollInteractor::compute_pid()
     int dt = state_.get_pid_dt_sec();
     if (dt < 1) dt = 60;
 
-    // Freeze integral during DHW
+    // When heating is active, floor the integral at the level that yields
+    // out_min, so the output responds immediately instead of traversing
+    // the dead zone 0 -> out_min. A higher integral (previous operating
+    // point) is preserved for bumpless transfer.
+    if (integrate) {
+        float p_term_floor = pid_cfg_.kp * (target - room);
+        float floor = pid_cfg_.out_min - p_term_floor;
+        if (pid_state_.integral < floor) pid_state_.integral = floor;
+    }
+
+    // Freeze integral during DHW or while CH is off.
     float saved_ki = pid_cfg_.ki;
-    if (dhw) pid_cfg_.ki = 0.0f;
+    if (dhw || !integrate) pid_cfg_.ki = 0.0f;
 
     float out = pid_step(&pid_cfg_, &pid_state_, target, room, dt);
     pid_cfg_.ki = saved_ki;

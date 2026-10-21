@@ -345,3 +345,40 @@ TEST_CASE("PidPoll: PID выключает нагрев при достижен�
     REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
     REQUIRE(state.get_ch_setpoint() == Approx(25.0f));
 }
+
+// ═══ Anti-windup: интеграл не растёт при CH off и стартует с out_min ═══
+
+TEST_CASE("PidPoll: интеграл не накапливается при выключенном CH", "[pid][antiwindup][regression]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(22.4f);  // дедбенд: цель 22.5, гистерезис 0.2
+    state.set_pid_config(2.5f, 0.015f, 0.1f, 60, 0, 22.5f, 300);
+    state.set_pid_hysteresis(0.2f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+
+    for (int i = 0; i < 10; i++) {
+        time.advance_sec(60); pid.execute();
+    }
+
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+    REQUIRE(state.get_pid_i() == Approx(0.0f).margin(0.001f));
+}
+
+TEST_CASE("PidPoll: при включении CH выход сразу выше минимума (нет холостого хода)", "[pid][antiwindup][regression]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(22.2f);  // ниже цели - гистерезис
+    state.set_pid_config(2.5f, 0.015f, 0.1f, 60, 0, 22.5f, 300);
+    state.set_pid_hysteresis(0.2f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+    REQUIRE(state.get_pid_output() > 25.0f);
+    REQUIRE(state.get_pid_i() > 20.0f);
+}

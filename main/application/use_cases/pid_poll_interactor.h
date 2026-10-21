@@ -42,6 +42,6 @@ private:
     bool     clamped_logged_ = false;
 
     void load_config();
-    void compute_pid();
+    void compute_pid(bool integrate);
     void apply_output(float output);
 };
