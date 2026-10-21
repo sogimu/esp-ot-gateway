@@ -43,6 +43,7 @@ set(TEST_SRCS
     test_dhw_hysteresis.cpp
     test_schedule_service.cpp
     test_schedule_persistence.cpp
+    test_dhw_schedule.cpp
     test_modulation_stats.cpp
     test_burn_cycle.cpp
     test_dhw_predict.cpp
@@ -131,6 +132,7 @@ set(STUB_SRCS
 # ── Application .cpp files (compiled into test binary) ────
 set(APP_SRCS
     ${MAIN_DIR}/application/services/dhw_hysteresis_service.cpp
+    ${MAIN_DIR}/application/services/dhw_schedule_service.cpp
     ${MAIN_DIR}/application/services/schedule_service.cpp
     ${MAIN_DIR}/application/services/modulation_stats_service.cpp
     ${MAIN_DIR}/application/services/burn_cycle_service.cpp

@@ -29,6 +29,7 @@ public:
 
     // IConfigureSystem
     void set_ch_mode(CHMode mode) override;
+    void set_dhw_mode(DHWMode mode) override;
     void set_ch_enable(bool) override;
     void set_dhw_enable(bool) override;
     void set_ch_setpoint(float) override;
@@ -36,6 +37,7 @@ public:
     void set_dhw_hysteresis(float) override;
     void set_schedule(const CH_Schedule&) override;
     void set_pid_schedule(const PID_Schedule&) override;
+    void set_dhw_schedule(const DHW_Schedule&) override;
     void set_timezone(int offset) override;
     void set_sntp_servers(const char* srv0, const char* srv1) override;
 

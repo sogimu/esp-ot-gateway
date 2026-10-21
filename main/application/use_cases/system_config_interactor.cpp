@@ -75,6 +75,14 @@ void SystemConfigInteractor::set_ch_enable(bool en)
     save_and_log("CH: %s", en ? "вкл" : "выкл");
 }
 
+void SystemConfigInteractor::set_dhw_mode(DHWMode mode)
+{
+    state_.lock_exclusive();
+    state_.set_dhw_mode(mode);
+    state_.unlock_exclusive();
+    save_and_log("Режим ГВС: %s", mode == DHWMode::Schedule ? "по расписанию" : "статичный");
+}
+
 void SystemConfigInteractor::set_dhw_enable(bool en)
 {
     state_.lock_exclusive();
@@ -129,6 +137,14 @@ void SystemConfigInteractor::set_pid_schedule(const PID_Schedule& sched)
     state_.set_pid_schedule(&sched);
     state_.unlock_exclusive();
     save_and_log("PID расписание: %s", sched.enabled ? "вкл" : "выкл");
+}
+
+void SystemConfigInteractor::set_dhw_schedule(const DHW_Schedule& sched)
+{
+    state_.lock_exclusive();
+    state_.set_dhw_schedule(&sched);
+    state_.unlock_exclusive();
+    save_and_log("Расписание ГВС сохранено");
 }
 
 void SystemConfigInteractor::set_timezone(int offset)

@@ -135,6 +135,14 @@ public:
     virtual void set_ch_mode(CHMode v) = 0;
     virtual CHMode get_ch_mode() const = 0;
 
+    // ── DHW mode ───────────────────────────────────────
+    virtual void set_dhw_mode(DHWMode v) = 0;
+    virtual DHWMode get_dhw_mode() const = 0;
+
+    // ── DHW effective heating permission (derived by control loop) ──
+    virtual void set_dhw_heat_allowed(bool v) = 0;
+    virtual bool is_dhw_heat_allowed() const = 0;
+
     // ── Schedule ───────────────────────────────────────
     virtual void set_schedule(const void* sched) = 0; // CH_Schedule*
     virtual void get_schedule(void* sched) const = 0;
@@ -142,6 +150,10 @@ public:
     // ── PID Schedule ───────────────────────────────────
     virtual void set_pid_schedule(const void* sched) = 0; // PID_Schedule*
     virtual void get_pid_schedule(void* sched) const = 0;
+
+    // ── DHW Schedule ───────────────────────────────────
+    virtual void set_dhw_schedule(const void* sched) = 0; // DHW_Schedule*
+    virtual void get_dhw_schedule(void* sched) const = 0;
 
     // ── Hysteresis ─────────────────────────────────────
     virtual void  set_dhw_hysteresis(float v) = 0;

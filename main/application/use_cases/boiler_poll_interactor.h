@@ -53,6 +53,9 @@ private:
     uint32_t dhw_session_start_ms_ = 0;
     float dhw_session_min_temp_ = 0;
 
+    // DHW schedule — последний применённый локальный час (для логирования)
+    int last_dhw_schedule_hour_ = -1;
+
     // Previous status for change detection
     bool last_fault_ = false, last_flame_ = false;
     bool last_ch_active_ = false, last_dhw_active_ = false;
