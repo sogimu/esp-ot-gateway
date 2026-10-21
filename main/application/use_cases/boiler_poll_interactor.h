@@ -68,6 +68,5 @@ private:
 
     // Helpers
     uint32_t now_ms() const;
-    static float f88_to_float(uint16_t v);
     static uint16_t float_to_f88(float f);
 };

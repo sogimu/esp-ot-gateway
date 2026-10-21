@@ -11,6 +11,7 @@ public:
     struct WriteResult { bool success; };
 
     virtual ReadResult  read(uint8_t data_id) = 0;
+    virtual ReadResult  read_temperature(uint8_t data_id) = 0;
     virtual ReadResult  read_status(uint8_t master_flags, bool fault_reset) = 0;
     virtual WriteResult write(uint8_t data_id, uint16_t value) = 0;
     virtual WriteResult write_status(uint8_t master_flags, bool fault_reset) = 0;

@@ -113,6 +113,9 @@ set(TEST_SRCS
     # Fault codes (OEM + ASF flag decoding, JSON rendering)
     test_fault_codes.cpp
 
+    # Signed f8.8 temperature decoding (OpenTherm adapter)
+    test_f88_signed_decode.cpp
+
     # OTA interactor — конечный автомат, кэширование версий, блокировка
     test_ota_interactor.cpp
     # OTA validity adapter — pending/armed/heartbeat/откат
@@ -145,6 +148,8 @@ set(APP_SRCS
     # MQTT interactor (testable on host — no ESP-IDF deps)
     ${MAIN_DIR}/infrastructure/driving/mqtt_interactor.cpp
     ${MAIN_DIR}/infrastructure/driven/web_presenter_adapter.cpp
+    # OpenTherm boiler adapter (host-testable — depends only on clean ports)
+    ${MAIN_DIR}/infrastructure/driven/boiler_opentherm_adapter.cpp
     # OTA interactor — тестируется на хосте (HW-free, зависит от driven-портов)
     ${MAIN_DIR}/infrastructure/driving/ota_interactor.cpp
     ${MAIN_DIR}/infrastructure/driven/ota_validity_adapter.cpp

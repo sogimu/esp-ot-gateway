@@ -27,6 +27,14 @@ public:
         return {false, 0};
     }
 
+    ReadResult read_temperature(uint8_t data_id) override {
+        auto it = read_responses_.find(data_id);
+        if (it != read_responses_.end()) {
+            return {true, it->second};
+        }
+        return {false, 0};
+    }
+
     ReadResult read_status(uint8_t master_flags, bool fault_reset) override {
         status_master_ = master_flags;
         if (fault_reset) fault_reset_called_ = true;

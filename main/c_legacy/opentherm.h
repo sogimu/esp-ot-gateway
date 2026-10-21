@@ -190,7 +190,14 @@ void OT_Init(void);
 bool OT_Transaction(const OT_Frame *request, OT_Frame *response);
 
 /* Вспомогательные функции формата f8.8 */
-float    OT_f88_to_float(uint16_t v);
+/* Знаковый f8.8 → float: целая часть — int8_t (two's complement), дробная — 1/256. */
+static inline float OT_f88_to_float(uint16_t v)
+{
+    int8_t  i = (int8_t)(v >> 8);
+    uint8_t f = (uint8_t)(v & 0xFF);
+    return (float)i + (float)f / 256.0f;
+}
+
 uint16_t OT_float_to_f88(float f);
 
 #ifdef __cplusplus

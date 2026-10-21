@@ -26,6 +26,24 @@ IBoilerHardware::ReadResult BoilerOpenThermAdapter::read(uint8_t data_id)
     return r;
 }
 
+IBoilerHardware::ReadResult BoilerOpenThermAdapter::read_temperature(uint8_t data_id)
+{
+    OT_Frame req = {};
+    OT_Frame resp = {};
+    req.msg_type = OT_MSG_READ_DATA;
+    req.data_id = data_id;
+
+    bool ok = ot_hw_.send_and_receive(static_cast<const void*>(&req), static_cast<void*>(&resp));
+    ReadResult r;
+    r.success = ok;
+    if (ok) {
+        r.value_f88 = OT_f88_to_float(resp.data_value);
+    } else {
+        r.value_f88 = NAN;
+    }
+    return r;
+}
+
 IBoilerHardware::ReadResult BoilerOpenThermAdapter::read_status(uint8_t master_flags, bool fault_reset)
 {
     OT_Frame req = {};
