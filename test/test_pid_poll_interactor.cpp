@@ -301,3 +301,25 @@ TEST_CASE("PID_Sched: disabled schedule keeps config target", "[pid][sched]") {
     time.advance_sec(1); pid.execute();
     REQUIRE(state.get_pid_target_room() == Approx(22.0f));
 }
+
+// ═══ Блокировка цикла: уставка CH должна снижаться до минимума ═══
+
+TEST_CASE("PidPoll: блокировка цикла снижает уставку CH до минимума", "[pid][lockout][regression]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(22.0f);
+    state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
+    state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
+    state.set_ch_setpoint(26.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+
+    state.set_flame(true);
+    time.advance_sec(1); pid.execute();
+
+    state.set_flame(false);
+    time.advance_sec(1); pid.execute();
+
+    REQUIRE(state.get_pid_cycle_locked() == true);
+    REQUIRE(state.get_ch_setpoint() == Approx(25.0f));
+}

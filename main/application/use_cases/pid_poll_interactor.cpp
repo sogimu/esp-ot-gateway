@@ -139,6 +139,7 @@ void PidPollInteractor::execute()
     if (cycle_locked_) {
         state_.lock_exclusive();
         state_.set_pid_state(enabled, true, MIN_SETPOINT, 0, 0, 0, room, state_.get_pid_target_room(), true, lockout, false);
+        state_.set_ch_setpoint(MIN_SETPOINT);
         state_.unlock_exclusive();
         if (!lockout_logged_) {
             log_.event(ILogger::MODE, "PID: блокировка цикла, SP %.0f", (double)MIN_SETPOINT);
