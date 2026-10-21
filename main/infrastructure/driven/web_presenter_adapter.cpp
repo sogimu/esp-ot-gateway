@@ -80,6 +80,9 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
                  (int)uh.count(), (int)um.count(), (int)us.count());
     }
 
+    // Effective DHW heating permission, derived by the control loop
+    bool dhw_heat_allowed = state_->is_dhw_heat_allowed();
+
     // Prepare fault descriptions
     char asf_text_buf[256];
     FaultCodes::asf_flags_text(state_->get_asf_flags(), asf_text_buf, sizeof(asf_text_buf));
@@ -91,7 +94,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"modulation\":%.1f,"
         "\"ch_setpoint\":%.0f,\"dhw_setpoint\":%.0f,"
         "\"dhw_sp_min\":%.0f,\"dhw_sp_max\":%.0f,\"ch_sp_min\":%.0f,\"ch_sp_max\":%.0f,"
-        "\"ch_enable\":%d,\"ch_mode\":%d,\"dhw_enable\":%d,"
+        "\"ch_enable\":%d,\"ch_mode\":%d,\"dhw_enable\":%d,\"dhw_mode\":%d,\"dhw_heat_allowed\":%d,"
         "\"dhw_pred_active\":%d,\"dhw_pred_remaining\":%d,\"dhw_pred_uncertainty\":%d,"
         "\"dhw_pred_elapsed\":%d,\"dhw_pred_rate\":%.4f,\"dhw_last_session_sec\":%d,"
         "\"asf_flags\":%d,\"oem_fault\":%d,\"oem_diag\":%d,"
@@ -124,7 +127,8 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         (double)state_->get_dhw_sp_min(), (double)state_->get_dhw_sp_max(),
         (double)state_->get_ch_sp_min(), (double)state_->get_ch_sp_max(),
         state_->is_ch_enabled() ? 1 : 0, static_cast<int>(state_->get_ch_mode()),
-        state_->is_dhw_enabled() ? 1 : 0,
+        state_->is_dhw_enabled() ? 1 : 0, static_cast<int>(state_->get_dhw_mode()),
+        dhw_heat_allowed ? 1 : 0,
         state_->get_dhw_pred_active() ? 1 : 0,
         state_->get_dhw_pred_remaining_sec(), state_->get_dhw_pred_uncertainty_sec(),
         state_->get_dhw_pred_elapsed_sec(), (double)state_->get_dhw_pred_rate_cps(),
@@ -205,6 +209,33 @@ int WebPresenterAdapter::render_pid_schedule(char* buf, size_t size)
     for (int h = 0; h < 24 && pos < (int)size - 10; h++) {
         pos += snprintf(buf + pos, size - pos, "%.1f%s",
                         (double)sched.temps[h], (h < 23) ? "," : "");
+    }
+    pos += snprintf(buf + pos, size - pos, "]}");
+    state_->unlock_shared();
+    return pos;
+}
+
+int WebPresenterAdapter::render_dhw_schedule(char* buf, size_t size)
+{
+    if (!state_) return snprintf(buf, size, "{}");
+
+    state_->lock_shared();
+    DHW_Schedule sched;
+    state_->get_dhw_schedule(&sched);
+
+    // Current local hour from ITimeSource
+    int hour = -1;
+    if (time_ && time_->is_synced()) {
+        auto local = time_->local_now().time_since_epoch();
+        hour = (int)(std::chrono::duration_cast<std::chrono::hours>(local).count() % 24);
+        if (hour < 0) hour += 24;
+    }
+
+    int pos = snprintf(buf, size, "{\"hour\":%d,\"on\":[",
+                       hour);
+    for (int h = 0; h < 24 && pos < (int)size - 10; h++) {
+        pos += snprintf(buf + pos, size - pos, "%d%s",
+                        sched.on[h] ? 1 : 0, (h < 23) ? "," : "");
     }
     pos += snprintf(buf + pos, size - pos, "]}");
     state_->unlock_shared();

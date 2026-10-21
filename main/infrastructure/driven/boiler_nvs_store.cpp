@@ -56,6 +56,10 @@ void BoilerNvsStore::load_boiler_config(IHeatingStateStore& s)
     if (nvs_get_i32(h, "ch_mode", &i32) == ESP_OK)
         { s.lock_exclusive(); s.set_ch_mode(static_cast<CHMode>(i32)); s.unlock_exclusive(); }
 
+    // DHW mode
+    if (nvs_get_i32(h, "dhw_mode", &i32) == ESP_OK)
+        { s.lock_exclusive(); s.set_dhw_mode(static_cast<DHWMode>(i32)); s.unlock_exclusive(); }
+
     // PID config
     float pid_kp=2.0f, pid_ki=0.01f, pid_kd=0.0f;
     int32_t pid_dt=60, pid_lockout=300;
@@ -93,6 +97,18 @@ void BoilerNvsStore::load_boiler_config(IHeatingStateStore& s)
         if (nvs_get_blob(h, "pid_sched", nullptr, &sz) == ESP_OK && sz == sizeof(ps)) {
             if (nvs_get_blob(h, "pid_sched", &ps, &sz) == ESP_OK) {
                 s.set_pid_schedule(&ps);
+            }
+        }
+    }
+
+    // DHW schedule — двухшаговый запрос размера (D10)
+    {
+        DHW_Schedule ds;
+        memset(&ds, 0, sizeof(ds));
+        sz = 0;
+        if (nvs_get_blob(h, "dhw_sched", nullptr, &sz) == ESP_OK && sz == sizeof(ds)) {
+            if (nvs_get_blob(h, "dhw_sched", &ds, &sz) == ESP_OK) {
+                s.set_dhw_schedule(&ds);
             }
         }
     }
@@ -168,6 +184,7 @@ void BoilerNvsStore::save_boiler_config(const IHeatingStateStore& s)
     nvs_set_i16(h, "dhw_sp", (int16_t)s.get_dhw_setpoint());
     nvs_set_u8(h, "dhw_hyst", (uint8_t)(s.get_dhw_hysteresis() * 10.0f + 0.5f));
     nvs_set_i32(h, "ch_mode", static_cast<int32_t>(s.get_ch_mode()));
+    nvs_set_i32(h, "dhw_mode", static_cast<int32_t>(s.get_dhw_mode()));
 
     // PID
     nvs_set_i32(h, "pid_kp", (int32_t)(s.get_pid_kp() * 1000.0f + 0.5f));
@@ -191,6 +208,13 @@ void BoilerNvsStore::save_boiler_config(const IHeatingStateStore& s)
         PID_Schedule ps;
         s.get_pid_schedule(&ps);
         nvs_set_blob(h, "pid_sched", &ps, sizeof(ps));
+    }
+
+    // DHW schedule
+    {
+        DHW_Schedule ds;
+        s.get_dhw_schedule(&ds);
+        nvs_set_blob(h, "dhw_sched", &ds, sizeof(ds));
     }
 
     // Boiler model config
