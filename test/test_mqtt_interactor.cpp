@@ -29,6 +29,7 @@ using Catch::Approx;
 
 struct SpySystemConfig : public IConfigureSystem {
     void set_ch_mode(CHMode) override {}
+    void set_dhw_mode(DHWMode) override {}
     void set_ch_enable(bool v) override { ch_enable_ = v; ch_enable_set_ = true; }
     void set_dhw_enable(bool v) override { dhw_enable_ = v; dhw_enable_set_ = true; }
     void set_ch_setpoint(float v) override { ch_setpoint_ = v; ch_setpoint_set_ = true; }

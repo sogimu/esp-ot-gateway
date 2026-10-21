@@ -11,3 +11,9 @@ enum class CHMode : int {
 inline bool is_pid_mode(CHMode m) {
     return m == CHMode::PID_Static || m == CHMode::PID_Sched;
 }
+
+/// DHW enable mode — persisted in NVS, sent over JSON as int.
+enum class DHWMode : int {
+    Static   = 0,   // постоянное разрешение нагрева (по dhw_enable)
+    Schedule = 1    // разрешение нагрева по суточному расписанию
+};

@@ -8,6 +8,7 @@
 class IConfigureSystem {
 public:
     virtual void set_ch_mode(CHMode mode) = 0;
+    virtual void set_dhw_mode(DHWMode mode) = 0;
     virtual void set_ch_enable(bool) = 0;
     virtual void set_dhw_enable(bool) = 0;
     virtual void set_ch_setpoint(float temp) = 0;          // clamped to boiler bounds (ID 49)

@@ -94,6 +94,8 @@ bool HeatingStateAdapter::is_dhw_enabled() const { return state_.dhw_enable_; }
 
 void HeatingStateAdapter::set_ch_mode(CHMode v) { state_.ch_mode_ = v; }
 CHMode HeatingStateAdapter::get_ch_mode() const { return state_.ch_mode_; }
+void HeatingStateAdapter::set_dhw_mode(DHWMode v) { state_.dhw_mode_ = v; }
+DHWMode HeatingStateAdapter::get_dhw_mode() const { return state_.dhw_mode_; }
 IMPL_GETSET_I(int, tz_offset)
 
 // Fault codes
@@ -208,12 +210,10 @@ void HeatingStateAdapter::get_pid_schedule(void* sched) const {
 }
 void HeatingStateAdapter::set_dhw_schedule(const void* sched) {
     const DHW_Schedule& s = *static_cast<const DHW_Schedule*>(sched);
-    state_.dhw_schedule_enabled_ = s.enabled;
     memcpy(state_.dhw_schedule_on_, s.on, 24 * sizeof(bool));
 }
 void HeatingStateAdapter::get_dhw_schedule(void* sched) const {
     DHW_Schedule& s = *static_cast<DHW_Schedule*>(sched);
-    s.enabled = state_.dhw_schedule_enabled_;
     memcpy(s.on, state_.dhw_schedule_on_, 24 * sizeof(bool));
 }
 

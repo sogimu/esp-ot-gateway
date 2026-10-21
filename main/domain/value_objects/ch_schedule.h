@@ -42,6 +42,6 @@ struct PID_Schedule {
 /// on[h] == true  → heating allowed (decision via hysteresis)
 /// on[h] == false → heating forbidden
 struct DHW_Schedule {
-    bool enabled = false;
-    bool on[24] = {};
+    bool on[24];
+    DHW_Schedule() { for (int i = 0; i < 24; i++) on[i] = true; } // fail-safe: нагрев разрешён по умолчанию
 };

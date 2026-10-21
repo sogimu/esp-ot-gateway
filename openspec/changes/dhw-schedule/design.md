@@ -31,59 +31,62 @@ dhw_enabled ─┐                           dhw_en ─────────�
 
 ## Decisions
 
-### D1: Модель данных — `bool on[24]`, а не `float temps[24]`
+### D1: Модель данных — режим `DHWMode` + сетка `bool on[24]`
+
+Режим задаёт, применяется ли расписание, — по образцу `CHMode` (подрежим «Статичный / По расписанию»):
 
 ```cpp
+enum class DHWMode : int {
+    Static   = 0,   // постоянное разрешение нагрева (по dhw_enable)
+    Schedule = 1    // разрешение нагрева по суточному расписанию
+};
+
 struct DHW_Schedule {
-    bool enabled = false;
-    bool on[24] = {};
-    // on[h] = true  → нагрев разрешён (решение по гистерезису)
-    // on[h] = false → нагрев запрещён
+    bool on[24];
+    DHW_Schedule() { for (int i = 0; i < 24; i++) on[i] = true; } // fail-safe: нагрев разрешён по умолчанию
 };
 ```
 
-Кейс «ночью не греть» требует именно on/off, а не уставки: запрет нагрева нельзя выразить уставкой (котёл всё равно будет подогревать по нижней границе). Тип отличается от `CH_Schedule` (bool vs float), но форма — сетка 24 ячейки + `enabled` — сохраняется, как и прочие звенья канала.
+Кейс «ночью не греть» требует именно on/off, а не уставки. Тип отличается от `CH_Schedule` (bool vs float), но форма — сетка 24 ячейки — сохраняется. Отдельного флага `enabled` у расписания нет: активация задаётся режимом `DHWMode::Schedule`.
 
-**Альтернатива (отклонена):** сетка уставок ГВС — мутная семантика «не греть», лишний риск.
+**Альтернатива (отклонена):** отдельный флаг `enabled` у `DHW_Schedule` — дублирует режим (как избыточный `enabled` у CH) и не выражает «режим» явно в интерфейсе.
 
 ### D2: Где применять — внутри `do_dhw_hysteresis()`
 
 Вводим эффективное разрешение нагрева и подставляем вместо `dhw_enabled`:
 
 ```
-dhw_allowed = dhw_enable && (schedule.enabled ? on[local_hour] : true)
+schedule_ok = (dhw_mode == Schedule) ? is_allowed(on, local_hour) : true
+dhw_allowed = dhw_enable && schedule_ok
 ```
 
-- При `on[h]=false` ветка `else` в `do_dhw_hysteresis()` сбрасывает `dhw_priority_ = false` → нагрев останавливается сразу (а не в следующем часу).
-- `build_master_byte()` не трогаем: он уже требует `dhw_en && dhw_priority_`, а `dhw_priority_` теперь гасится расписанием.
-- `dhw_enable=false` остаётся мастером — расписание не «воскрешает» нагрев.
+- При `on[h]=false` ветка `else` в `do_dhw_hysteresis()` сбрасывает `dhw_priority_ = false` → нагрев останавливается сразу.
+- `build_master_byte()` не трогаем: он уже требует `dhw_en && dhw_priority_`.
+- `dhw_enable=false` остаётся мастером — режим/расписание не «воскрешает» нагрев.
 
-Вычисление `on[local_hour]` выносим в чистую функцию-помощницу (по образцу `ScheduleService::evaluate`): `evaluate_dhw(enabled, on, hour) -> bool allowed`.
-
-**Альтернатива (отклонена):** отдельный `do_dhw_schedule()` + отдельный флаг в `build_master_byte()` — больше мест для рассинхрона, а выгоды нет.
+Вычисление `on[local_hour]` выносим в чистую функцию `DhwScheduleService::is_allowed(on, hour) -> bool allowed`.
 
 ### D3: Fail-safe при недостоверном времени
 
-Как в `do_schedule()` для CH (`boiler_poll_interactor.cpp:284`): если `!time_.is_synced()` — сетку не применяем, нагрев работает как раньше (`dhw_enable` + гистерезис). Сбой часов не должен оставить бак холодным.
+Как в `do_schedule()` для CH: если `!time_.is_synced()` — сетку не применяем, нагрев работает как раньше (`dhw_enable` + гистерезис). Сбой часов не должен оставить бак холодным.
 
-### D4: Персистентность `DHW_Schedule`
+### D4: Персистентность `DHWMode` и `DHW_Schedule`
 
-Зеркалим схему `CH_Schedule`/`PID_Schedule` в `boiler_nvs_store.{h,cpp}`:
-- `load_boiler_config()`: двухшаговый `nvs_get_blob("dhw_sched", ...)` с проверкой `sz == sizeof(DHW_Schedule)`, затем `s.set_dhw_schedule(&ds)`.
-- `save_boiler_config()`: `nvs_set_blob(h, "dhw_sched", &ds, sizeof(ds))`.
+- `dhw_mode` — ключ NVS `dhw_mode` (i32), по образцу `ch_mode`.
+- `DHW_Schedule` — blob `dhw_sched` (двухшаговый `nvs_get_blob` + проверка `sz == sizeof(DHW_Schedule)`), по образцу `ch_sched`/`pid_sched`.
 
-Новый ключ не ломает старые прошивки (отсутствие ключа → дефолт `enabled=false`), `cfg_ver` не повышаем.
+Новые ключи не ломают старые прошивки (отсутствие → дефолт `Static` / все ячейки `true`), `cfg_ver` не повышаем.
 
 ### D5: HTTP + presenter
 
-Повторяем пару `/api/schedule`/`render_schedule()`:
-- Роут `GET/POST /api/dhw_schedule` в `http_controller_adapter.cpp` (парсинг `enabled` + `on:[...]`, в отличие от `temps:[...]`).
-- `WebPresenterAdapter::render_dhw_schedule()` — возвращает `{"enabled":…,"hour":…,"on":[0,1,…]}`; `hour` = локальный час или `-1` при недостоверном времени.
-- `IConfigureSystem::set_dhw_schedule()` + реализация в `SystemConfigInteractor` (валидация не требуется — булевы ячейки), сохранение через существующий `save_and_log`.
+- Роут `GET/POST /api/dhw_schedule` в `http_controller_adapter.cpp` (парсинг `on:[...]`, в отличие от `temps:[...]` у CH).
+- `WebPresenterAdapter::render_dhw_schedule()` — возвращает `{"hour":…,"on":[0,1,…]}`; `hour` = локальный час или `-1` при недостоверном времени.
+- Режим `dhw_mode` — в `POST /api/control` (как `ch_mode`) и в `GET /api/status` (`render_status`).
+- `IConfigureSystem::set_dhw_mode()` / `set_dhw_schedule()` + реализация в `SystemConfigInteractor` (валидация не требуется — булевы ячейки), сохранение через `save_and_log`.
 
 ### D6: Веб-панель
 
-Новая панель `pnl_dhw_sched` в `web_page.h`, визуально повторяющая `pnl_sched` (сетка 12×2 кликабельных ячеек, кнопки «Выбрать все/Снять/Сохранить»), но без слайдера температуры: ячейка переключает on/off. JS-логика — по образцу `schedInit/schedRender/schedSave`, но оперирует булевой сеткой и эндпоинтом `/api/dhw_schedule`.
+В секции «Бойлер БКН» добавляем выбор режима «Статичный / По расписанию» (радио-группа, как подрежим CH), под ней — сетка 12×2 кликабельных ячеек on/off с кнопками «Включить все/Выключить все/Сохранить» (без слайдера температуры). Сетка видна только в режиме «По расписанию». JS — по образцу `schedInit/schedRender/schedSave`, эндпоинт `/api/dhw_schedule`.
 
 ## Risks / Trade-offs
 

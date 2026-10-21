@@ -140,6 +140,10 @@ public:
     void set_ch_mode(CHMode v) override;
     CHMode get_ch_mode() const override;
 
+    // DHW mode
+    void set_dhw_mode(DHWMode v) override;
+    DHWMode get_dhw_mode() const override;
+
     // Schedule (opaque implementation — casts to CH_Schedule in .cpp)
     void set_schedule(const void* sched) override;
     void get_schedule(void* sched) const override;
@@ -210,6 +214,7 @@ private:
     IBoilerConfigStore& boiler_store_;
 
     struct State {
+        State() { for (int i = 0; i < 24; i++) dhw_schedule_on_[i] = true; }
         bool   connected_ = false;
         bool   fault_ = false, flame_ = false, ch_active_ = false, dhw_active_ = false;
         float  ch_temp_ = 0, dhw_temp_ = 0, return_temp_ = 0, outside_temp_ = 0;
@@ -240,6 +245,7 @@ private:
         int    pid_dt_sec_ = 60, pid_room_sensor_ = 0, pid_lockout_sec_ = 300;
         float  pid_hysteresis_ = 0.5f;
         CHMode ch_mode_ = CHMode::Manual_Static;
+        DHWMode dhw_mode_ = DHWMode::Static;
         // Schedule
         bool  schedule_enabled_ = false;
         float schedule_temps_[24] = {};
@@ -249,8 +255,7 @@ private:
         bool  mqtt_connected_ = false;
         float pid_schedule_temps_[24] = {};
         // DHW Schedule
-        bool  dhw_schedule_enabled_ = false;
-        bool  dhw_schedule_on_[24] = {};
+        bool  dhw_schedule_on_[24];
         // Hysteresis
         float dhw_hysteresis_ = 2.0f;
         // Timezone

@@ -29,6 +29,7 @@ public:
 
     // IConfigureSystem
     void set_ch_mode(CHMode mode) override;
+    void set_dhw_mode(DHWMode mode) override;
     void set_ch_enable(bool) override;
     void set_dhw_enable(bool) override;
     void set_ch_setpoint(float) override;

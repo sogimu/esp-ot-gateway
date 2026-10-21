@@ -236,25 +236,31 @@ void BoilerPollInteractor::do_dhw_hysteresis()
     // DHW schedule — gate heating by local hour (fail-safe: allow when unsynced)
     bool dhw_allowed = dhw_enabled;
     {
-        DHW_Schedule sched;
         state_.lock_shared();
-        state_.get_dhw_schedule(&sched);
+        DHWMode dhw_mode = state_.get_dhw_mode();
         state_.unlock_shared();
 
-        int hour = -1;
-        if (time_.is_synced()) {
-            auto local = time_.local_now().time_since_epoch();
-            hour = static_cast<int>(std::chrono::duration_cast<std::chrono::hours>(local).count() % 24);
-            if (hour < 0) hour += 24;
-        }
+        if (dhw_mode == DHWMode::Schedule) {
+            DHW_Schedule sched;
+            state_.lock_shared();
+            state_.get_dhw_schedule(&sched);
+            state_.unlock_shared();
 
-        bool schedule_ok = DhwScheduleService::is_allowed(sched.enabled, sched.on, hour);
-        dhw_allowed = dhw_enabled && schedule_ok;
+            int hour = -1;
+            if (time_.is_synced()) {
+                auto local = time_.local_now().time_since_epoch();
+                hour = static_cast<int>(std::chrono::duration_cast<std::chrono::hours>(local).count() % 24);
+                if (hour < 0) hour += 24;
+            }
 
-        if (sched.enabled && hour != last_dhw_schedule_hour_) {
-            last_dhw_schedule_hour_ = hour;
-            log_.event(ILogger::MODE, "Расписание ГВС: час %d, нагрев %s",
-                       hour, schedule_ok ? "разрешён" : "запрещён");
+            bool schedule_ok = DhwScheduleService::is_allowed(sched.on, hour);
+            dhw_allowed = dhw_enabled && schedule_ok;
+
+            if (time_.is_synced() && hour != last_dhw_schedule_hour_) {
+                last_dhw_schedule_hour_ = hour;
+                log_.event(ILogger::MODE, "Расписание ГВС: час %d, нагрев %s",
+                           hour, schedule_ok ? "разрешён" : "запрещён");
+            }
         }
     }
 

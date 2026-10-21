@@ -141,6 +141,7 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
     if (self->cfg_) {
         v = json_get_int(body, "\"ch_enable\""); if (v >= 0) self->cfg_->set_ch_enable(v != 0);
         v = json_get_int(body, "\"ch_mode\"");   if (v >= 0) self->cfg_->set_ch_mode(static_cast<CHMode>(v));
+        v = json_get_int(body, "\"dhw_mode\"");   if (v >= 0) self->cfg_->set_dhw_mode(static_cast<DHWMode>(v));
         v = json_get_int(body, "\"dhw_enable\""); if (v >= 0) self->cfg_->set_dhw_enable(v != 0);
         f = json_get_float(body, "\"ch_setpoint\"");
         if (f > -1e37f) self->cfg_->set_ch_setpoint(f);
@@ -313,10 +314,7 @@ esp_err_t HttpControllerAdapter::handler_dhw_schedule(httpd_req_t* req) {
             httpd_resp_sendstr(req, "{\"ok\":false}");
             return ESP_FAIL;
         }
-        int en = json_get_int(body, "\"enabled\"");
-        if (en < 0) en = 1;
         DHW_Schedule sched;
-        sched.enabled = (en != 0);
         const char* p = strstr(body, "\"on\"");
         if (p) {
             p = strchr(p, '[');

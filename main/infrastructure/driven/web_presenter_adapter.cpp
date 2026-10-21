@@ -91,7 +91,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"modulation\":%.1f,"
         "\"ch_setpoint\":%.0f,\"dhw_setpoint\":%.0f,"
         "\"dhw_sp_min\":%.0f,\"dhw_sp_max\":%.0f,\"ch_sp_min\":%.0f,\"ch_sp_max\":%.0f,"
-        "\"ch_enable\":%d,\"ch_mode\":%d,\"dhw_enable\":%d,"
+        "\"ch_enable\":%d,\"ch_mode\":%d,\"dhw_enable\":%d,\"dhw_mode\":%d,"
         "\"dhw_pred_active\":%d,\"dhw_pred_remaining\":%d,\"dhw_pred_uncertainty\":%d,"
         "\"dhw_pred_elapsed\":%d,\"dhw_pred_rate\":%.4f,\"dhw_last_session_sec\":%d,"
         "\"asf_flags\":%d,\"oem_fault\":%d,\"oem_diag\":%d,"
@@ -124,7 +124,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         (double)state_->get_dhw_sp_min(), (double)state_->get_dhw_sp_max(),
         (double)state_->get_ch_sp_min(), (double)state_->get_ch_sp_max(),
         state_->is_ch_enabled() ? 1 : 0, static_cast<int>(state_->get_ch_mode()),
-        state_->is_dhw_enabled() ? 1 : 0,
+        state_->is_dhw_enabled() ? 1 : 0, static_cast<int>(state_->get_dhw_mode()),
         state_->get_dhw_pred_active() ? 1 : 0,
         state_->get_dhw_pred_remaining_sec(), state_->get_dhw_pred_uncertainty_sec(),
         state_->get_dhw_pred_elapsed_sec(), (double)state_->get_dhw_pred_rate_cps(),
@@ -227,8 +227,8 @@ int WebPresenterAdapter::render_dhw_schedule(char* buf, size_t size)
         if (hour < 0) hour += 24;
     }
 
-    int pos = snprintf(buf, size, "{\"enabled\":%d,\"hour\":%d,\"on\":[",
-                       sched.enabled ? 1 : 0, hour);
+    int pos = snprintf(buf, size, "{\"hour\":%d,\"on\":[",
+                       hour);
     for (int h = 0; h < 24 && pos < (int)size - 10; h++) {
         pos += snprintf(buf + pos, size - pos, "%d%s",
                         sched.on[h] ? 1 : 0, (h < 23) ? "," : "");

@@ -135,6 +135,10 @@ public:
     virtual void set_ch_mode(CHMode v) = 0;
     virtual CHMode get_ch_mode() const = 0;
 
+    // ── DHW mode ───────────────────────────────────────
+    virtual void set_dhw_mode(DHWMode v) = 0;
+    virtual DHWMode get_dhw_mode() const = 0;
+
     // ── Schedule ───────────────────────────────────────
     virtual void set_schedule(const void* sched) = 0; // CH_Schedule*
     virtual void get_schedule(void* sched) const = 0;
