@@ -313,6 +313,11 @@ uint8_t BoilerPollInteractor::build_master_byte()
     bool ch_en = pending_ch_enable_ ? pending_ch_enable_val_ : state_.is_ch_enabled();
     bool dhw_en = pending_dhw_enable_ ? pending_dhw_enable_val_ : state_.is_dhw_enabled();
 
+    // In adaptive (PID) mode the PID's decision gates the CH enable bit.
+    if (ch_en && is_pid_mode(state_.get_ch_mode()) && !state_.get_pid_ch_enabled_by_pid()) {
+        ch_en = false;
+    }
+
     if (ch_en) m |= MASTER_CH_ENABLE;
     if (dhw_en && dhw_priority_) {
         m |= MASTER_DHW_ENABLE;

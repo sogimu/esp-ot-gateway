@@ -323,3 +323,25 @@ TEST_CASE("PidPoll: блокировка цикла снижает уставк�
     REQUIRE(state.get_pid_cycle_locked() == true);
     REQUIRE(state.get_ch_setpoint() == Approx(25.0f));
 }
+
+// ═══ Off-путь PID: выключение по гистерезису ═══
+
+TEST_CASE("PidPoll: PID выключает нагрев при достижении цели (off-путь)", "[pid][off][regression]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(18.0f);
+    state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
+    state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+
+    state.set_t1_temp(24.0f);
+    time.advance_sec(60); pid.execute();
+
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+    REQUIRE(state.get_ch_setpoint() == Approx(25.0f));
+}

@@ -165,9 +165,9 @@ void PidPollInteractor::execute()
     float target = state_.get_pid_target_room();
     float hysteresis = state_.get_pid_hysteresis();
 
-    // Hysteresis for CH enable
+    // Hysteresis for CH enable — deadband memory is PID's own decision.
     bool ch_on;
-    if (!state_.is_ch_enabled() || room > target + hysteresis) {
+    if (room > target + hysteresis) {
         ch_on = false;
     } else if (room < target - hysteresis) {
         ch_on = true;
@@ -179,16 +179,10 @@ void PidPollInteractor::execute()
     state_.set_pid_state(enabled, true, output,
                           state_.get_pid_p(), state_.get_pid_i(), state_.get_pid_d(),
                           room, target, false, 0, ch_on);
+    // Setpoint: raise to PID output when heating, drop to minimum when off.
+    // CH enable bit is gated in BoilerPollInteractor::build_master_byte() by pid_ch_enabled.
+    state_.set_ch_setpoint(ch_on ? output : MIN_SETPOINT);
     state_.unlock_exclusive();
-
-    // State updated above; BoilerPollInteractor handles OT writes
-    // CH setpoint written via state_.set_ch_setpoint(); CH enable via state_.set_ch_enable()
-    if (ch_on) {
-        state_.lock_exclusive();
-        state_.set_ch_setpoint(output);
-        state_.set_ch_enable(true);
-        state_.unlock_exclusive();
-    }
 
     log_.event(ILogger::MODE,
         "PID: SP=%.0f°C цель=%.1f°C комн=%.1f°C CH=%s (P=%.1f I=%.1f)",
