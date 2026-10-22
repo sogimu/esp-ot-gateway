@@ -405,3 +405,33 @@ TEST_CASE("PidPoll: CH включается, когда выход PI выше �
     REQUIRE(state.get_pid_output() > 25.0f);
     REQUIRE(state.get_pid_i() > 20.0f);
 }
+
+// ═══ Конец ГВС не должен взводить цикловую блокировку CH ═══
+
+TEST_CASE("PidPoll: конец ГВС не блокирует отопление", "[pid][lockout][dhw]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(22.2f);  // ниже цели — PI хочет греть
+    state.set_pid_config(2.5f, 0.01f, 0.1f, 60, 0, 22.5f, 300);
+    state.set_pid_hysteresis(0.1f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(25.0f, 40.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+
+    // ГВС греется, пламя горит
+    state.set_dhw_active(true);
+    state.set_flame(true);
+    time.advance_sec(1); pid.execute();
+
+    // ГВС закончился, пламя погасло
+    state.set_dhw_active(false);
+    state.set_flame(false);
+    time.advance_sec(1); pid.execute();
+    REQUIRE(state.get_pid_cycle_locked() == false);
+
+    // После тика PI отопление должно включиться, а не ждать блокировку
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_cycle_locked() == false);
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+}

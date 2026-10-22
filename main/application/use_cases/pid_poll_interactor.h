@@ -36,6 +36,7 @@ private:
     uint32_t last_compute_ms_ = 0;
     bool     prev_flame_ = false;
     uint32_t last_flame_off_ms_ = 0;
+    uint32_t last_dhw_active_ms_ = 0;
     bool     cycle_locked_ = false;
     bool     lockout_logged_ = false;
     bool     overheat_logged_ = false;

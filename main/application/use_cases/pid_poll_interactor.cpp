@@ -9,6 +9,7 @@
 #include <cstdio>
 
 static constexpr float  MAX_SAFE_ROOM     = 30.0f;
+static constexpr uint32_t DHW_GRACE_MS    = 15000;  // ignore DHW-ending flame-off for the CH lockout
 
 PidPollInteractor::PidPollInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                                        ITimeSource& time, ILogger& log)
@@ -96,13 +97,18 @@ void PidPollInteractor::execute()
     state_.lock_shared();
     float room = (sensor_id == 0) ? state_.get_t1_temp() : state_.get_t2_temp();
     bool flame = state_.is_flame_on();
+    bool dhw = state_.is_dhw_active();
     state_.unlock_shared();
 
     bool room_valid = (room > -100.0f);
+    if (dhw) last_dhw_active_ms_ = now;
 
-    // Flame tracking for cycle lockout
+    // Flame tracking for cycle lockout. A flame-off caused by a DHW session
+    // ending is not a CH cycle, so it must not arm the CH lockout.
+    bool dhw_grace = (last_dhw_active_ms_ != 0) &&
+                     (now - last_dhw_active_ms_ < DHW_GRACE_MS);
     if (flame != prev_flame_) {
-        if (prev_flame_ && !flame) {
+        if (prev_flame_ && !flame && !dhw && !dhw_grace) {
             last_flame_off_ms_ = now;
             cycle_locked_ = true;
         }
