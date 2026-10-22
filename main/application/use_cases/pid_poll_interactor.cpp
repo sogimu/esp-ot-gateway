@@ -221,10 +221,12 @@ void PidPollInteractor::load_config()
     if (hi > phys_max) hi = phys_max;
     if (hi < lo + 1.0f) hi = lo + 1.0f;
 
+    // Reload gains every tick so runtime changes from the web/API apply at once.
+    pid_cfg_.kp = state_.get_pid_kp();
+    pid_cfg_.ki = state_.get_pid_ki();
+    pid_cfg_.kd = state_.get_pid_kd();
+
     if (!pid_inited_) {
-        pid_cfg_.kp = state_.get_pid_kp();
-        pid_cfg_.ki = state_.get_pid_ki();
-        pid_cfg_.kd = state_.get_pid_kd();
         pid_init(&pid_state_);
         // Bumpless start: resume from the last auto operating point if known,
         // otherwise start at the minimum flow setpoint (no dead zone).

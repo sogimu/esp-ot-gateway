@@ -448,3 +448,25 @@ TEST_CASE("PidPoll: конец ГВС не блокирует отопление
     REQUIRE(state.get_pid_cycle_locked() == false);
     REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
 }
+
+TEST_CASE("PidPoll: изменения Kp/Ki применяются на лету", "[pid][config]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(20.0f);  // ошибка +2.5 °C
+    state.set_pid_config(1.0f, 0.0f, 0.0f, 60, 0, 22.5f, 300);
+    state.set_pid_hysteresis(0.1f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(25.0f, 40.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+    float p1 = state.get_pid_p();
+
+    // Меняем Kp без смены режима/перезагрузки
+    state.set_pid_config(4.0f, 0.0f, 0.0f, 60, 0, 22.5f, 300);
+    time.advance_sec(60); pid.execute();
+    float p2 = state.get_pid_p();
+
+    REQUIRE(p2 > p1);
+}
