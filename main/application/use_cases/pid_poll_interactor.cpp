@@ -8,10 +8,7 @@
 #include <cmath>
 #include <cstdio>
 
-static constexpr int    SENSOR_TIMEOUT_MS = 120000;
 static constexpr float  MAX_SAFE_ROOM     = 30.0f;
-static constexpr float  FALLBACK_SP       = 40.0f;
-static constexpr float  MIN_SETPOINT      = 25.0f;
 
 PidPollInteractor::PidPollInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                                        ITimeSource& time, ILogger& log)
@@ -168,6 +165,7 @@ void PidPollInteractor::execute()
     float output = state_.get_pid_output();
     float sp_min = pid_cfg_.out_min;
     float deadband = state_.get_pid_hysteresis();
+    if (deadband < 0.1f) deadband = 0.1f;  // a zero deadband would keep CH always on
 
     // CH on/off derived from the PI output (small deadband against chatter).
     bool ch_on;
@@ -249,8 +247,8 @@ void PidPollInteractor::compute_pid()
             float p_term = pid_cfg_.kp * error;
             float raw = p_term + pid_state_.integral + pid_state_.d_filt;
             log_.event(ILogger::MODE,
-                "PID: расч.%.1f < мин.%.0f°C (цель=%.1f комн=%.1f Δ=%.1f Kp=%.1f P=%.1f I=%.1f dt=%d)",
-                (double)raw, (double)pid_cfg_.out_min,
+                "PID: расч.%.1f вне [%.0f..%.0f]°C (цель=%.1f комн=%.1f Δ=%.1f Kp=%.1f P=%.1f I=%.1f dt=%d)",
+                (double)raw, (double)pid_cfg_.out_min, (double)pid_cfg_.out_max,
                 (double)target, (double)room, (double)error,
                 (double)pid_cfg_.kp, (double)p_term, (double)pid_state_.integral,
                 dt);
@@ -262,7 +260,7 @@ void PidPollInteractor::compute_pid()
 
     float p_term = pid_cfg_.kp * (target - room);
     float i_term = pid_state_.integral;
-    float d_term = 0; // simplified — the old code tracks d_filt
+    float d_term = pid_state_.d_filt;
 
     state_.lock_exclusive();
     state_.set_pid_state(state_.get_pid_enabled(), true, out,

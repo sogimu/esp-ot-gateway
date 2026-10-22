@@ -175,8 +175,7 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
         float sp_min = json_get_float(body, "\"pid_sp_min\"");
         float sp_max = json_get_float(body, "\"pid_sp_max\"");
         if (sp_min > -1e37f || sp_max > -1e37f) {
-            if (sp_min <= -1e37f) sp_min = 25.0f;
-            if (sp_max <= -1e37f) sp_max = 40.0f;
+            // Missing values stay < -1e37f; the interactor keeps the current bound.
             self->pid_->set_pid_flow_limits(sp_min, sp_max);
         }
     }

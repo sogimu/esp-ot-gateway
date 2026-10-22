@@ -198,6 +198,11 @@ void SystemConfigInteractor::set_pid_hysteresis(float v)
 
 void SystemConfigInteractor::set_pid_flow_limits(float min_sp, float max_sp)
 {
+    // Partial update: a value < -1e37f means "keep the current bound".
+    state_.lock_shared();
+    if (min_sp <= -1e37f) min_sp = state_.get_pid_sp_min();
+    if (max_sp <= -1e37f) max_sp = state_.get_pid_sp_max();
+    state_.unlock_shared();
     if (min_sp > max_sp) { float t = min_sp; min_sp = max_sp; max_sp = t; }
     state_.lock_exclusive();
     state_.set_pid_flow_limits(min_sp, max_sp);
