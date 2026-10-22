@@ -142,10 +142,10 @@ static const char WEB_PAGE[] =
 ".error-mid{color:#ffab40}"
 ".tip{position:relative;display:inline-block;cursor:help;margin-left:3px;vertical-align:middle}"
 ".tip-icon{color:#4fc3f7;font-size:1.1em;font-weight:bold;font-style:normal}"
-".tip .tiptext{visibility:hidden;width:240px;background:#0f3460;color:#ddd;text-align:left;"
+".tip .tiptext{visibility:hidden;width:max-content;max-width:min(320px,calc(100vw - 40px));box-sizing:border-box;background:#0f3460;color:#ddd;text-align:left;"
 "border-radius:6px;padding:8px 10px;position:absolute;z-index:100;"
-"bottom:calc(100% + 6px);left:50%;margin-left:-120px;font-size:.72em;font-weight:normal;"
-"line-height:1.45;box-shadow:0 3px 12px rgba(0,0,0,.6);border:1px solid #4fc3f7;"
+"bottom:calc(100% + 6px);left:0;font-size:.72em;font-weight:normal;"
+"line-height:1.45;box-shadow:0 3px 12px rgba(0,0,0,.6);border:1px solid #4fc3f7;overflow-wrap:break-word;"
 "opacity:0;transition:opacity .2s,visibility .2s;pointer-events:none}"
 ".tip:hover .tiptext{visibility:visible;opacity:1}"
 /* WiFi tab — network list, generic .btn disabled, text inputs in ctrl-row */
