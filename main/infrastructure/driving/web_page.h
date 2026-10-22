@@ -547,7 +547,7 @@ static const char WEB_PAGE[] =
 "<div class='ctrl-row'>"
 "<label>Защита цикла (с) <span class='tip'><span class='tip-icon'>&#9432;</span><span class='tiptext'>Минимальное время (секунд) между выключением и повторным включением горелки. Защищает котёл от тактовки — слишком частых циклов пуск/останов. Рекомендуется 300 с (5 мин).</span></span></label>"
 "<select id='pid_lockout' onchange='setDirty()' style='font-size:.9em;padding:2px 6px;background:#1a1a2e;color:#4fc3f7;border:1px solid #0f3460;border-radius:4px'>"
-"<option value='120'>120</option><option value='300' selected>300</option>"
+"<option value='0'>выкл</option><option value='120'>120</option><option value='300' selected>300</option>"
 "<option value='600'>600</option><option value='900'>900</option>"
 "</select>"
 "</div>"

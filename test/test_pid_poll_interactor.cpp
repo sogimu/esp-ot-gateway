@@ -302,26 +302,39 @@ TEST_CASE("PID_Sched: disabled schedule keeps config target", "[pid][sched]") {
     REQUIRE(state.get_pid_target_room() == Approx(22.0f));
 }
 
-// ═══ Блокировка цикла: уставка CH должна снижаться до минимума ═══
+// ═══ Блокировка цикла: взводится при выключении CH, не по пламени ═══
 
-TEST_CASE("PidPoll: блокировка цикла снижает уставку CH до минимума", "[pid][lockout][regression]") {
+TEST_CASE("PidPoll: блокировка цикла взводится при выключении CH", "[pid][lockout][regression]") {
     FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
     state.set_ch_mode(CHMode::PID_Static);
-    state.set_t1_temp(22.0f);
-    state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
-    state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
-    state.set_ch_setpoint(26.0f);
+    state.set_t1_temp(18.0f);  // холодно — CH включится
+    state.set_pid_config(2.5f, 0.01f, 0.0f, 60, 0, 22.5f, 5);  // блокировка 5 с
+    state.set_pid_hysteresis(0.1f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(25.0f, 40.0f);
 
     PidPollInteractor pid(state, boiler, time, log);
 
-    state.set_flame(true);
     time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
 
-    state.set_flame(false);
+    // Комната выше цели — PI сам выключает CH
+    state.set_t1_temp(25.0f);
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+
+    // Следующий тик фиксирует переход и взводит блокировку
     time.advance_sec(1); pid.execute();
-
     REQUIRE(state.get_pid_cycle_locked() == true);
     REQUIRE(state.get_ch_setpoint() == Approx(25.0f));
+
+    // По истечении блокировки CH снова включается
+    state.set_t1_temp(18.0f);
+    time.advance_sec(6); pid.execute();
+    REQUIRE(state.get_pid_cycle_locked() == false);
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
 }
 
 // ═══ Off-путь PID: выключение по гистерезису ═══
