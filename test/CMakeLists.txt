@@ -56,6 +56,9 @@ set(TEST_SRCS
     test_reset_statistics.cpp
     test_setpoint_bounds.cpp
 
+    # Temperature correction
+    test_temperature_correction.cpp
+
     # Bug-focused tests (calculation edge cases)
     test_burn_cycle_bugs.cpp
     test_mod_stats_bugs.cpp
@@ -150,6 +153,7 @@ set(APP_SRCS
     # MQTT interactor (testable on host — no ESP-IDF deps)
     ${MAIN_DIR}/infrastructure/driving/mqtt_interactor.cpp
     ${MAIN_DIR}/infrastructure/driven/web_presenter_adapter.cpp
+    ${MAIN_DIR}/infrastructure/driven/temperature_source_adapter.cpp
     # OpenTherm boiler adapter (host-testable — depends only on clean ports)
     ${MAIN_DIR}/infrastructure/driven/boiler_opentherm_adapter.cpp
     # OTA interactor — тестируется на хосте (HW-free, зависит от driven-портов)

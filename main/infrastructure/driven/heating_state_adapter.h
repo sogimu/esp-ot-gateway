@@ -53,6 +53,20 @@ public:
     float get_t1_temp()     const override;
     float get_t2_temp()     const override;
 
+    // Temperature correction offsets
+    void set_t1_offset(float v) override;
+    void set_t2_offset(float v) override;
+    void set_outside_offset(float v) override;
+    void set_ch_temp_offset(float v) override;
+    void set_return_temp_offset(float v) override;
+    void set_dhw_temp_offset(float v) override;
+    float get_t1_offset()          const override;
+    float get_t2_offset()          const override;
+    float get_outside_offset()     const override;
+    float get_ch_temp_offset()     const override;
+    float get_return_temp_offset() const override;
+    float get_dhw_temp_offset()    const override;
+
     // Setpoints & bounds
     void set_ch_setpoint(float v) override;
     void set_dhw_setpoint(float v) override;
@@ -224,6 +238,8 @@ private:
         float  ch_temp_ = 0, dhw_temp_ = 0, return_temp_ = 0, outside_temp_ = 0;
         float  modulation_ = 0;
         float  t1_temp_ = -127.0f, t2_temp_ = -127.0f;
+        float  t1_offset_ = 0, t2_offset_ = 0, outside_offset_ = 0;
+        float  ch_temp_offset_ = 0, return_temp_offset_ = 0, dhw_temp_offset_ = 0;
         float  ch_setpoint_ = 30.0f, dhw_setpoint_ = 55.0f;
         float  ch_sp_min_ = 0, ch_sp_max_ = 80;
         float  dhw_sp_min_ = 0, dhw_sp_max_ = 65;

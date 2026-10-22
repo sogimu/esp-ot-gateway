@@ -150,6 +150,18 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
         f = json_get_float(body, "\"dhw_hysteresis\""); if (f > -1e37f) self->cfg_->set_dhw_hysteresis(f);
         f = json_get_float(body, "\"tz_offset\"");
         if (f > -1e37f) { int tz = (int)f; if (tz >= -12 && tz <= 14) self->cfg_->set_timezone(tz); }
+        {
+            float t1o  = json_get_float(body, "\"t1_offset\"");
+            float t2o  = json_get_float(body, "\"t2_offset\"");
+            float oo   = json_get_float(body, "\"outside_offset\"");
+            float cto  = json_get_float(body, "\"ch_temp_offset\"");
+            float rto  = json_get_float(body, "\"return_temp_offset\"");
+            float dto  = json_get_float(body, "\"dhw_temp_offset\"");
+            if (t1o > -1e37f || t2o > -1e37f || oo > -1e37f ||
+                cto > -1e37f || rto > -1e37f || dto > -1e37f) {
+                self->cfg_->set_temperature_offsets(t1o, t2o, oo, cto, rto, dto);
+            }
+        }
     }
     if (self->pid_) {
         float kp = json_get_float(body, "\"pid_kp\"");

@@ -167,6 +167,25 @@ void BoilerNvsStore::load_boiler_config(IHeatingStateStore& s)
         }
     }
 
+    // Temperature correction offsets blob
+    {
+        NvsTempOffsetBlob off;
+        memset(&off, 0, sizeof(off));
+        sz = 0;
+        if (nvs_get_blob(h, "temp_off", nullptr, &sz) == ESP_OK && sz == sizeof(off)) {
+            if (nvs_get_blob(h, "temp_off", &off, &sz) == ESP_OK) {
+                s.lock_exclusive();
+                s.set_t1_offset(off.t1_offset);
+                s.set_t2_offset(off.t2_offset);
+                s.set_outside_offset(off.outside_offset);
+                s.set_ch_temp_offset(off.ch_temp_offset);
+                s.set_return_temp_offset(off.return_temp_offset);
+                s.set_dhw_temp_offset(off.dhw_temp_offset);
+                s.unlock_exclusive();
+            }
+        }
+    }
+
     nvs_close(h);
 }
 
@@ -238,6 +257,18 @@ void BoilerNvsStore::save_boiler_config(const IHeatingStateStore& s)
         eff.t2 = s.get_eff_t2(); eff.v2 = s.get_eff_v2();
         eff.t3 = s.get_eff_t3(); eff.v3 = s.get_eff_v3();
         nvs_set_blob(h, "eff", &eff, sizeof(eff));
+    }
+
+    // Temperature correction offsets
+    {
+        NvsTempOffsetBlob off;
+        off.t1_offset = s.get_t1_offset();
+        off.t2_offset = s.get_t2_offset();
+        off.outside_offset = s.get_outside_offset();
+        off.ch_temp_offset = s.get_ch_temp_offset();
+        off.return_temp_offset = s.get_return_temp_offset();
+        off.dhw_temp_offset = s.get_dhw_temp_offset();
+        nvs_set_blob(h, "temp_off", &off, sizeof(off));
     }
 
     nvs_set_u8(h, "cfg_ver", CFG_VER);

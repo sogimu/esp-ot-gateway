@@ -14,6 +14,10 @@ public:
     virtual void set_ch_setpoint(float temp) = 0;          // clamped to boiler bounds (ID 49)
     virtual void set_dhw_setpoint(float temp) = 0;         // clamped to boiler bounds (ID 48)
     virtual void set_dhw_hysteresis(float value) = 0;      // validated 0.5–10
+    /// Set per-temperature correction offsets (°C). Each parameter < -1e37f
+    /// means "leave unchanged"; otherwise clamped to [-10.0, +10.0].
+    virtual void set_temperature_offsets(float t1, float t2, float outside,
+                                         float ch_temp, float return_temp, float dhw_temp) = 0;
     virtual void set_schedule(const CH_Schedule&) = 0;
     virtual void set_pid_schedule(const PID_Schedule&) = 0;
     virtual void set_dhw_schedule(const DHW_Schedule&) = 0;
