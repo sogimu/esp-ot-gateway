@@ -115,6 +115,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"pid_kp\":%.1f,\"pid_ki\":%.4f,\"pid_kd\":%.1f,"
         "\"pid_dt_sec\":%d,\"pid_room_sensor\":%d,\"pid_lockout_sec\":%d,"
         "\"pid_hysteresis\":%.1f"
+        ",\"pid_sp_min\":%.0f,\"pid_sp_max\":%.0f"
         "}",
         state_->is_connected() ? 1 : 0,
         state_->has_fault() ? 1 : 0,
@@ -155,6 +156,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         (double)state_->get_pid_kp(), (double)state_->get_pid_ki(), (double)state_->get_pid_kd(),
         state_->get_pid_dt_sec(), state_->get_pid_room_sensor(), state_->get_pid_lockout_sec(),
         (double)state_->get_pid_hysteresis()
+        , (double)state_->get_pid_sp_min(), (double)state_->get_pid_sp_max()
     );
 
     state_->unlock_shared();

@@ -28,6 +28,7 @@ public:
         pid_remaining_lockout_ = 0; pid_ch_enabled_ = false;
         pid_kp_ = 2.0f; pid_ki_ = 0.01f; pid_kd_ = 0;
         pid_dt_sec_ = 60; pid_room_sensor_ = 0; pid_lockout_sec_ = 300; pid_hysteresis_ = 0.5f;
+        pid_sp_min_ = 25.0f; pid_sp_max_ = 40.0f;
         ch_mode_ = CHMode::Manual_Static;
         dhw_mode_ = DHWMode::Static;
         dhw_heat_allowed_ = false;
@@ -158,6 +159,7 @@ public:
         pid_target_room_ = tr; pid_lockout_sec_ = lo;
     }
     void set_pid_hysteresis(float v) override { pid_hysteresis_ = v; }
+    void set_pid_flow_limits(float min_sp, float max_sp) override { pid_sp_min_ = min_sp; pid_sp_max_ = max_sp; }
     #define FAKE_PID_GET(type, name) type get_pid_##name() const override { return pid_##name##_; }
     FAKE_PID_GET(bool, enabled) FAKE_PID_GET(bool, active) FAKE_PID_GET(float, output)
     FAKE_PID_GET(float, p) FAKE_PID_GET(float, i) FAKE_PID_GET(float, d)
@@ -167,6 +169,8 @@ public:
     FAKE_PID_GET(int, dt_sec) FAKE_PID_GET(int, room_sensor) FAKE_PID_GET(int, lockout_sec)
     bool get_pid_ch_enabled_by_pid() const override { return pid_ch_enabled_; }
     FAKE_PID_GET(float, hysteresis)
+    FAKE_PID_GET(float, sp_min)
+    FAKE_PID_GET(float, sp_max)
 
     // CH mode
     void set_ch_mode(CHMode v) override { ch_mode_ = v; }
@@ -287,6 +291,7 @@ public:
     float  pid_kp_ = 2.0f, pid_ki_ = 0.01f, pid_kd_ = 0;
     int    pid_dt_sec_ = 60, pid_room_sensor_ = 0, pid_lockout_sec_ = 300;
     float  pid_hysteresis_ = 0.5f;
+    float  pid_sp_min_ = 25.0f, pid_sp_max_ = 40.0f;
     CHMode ch_mode_ = CHMode::Manual_Static;
     DHWMode dhw_mode_ = DHWMode::Static;
     bool   dhw_heat_allowed_ = false;

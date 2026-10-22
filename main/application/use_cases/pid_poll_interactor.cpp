@@ -123,12 +123,13 @@ void PidPollInteractor::execute()
 
     // Overheat protection — update state only; BoilerPollInteractor writes OT
     if (room_valid && room > MAX_SAFE_ROOM) {
+        float sp_min = pid_cfg_.out_min;
         state_.lock_exclusive();
-        state_.set_pid_state(enabled, true, MIN_SETPOINT, 0, 0, 0, room, state_.get_pid_target_room(), cycle_locked_, 0, false);
-        state_.set_ch_setpoint(MIN_SETPOINT);  // signal BoilerPollInteractor via state
+        state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), cycle_locked_, 0, false);
+        state_.set_ch_setpoint(sp_min);
         state_.unlock_exclusive();
         if (!overheat_logged_) {
-            log_.event(ILogger::MODE, "PID: ПЕРЕГРЕВ %.1f>%.0f, SP %.0f", (double)room, (double)MAX_SAFE_ROOM, (double)MIN_SETPOINT);
+            log_.event(ILogger::MODE, "PID: ПЕРЕГРЕВ %.1f>%.0f, SP %.0f", (double)room, (double)MAX_SAFE_ROOM, (double)sp_min);
             overheat_logged_ = true;
         }
         return;
@@ -137,12 +138,13 @@ void PidPollInteractor::execute()
 
     // Cycle locked — hold min setpoint
     if (cycle_locked_) {
+        float sp_min = pid_cfg_.out_min;
         state_.lock_exclusive();
-        state_.set_pid_state(enabled, true, MIN_SETPOINT, 0, 0, 0, room, state_.get_pid_target_room(), true, lockout, false);
-        state_.set_ch_setpoint(MIN_SETPOINT);
+        state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), true, lockout, false);
+        state_.set_ch_setpoint(sp_min);
         state_.unlock_exclusive();
         if (!lockout_logged_) {
-            log_.event(ILogger::MODE, "PID: блокировка цикла, SP %.0f", (double)MIN_SETPOINT);
+            log_.event(ILogger::MODE, "PID: блокировка цикла, SP %.0f", (double)sp_min);
             lockout_logged_ = true;
         }
         return;
@@ -159,31 +161,31 @@ void PidPollInteractor::execute()
     if (!room_valid) return;
 
     float target = state_.get_pid_target_room();
-    float hysteresis = state_.get_pid_hysteresis();
 
-    // Hysteresis for CH enable — deadband memory is PID's own decision.
-    // Computed before the PID step so integration can be gated by ch_on.
+    // Pure PI: the output IS the flow setpoint, bounded by pid_sp_min/pid_sp_max.
+    compute_pid();
+
+    float output = state_.get_pid_output();
+    float sp_min = pid_cfg_.out_min;
+    float deadband = state_.get_pid_hysteresis();
+
+    // CH on/off derived from the PI output (small deadband against chatter).
     bool ch_on;
-    if (room > target + hysteresis) {
-        ch_on = false;
-    } else if (room < target - hysteresis) {
+    if (output >= sp_min + deadband) {
         ch_on = true;
+    } else if (output <= sp_min) {
+        ch_on = false;
     } else {
         ch_on = state_.get_pid_ch_enabled_by_pid();
     }
-
-    // Compute PID; integrate only while CH is actually heating.
-    compute_pid(ch_on);
-
-    float output = state_.get_pid_output();
 
     state_.lock_exclusive();
     state_.set_pid_state(enabled, true, output,
                           state_.get_pid_p(), state_.get_pid_i(), state_.get_pid_d(),
                           room, target, false, 0, ch_on);
-    // Setpoint: raise to PID output when heating, drop to minimum when off.
+    // When CH is off, park the setpoint at the minimum.
     // CH enable bit is gated in BoilerPollInteractor::build_master_byte() by pid_ch_enabled.
-    state_.set_ch_setpoint(ch_on ? output : MIN_SETPOINT);
+    state_.set_ch_setpoint(ch_on ? output : sp_min);
     state_.unlock_exclusive();
 
     log_.event(ILogger::MODE,
@@ -197,23 +199,31 @@ void PidPollInteractor::execute()
 
 void PidPollInteractor::load_config()
 {
+    // Effective flow setpoint bounds: user limits clamped by boiler limits (ID 49).
+    float phys_min = (state_.get_ch_sp_min() >= 20.0f) ? state_.get_ch_sp_min() : 25.0f;
+    float phys_max = (state_.get_ch_sp_max() >= 20.0f && state_.get_ch_sp_max() <= 80.0f)
+                       ? state_.get_ch_sp_max() : 75.0f;
+    float lo = state_.get_pid_sp_min();
+    float hi = state_.get_pid_sp_max();
+    if (lo < phys_min) lo = phys_min;
+    if (lo > phys_max) lo = phys_max;
+    if (hi < phys_min) hi = phys_min;
+    if (hi > phys_max) hi = phys_max;
+    if (hi < lo + 1.0f) hi = lo + 1.0f;
+
     if (!pid_inited_) {
         pid_cfg_.kp = state_.get_pid_kp();
         pid_cfg_.ki = state_.get_pid_ki();
         pid_cfg_.kd = state_.get_pid_kd();
-        pid_cfg_.out_min = (state_.get_ch_sp_min() >= 20.0f) ? state_.get_ch_sp_min() : 25.0f;
-        pid_cfg_.out_max = (state_.get_ch_sp_max() >= 20.0f && state_.get_ch_sp_max() <= 80.0f)
-                            ? state_.get_ch_sp_max() : 75.0f;
         pid_init(&pid_state_);
+        pid_state_.integral = lo;   // start at the minimum flow setpoint (no dead zone)
         pid_inited_ = true;
     }
-    // Update bounds dynamically
-    pid_cfg_.out_min = (state_.get_ch_sp_min() >= 20.0f) ? state_.get_ch_sp_min() : 25.0f;
-    pid_cfg_.out_max = (state_.get_ch_sp_max() >= 20.0f && state_.get_ch_sp_max() <= 80.0f)
-                        ? state_.get_ch_sp_max() : 75.0f;
+    pid_cfg_.out_min = lo;
+    pid_cfg_.out_max = hi;
 }
 
-void PidPollInteractor::compute_pid(bool integrate)
+void PidPollInteractor::compute_pid()
 {
     int sensor_id = state_.get_pid_room_sensor();
     state_.lock_shared();
@@ -225,19 +235,10 @@ void PidPollInteractor::compute_pid(bool integrate)
     int dt = state_.get_pid_dt_sec();
     if (dt < 1) dt = 60;
 
-    // When heating is active, floor the integral at the level that yields
-    // out_min, so the output responds immediately instead of traversing
-    // the dead zone 0 -> out_min. A higher integral (previous operating
-    // point) is preserved for bumpless transfer.
-    if (integrate) {
-        float p_term_floor = pid_cfg_.kp * (target - room);
-        float floor = pid_cfg_.out_min - p_term_floor;
-        if (pid_state_.integral < floor) pid_state_.integral = floor;
-    }
-
-    // Freeze integral during DHW or while CH is off.
+    // Freeze integral during DHW; otherwise integrate freely — it also unwinds
+    // when the room is above target, even while CH is off.
     float saved_ki = pid_cfg_.ki;
-    if (dhw || !integrate) pid_cfg_.ki = 0.0f;
+    if (dhw) pid_cfg_.ki = 0.0f;
 
     float out = pid_step(&pid_cfg_, &pid_state_, target, room, dt);
     pid_cfg_.ki = saved_ki;

@@ -196,6 +196,15 @@ void SystemConfigInteractor::set_pid_hysteresis(float v)
     save_and_log("Гистерезис PID: %.1f C", (double)v);
 }
 
+void SystemConfigInteractor::set_pid_flow_limits(float min_sp, float max_sp)
+{
+    if (min_sp > max_sp) { float t = min_sp; min_sp = max_sp; max_sp = t; }
+    state_.lock_exclusive();
+    state_.set_pid_flow_limits(min_sp, max_sp);
+    state_.unlock_exclusive();
+    save_and_log("Границы подачи PID: %.0f..%.0f C", (double)min_sp, (double)max_sp);
+}
+
 // IFaultReset — fault reset is handled by BoilerPollInteractor::do_status()
 // (pending_fault_reset_ flag sent as LB bit 0 in STATUS frame)
 void SystemConfigInteractor::reset()

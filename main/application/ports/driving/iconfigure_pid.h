@@ -8,5 +8,6 @@ public:
                                      int dt_sec, int room_sensor,
                                      float target_room, int lockout_sec) = 0;
     virtual void set_pid_hysteresis(float) = 0;
+    virtual void set_pid_flow_limits(float min_sp, float max_sp) = 0;
     virtual ~IConfigurePid() = default;
 };
