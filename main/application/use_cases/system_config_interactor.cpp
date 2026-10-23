@@ -47,6 +47,10 @@ void SystemConfigInteractor::save_and_log(const char* msg, ...)
 // IConfigureSystem
 void SystemConfigInteractor::set_ch_mode(CHMode mode)
 {
+    state_.lock_shared();
+    CHMode prev = state_.get_ch_mode();
+    state_.unlock_shared();
+
     state_.lock_exclusive();
     state_.set_ch_mode(mode);
     state_.unlock_exclusive();
@@ -60,7 +64,9 @@ void SystemConfigInteractor::set_ch_mode(CHMode mode)
     }
     save_and_log("Режим CH: %s", mode_name);
 
-    if (pid_poll_) {
+    // Re-arm the PID only when the mode actually changed. Otherwise a config
+    // apply (e.g. a gain change) would reset the PID state and the learned base.
+    if (pid_poll_ && mode != prev) {
         if (is_pid_mode(mode))
             pid_poll_->enable();
         else

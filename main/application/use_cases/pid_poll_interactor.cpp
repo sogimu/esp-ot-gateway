@@ -255,13 +255,12 @@ void PidPollInteractor::load_config()
 
     if (!pid_inited_) {
         pid_init(&pid_state_);
-        // Bumpless start: resume the base from the last auto setpoint if known,
-        // otherwise start from the minimum; the trim starts at zero.
-        float seed = sp_lo_;
-        if (last_auto_output_ > sp_lo_ && last_auto_output_ <= sp_hi_) seed = last_auto_output_;
-        base_ = seed;
-        pid_state_.integral = 0.0f;
+        pid_state_.integral = 0.0f;   // trim starts fresh; the base keeps the operating point
         pid_inited_ = true;
+    }
+    if (!base_inited_) {
+        base_ = sp_lo_;
+        base_inited_ = true;
     }
     if (base_ < sp_lo_) base_ = sp_lo_;
     if (base_ > sp_hi_) base_ = sp_hi_;
@@ -306,7 +305,6 @@ void PidPollInteractor::compute_pid(int dt_sec)
     float sp = base_ + trim;
     if (sp < sp_lo_) sp = sp_lo_;
     if (sp > sp_hi_) sp = sp_hi_;
-    last_auto_output_ = sp;
 
     if (sp <= sp_lo_ || sp >= sp_hi_) {
         if (!clamped_logged_) {
