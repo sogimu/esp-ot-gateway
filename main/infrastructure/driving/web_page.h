@@ -552,7 +552,7 @@ static const char WEB_PAGE[] =
 "</select>"
 "</div>"
 "<div class='ctrl-row'>"
-"<label>Гистерезис вкл/выкл <span class='tip'><span class='tip-icon'>&#9432;</span><span class='tiptext'>Зона нечувствительности по уставке подачи. Отопление включается, когда расчётная подача превышает минимальную на эту величину, и выключается, когда опускается до минимума. Защищает от частого дёргания на пороге. Обычно 0.2&ndash;0.5&nbsp;&deg;C.</span></span></label>"
+"<label>Гистерезис вкл/выкл <span class='tip'><span class='tip-icon'>&#9432;</span><span class='tiptext'>Зона нечувствительности по температуре в комнате. Отопление выключается, когда комната выше цели на эту величину, и включается обратно, когда опускается ниже цели на эту же величину. Пример: цель 22&nbsp;&deg;C, гистерезис 0.2&nbsp;&deg;C &rarr; нагрев при &lt;21.8&nbsp;&deg;C, выключение при &gt;22.2&nbsp;&deg;C.</span></span></label>"
 "<button class='pm' onclick='adj(\"pid_hyst\",-0.1)'>−</button>"
 "<input type='range' id='pid_hyst' min='0.1' max='3.0' step='0.1' value='0.5' "
 "oninput='updateLabel(\"pid_hyst_v\",this.value)' onchange='setDirty()'>"

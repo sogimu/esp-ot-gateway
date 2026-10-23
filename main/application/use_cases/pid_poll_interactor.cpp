@@ -13,8 +13,7 @@ static constexpr float  MAX_SAFE_ROOM     = 30.0f;
 static constexpr float  UNWIND_GAIN       = 3.0f;   // faster integral unwind when the room is above target
 static constexpr float  TRIM_MAX          = 5.0f;   // PI correction authority around the base
 static constexpr float  BASE_TAU_SEC      = 1200.0f;// learned base time constant
-static constexpr float  ROOM_GUARD        = 0.3f;   // room overshoot guard (above target)
-static constexpr float  ROOM_GUARD_HYST   = 0.15f;  // release margin
+static constexpr float  SP_DEADBAND       = 0.1f;   // setpoint on/off deadband around sp_min
 
 PidPollInteractor::PidPollInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                                        ITimeSource& time, ILogger& log, ITemperatureSource* temps)
@@ -187,12 +186,10 @@ void PidPollInteractor::execute()
 
     float output = state_.get_pid_output();
     float sp_min = sp_lo_;
-    float deadband = state_.get_pid_hysteresis();
-    if (deadband < 0.1f) deadband = 0.1f;  // a zero deadband would keep CH always on
 
-    // CH on/off derived from the setpoint (small deadband against chatter).
+    // CH on/off derived from the setpoint (fixed deadband against chatter).
     bool ch_on;
-    if (output >= sp_min + deadband) {
+    if (output >= sp_min + SP_DEADBAND) {
         ch_on = true;
     } else if (output <= sp_min) {
         ch_on = false;
@@ -200,10 +197,12 @@ void PidPollInteractor::execute()
         ch_on = state_.get_pid_ch_enabled_by_pid();
     }
 
-    // Room overshoot guard: stop heating once the room is above the target.
-    if (room > target + ROOM_GUARD) {
+    // Room hysteresis: stop heating at target+hyst, resume at target-hyst.
+    float hyst = state_.get_pid_hysteresis();
+    if (hyst < 0.1f) hyst = 0.1f;
+    if (room > target + hyst) {
         room_guard_off_ = true;
-    } else if (room < target + ROOM_GUARD - ROOM_GUARD_HYST) {
+    } else if (room < target - hyst) {
         room_guard_off_ = false;
     }
     if (room_guard_off_) ch_on = false;

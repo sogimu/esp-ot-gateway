@@ -20,7 +20,7 @@
 - `base_` — член `PidPollInteractor`, инициализируется в `load_config` из `last_auto_output_` (bumpless) или `sp_min`.
 - Обучение: `transfer = integral * dt / 1200`; `base += transfer; integral -= transfer` (SP непрерывна) при комнате у цели или насыщении поправки сверху; не во время ГВС.
 - При `ch_prev == false` (CH был выключен) интеграл обнуляется перед расчётом.
-- Предохранитель: `ROOM_GUARD = 0.3`, `ROOM_GUARD_HYST = 0.15`.
+- Предохранитель: поле `pid_hysteresis` — off при `цель + hyst`, on при `цель − hyst`; дедбенд уставки подачи фиксирован 0.1 °C.
 
 ## Risks / Trade-offs
 
