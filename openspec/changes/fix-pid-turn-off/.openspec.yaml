@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-21
+goal: "Полный off-путь PID: при ch_on=false снижать уставку и гасить бит CH
+  включения в master-байте"

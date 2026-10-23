@@ -120,6 +120,7 @@ public:
     virtual void set_pid_config(float kp, float ki, float kd, int dt_sec,
                                  int room_sensor, float target_room, int lockout_sec) = 0;
     virtual void set_pid_hysteresis(float v) = 0;
+    virtual void set_pid_flow_limits(float min_sp, float max_sp) = 0;
 
     virtual bool  get_pid_enabled()            const = 0;
     virtual bool  get_pid_active()             const = 0;
@@ -139,6 +140,8 @@ public:
     virtual int   get_pid_room_sensor()        const = 0;
     virtual int   get_pid_lockout_sec()        const = 0;
     virtual float get_pid_hysteresis()         const = 0;
+    virtual float get_pid_sp_min()             const = 0;
+    virtual float get_pid_sp_max()             const = 0;
 
     // ── CH mode ────────────────────────────────────────
     virtual void set_ch_mode(CHMode v) = 0;

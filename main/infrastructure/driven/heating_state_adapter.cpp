@@ -176,6 +176,9 @@ void HeatingStateAdapter::set_pid_config(float kp, float ki, float kd, int dt, i
     state_.pid_target_room_ = tr; state_.pid_lockout_sec_ = lo;
 }
 void HeatingStateAdapter::set_pid_hysteresis(float v) { state_.pid_hysteresis_ = v; }
+void HeatingStateAdapter::set_pid_flow_limits(float min_sp, float max_sp) {
+    state_.pid_sp_min_ = min_sp; state_.pid_sp_max_ = max_sp;
+}
 
 #define IMPL_PID_GET(type, name) type HeatingStateAdapter::get_pid_##name() const { return state_.pid_##name##_; }
 IMPL_PID_GET(bool, enabled)
@@ -196,6 +199,8 @@ IMPL_PID_GET(int, dt_sec)
 IMPL_PID_GET(int, room_sensor)
 IMPL_PID_GET(int, lockout_sec)
 IMPL_PID_GET(float, hysteresis)
+IMPL_PID_GET(float, sp_min)
+IMPL_PID_GET(float, sp_max)
 
 // Schedule
 void HeatingStateAdapter::set_schedule(const void* sched) {

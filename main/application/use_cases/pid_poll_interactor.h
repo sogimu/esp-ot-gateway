@@ -36,14 +36,16 @@ private:
     bool pid_inited_ = false;
 
     uint32_t last_compute_ms_ = 0;
-    bool     prev_flame_ = false;
-    uint32_t last_flame_off_ms_ = 0;
+    bool     prev_ch_state_ = false;
+    uint32_t last_ch_off_ms_ = 0;
+    float    sp_lo_ = 25.0f, sp_hi_ = 40.0f;   // effective flow setpoint bounds
+    float    base_ = 25.0f;                    // learned feed-forward base
+    bool     base_inited_ = false;             // base survives mode switches
     bool     cycle_locked_ = false;
     bool     lockout_logged_ = false;
     bool     overheat_logged_ = false;
     bool     clamped_logged_ = false;
 
     void load_config();
-    void compute_pid();
-    void apply_output(float output);
+    void compute_pid(int dt_sec);
 };
