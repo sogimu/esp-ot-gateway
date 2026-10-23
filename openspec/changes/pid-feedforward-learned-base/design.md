@@ -18,7 +18,7 @@
 
 - `pid_step` работает в единицах `trim`: `out_min = −trim_max`, `out_max = +trim_max`, дополнительно урезанных по `sp_min − base` / `sp_max − base`.
 - `base_` — член `PidPollInteractor`, инициализируется в `load_config` из `last_auto_output_` (bumpless) или `sp_min`.
-- Обучение: `transfer = integral * dt / 1200`; `base += transfer; integral -= transfer` (SP непрерывна).
+- Обучение: `transfer = integral * dt / 1200`; `base += transfer; integral -= transfer` (SP непрерывна) при комнате у цели или насыщении поправки сверху; не во время ГВС.
 - При `ch_prev == false` (CH был выключен) интеграл обнуляется перед расчётом.
 - Предохранитель: `ROOM_GUARD = 0.3`, `ROOM_GUARD_HYST = 0.15`.
 

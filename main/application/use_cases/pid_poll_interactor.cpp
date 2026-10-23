@@ -30,6 +30,7 @@ void PidPollInteractor::enable()
 {
     bool was_enabled = state_.get_pid_enabled();
     prev_ch_state_ = false;
+    room_guard_off_ = false;
     cycle_locked_ = false;
     lockout_logged_ = false;
     overheat_logged_ = false;
@@ -51,6 +52,7 @@ void PidPollInteractor::disable()
 {
     bool was_enabled = state_.get_pid_enabled();
     prev_ch_state_ = false;
+    room_guard_off_ = false;
     cycle_locked_ = false;
     lockout_logged_ = false;
     overheat_logged_ = false;
@@ -102,6 +104,7 @@ void PidPollInteractor::execute()
     float room = (sensor_id == 0)
         ? (temps_ ? temps_->t1() : state_.get_t1_temp())
         : (temps_ ? temps_->t2() : state_.get_t2_temp());
+    bool dhw = state_.is_dhw_active();
 
     bool room_valid = (room > -100.0f);
 
@@ -205,9 +208,14 @@ void PidPollInteractor::execute()
     }
     if (room_guard_off_) ch_on = false;
 
-    // Learn the base: transfer part of the integral into the base while the
-    // room is stable at target, keeping the setpoint continuous.
-    if (ch_on && fabsf(target - room) < 0.2f) {
+    // Learn the base: transfer part of the integral into the base near the
+    // target (but not while the room is above it, to avoid absorbing the
+    // overshoot), or while the trim is saturated high (base too low). Skip DHW.
+    float err = target - room;
+    float trim_now = pid_cfg_.kp * err + pid_state_.integral;
+    bool learn = (err > -0.1f && err < 0.3f) ||
+                 (trim_now >= pid_cfg_.out_max - 0.05f);
+    if (ch_on && !dhw && learn) {
         float transfer = pid_state_.integral *
                          (static_cast<float>(elapsed_sec) / BASE_TAU_SEC);
         float new_base = base_ + transfer;
