@@ -12,6 +12,7 @@ class GasFlowService;
 class GasCorrectionInteractor;
 class PidQualityAssessor;
 class FopdtEstimator;
+class ITemperatureSource;
 
 /// JSON rendering from CA state + services.
 /// Writes into caller-provided buffer — no heap, thread-safe.
@@ -33,6 +34,7 @@ public:
     void set_time(class ITimeSource* t)   { time_ = t; }
     void set_pid_quality(const PidQualityAssessor* q) { pid_quality_ = q; }
     void set_fopdt_estimator(const FopdtEstimator* e) { fopdt_ = e; }
+    void set_temps(ITemperatureSource* t) { temps_ = t; }
 
     /// Render status JSON into buf, returns length (excluding null terminator).
     int render_status(char* buf, size_t size);
@@ -74,6 +76,7 @@ private:
     GasCorrectionInteractor*  gas_corr_ = nullptr;
     const PidQualityAssessor* pid_quality_ = nullptr;
     const FopdtEstimator*     fopdt_ = nullptr;
+    ITemperatureSource*       temps_ = nullptr;
     class ITimeSource*        time_ = nullptr;
     uint32_t                  total_uptime_base_ = 0;
     mutable uint32_t          free_heap_ = 0;       ///< обновляется из supervision

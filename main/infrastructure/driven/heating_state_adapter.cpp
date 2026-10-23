@@ -51,6 +51,14 @@ float HeatingStateAdapter::get_modulation()  const { return state_.modulation_; 
 float HeatingStateAdapter::get_t1_temp()     const { return state_.t1_temp_; }
 float HeatingStateAdapter::get_t2_temp()     const { return state_.t2_temp_; }
 
+// Temperature correction offsets
+void  HeatingStateAdapter::set_t1_offset(float v)      { state_.t1_offset_ = v; }
+void  HeatingStateAdapter::set_t2_offset(float v)      { state_.t2_offset_ = v; }
+void  HeatingStateAdapter::set_outside_offset(float v) { state_.outside_offset_ = v; }
+float HeatingStateAdapter::get_t1_offset()      const { return state_.t1_offset_; }
+float HeatingStateAdapter::get_t2_offset()      const { return state_.t2_offset_; }
+float HeatingStateAdapter::get_outside_offset() const { return state_.outside_offset_; }
+
 // Setpoints & bounds
 #define IMPL_GETSET_F(type, name) \
   void HeatingStateAdapter::set_##name(type v) { state_.name##_ = v; } \

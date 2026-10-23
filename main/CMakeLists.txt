@@ -24,6 +24,7 @@ idf_component_register(
         "infrastructure/driven/ot_hardware_adapter.cpp"
         "infrastructure/driven/boiler_opentherm_adapter.cpp"
         "infrastructure/driven/temperature_sensor_adapter.cpp"
+        "infrastructure/driven/temperature_source_adapter.cpp"
         "infrastructure/driven/web_presenter_adapter.cpp"
         "infrastructure/driven/boiler_nvs_store.cpp"
         "infrastructure/driven/gas_correction_nvs_store.cpp"

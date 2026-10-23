@@ -13,6 +13,7 @@
 #include "application/ports/driven/itime_source.h"
 #include <cstdio>
 #include <cstdarg>
+#include <cmath>
 
 SystemConfigInteractor::SystemConfigInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                                                  ITimeSettingsStore& config, IBoilerConfigStore& boiler_cfg,
@@ -119,6 +120,16 @@ void SystemConfigInteractor::set_dhw_hysteresis(float v)
     state_.set_dhw_hysteresis(v);
     state_.unlock_exclusive();
     save_and_log("Гистерезис ГВС: %.1f C", (double)v);
+}
+
+void SystemConfigInteractor::set_temperature_offsets(float t1, float t2, float outside)
+{
+    state_.lock_exclusive();
+    if (t1 > -1e37f)      state_.set_t1_offset(clamp_offset(t1));
+    if (t2 > -1e37f)      state_.set_t2_offset(clamp_offset(t2));
+    if (outside > -1e37f) state_.set_outside_offset(clamp_offset(outside));
+    state_.unlock_exclusive();
+    save_and_log("Коррекция температур обновлена");
 }
 
 void SystemConfigInteractor::set_schedule(const CH_Schedule& sched)
@@ -254,4 +265,11 @@ float SystemConfigInteractor::clamp_dhw(float sp)
     if (sp < lo) sp = lo;
     if (sp > hi) sp = hi;
     return sp;
+}
+
+float SystemConfigInteractor::clamp_offset(float v)
+{
+    if (v < -10.0f) v = -10.0f;
+    if (v > 10.0f)  v = 10.0f;
+    return std::roundf(v * 10.0f) / 10.0f;  // точность 0.1 °C
 }

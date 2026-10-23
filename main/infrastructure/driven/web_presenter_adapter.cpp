@@ -2,6 +2,7 @@
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
+#include "application/ports/driven/itemperatures_source.h"
 #include "application/ports/driven/ievent_log_reader.h"
 #include "domain/value_objects/fault_codes.h"
 #include "application/services/modulation_stats_service.h"
@@ -58,6 +59,15 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
 {
     if (!state_) return snprintf(buf, size, "{}");
 
+    // Corrected temperatures (through ITemperatureSource). Fall back to raw
+    // store getters only when no source is wired (test-only constructor).
+    float t1  = temps_ ? temps_->t1()          : state_->get_t1_temp();
+    float t2  = temps_ ? temps_->t2()          : state_->get_t2_temp();
+    float ch  = temps_ ? temps_->ch_flow()     : state_->get_ch_temp();
+    float ret = temps_ ? temps_->ch_return()   : state_->get_return_temp();
+    float dhw = temps_ ? temps_->dhw()         : state_->get_dhw_temp();
+    float out = temps_ ? temps_->outside()     : state_->get_outside_temp();
+
     state_->lock_shared();
 
     char timebuf[16] = "NTP...";
@@ -101,6 +111,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"asf_text\":\"%s\","
         "\"slave_type\":%d,\"slave_ver\":%d,\"ot_ver\":%.1f,"
         "\"t1_temp\":%.1f,\"t2_temp\":%.1f,"
+        "\"t1_offset\":%.1f,\"t2_offset\":%.1f,\"outside_offset\":%.1f,"
         "\"sched_on\":0,\"hour\":%d,\"time\":\"%s\",\"tz_offset\":%d,"
         "\"utc_time\":\"%s\",\"uptime_sec\":%lu,\"total_uptime_sec\":%lu,"
         "\"free_heap\":%" PRIu32 ",\"largest_free\":%" PRIu32 ","
@@ -121,8 +132,8 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         state_->has_fault() ? 1 : 0,
         state_->is_ch_active() ? 1 : 0, state_->is_dhw_active() ? 1 : 0,
         state_->is_flame_on() ? 1 : 0,
-        (double)state_->get_ch_temp(), (double)state_->get_return_temp(),
-        (double)state_->get_dhw_temp(), (double)state_->get_outside_temp(),
+        (double)ch, (double)ret,
+        (double)dhw, (double)out,
         (double)state_->get_modulation(),
         (double)state_->get_ch_setpoint(), (double)state_->get_dhw_setpoint(),
         (double)state_->get_dhw_sp_min(), (double)state_->get_dhw_sp_max(),
@@ -137,7 +148,9 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         state_->get_asf_flags(), state_->get_oem_fault_code(), state_->get_oem_diagnostic(),
         asf_text_buf,
         state_->get_slave_type(), state_->get_slave_version(), (double)state_->get_ot_version(),
-        (double)state_->get_t1_temp(), (double)state_->get_t2_temp(),
+        (double)t1, (double)t2,
+        (double)state_->get_t1_offset(), (double)state_->get_t2_offset(),
+        (double)state_->get_outside_offset(),
         sched_hour, timebuf,
         state_->get_tz_offset(), utcbuf,
         (unsigned long)(time_ ? time_->monotonic_us() / 1000000 : 0),
@@ -309,6 +322,7 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         "\"gas_temp_offset\":%.1f,"
         "\"ch_pmin\":%.1f,\"ch_pmax\":%.1f,"
         "\"dhw_pmin\":%.1f,\"dhw_pmax\":%.1f,"
+        "\"t1_offset\":%.1f,\"t2_offset\":%.1f,\"outside_offset\":%.1f,"
         "\"eff_t1\":%.0f,\"eff_v1\":%.2f,"
         "\"eff_t2\":%.0f,\"eff_v2\":%.2f,"
         "\"eff_t3\":%.0f,\"eff_v3\":%.2f,"
@@ -337,6 +351,8 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         (double)state_->get_gas_temp_offset(),
         (double)state_->get_ch_pmin(), (double)state_->get_ch_pmax(),
         (double)state_->get_dhw_pmin(), (double)state_->get_dhw_pmax(),
+        (double)state_->get_t1_offset(), (double)state_->get_t2_offset(),
+        (double)state_->get_outside_offset(),
         (double)state_->get_eff_t1(), (double)state_->get_eff_v1(),
         (double)state_->get_eff_t2(), (double)state_->get_eff_v2(),
         (double)state_->get_eff_t3(), (double)state_->get_eff_v3(),

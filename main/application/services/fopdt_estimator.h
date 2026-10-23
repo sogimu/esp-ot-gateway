@@ -4,12 +4,13 @@
 
 class IHeatingStateStore;
 class ITimeSource;
+class ITemperatureSource;
 
 class FopdtEstimator : public IControlTask {
 public:
     static constexpr int EVENT_RING_SIZE = 10;
 
-    FopdtEstimator(IHeatingStateStore& state, ITimeSource& time);
+    FopdtEstimator(IHeatingStateStore& state, ITimeSource& time, ITemperatureSource* temps = nullptr);
 
     void execute() override;
     void reset();
@@ -29,6 +30,7 @@ public:
 private:
     IHeatingStateStore& state_;
     ITimeSource&        time_;
+    ITemperatureSource* temps_ = nullptr;
 
     // Кольцевой буфер событий
     FopdtEvent events_[EVENT_RING_SIZE];

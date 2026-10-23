@@ -14,6 +14,7 @@ public:
         connected_ = false; fault_ = false; flame_ = false; ch_active_ = false; dhw_active_ = false;
         ch_temp_ = 0; dhw_temp_ = 0; return_temp_ = 0; outside_temp_ = 0; modulation_ = 0;
         t1_temp_ = -127.0f; t2_temp_ = -127.0f;
+        t1_offset_ = 0; t2_offset_ = 0; outside_offset_ = 0;
         ch_setpoint_ = 30.0f; dhw_setpoint_ = 55.0f;
         ch_sp_min_ = 0; ch_sp_max_ = 80; dhw_sp_min_ = 0; dhw_sp_max_ = 65;
         ch_enable_ = false; dhw_enable_ = false;
@@ -82,6 +83,14 @@ public:
     float get_modulation()  const override { return modulation_; }
     float get_t1_temp()     const override { return t1_temp_; }
     float get_t2_temp()     const override { return t2_temp_; }
+
+    // Temperature correction offsets
+    void set_t1_offset(float v) override { t1_offset_ = v; }
+    void set_t2_offset(float v) override { t2_offset_ = v; }
+    void set_outside_offset(float v) override { outside_offset_ = v; }
+    float get_t1_offset()      const override { return t1_offset_; }
+    float get_t2_offset()      const override { return t2_offset_; }
+    float get_outside_offset() const override { return outside_offset_; }
 
     // Setpoints & bounds
     void set_ch_setpoint(float v) override { ch_setpoint_ = v; }
@@ -268,6 +277,7 @@ public:
     bool   connected_ = false, fault_ = false, flame_ = false, ch_active_ = false, dhw_active_ = false;
     float  ch_temp_ = 0, dhw_temp_ = 0, return_temp_ = 0, outside_temp_ = 0, modulation_ = 0;
     float  t1_temp_ = -127.0f, t2_temp_ = -127.0f;
+    float  t1_offset_ = 0, t2_offset_ = 0, outside_offset_ = 0;
     float  ch_setpoint_ = 30.0f, dhw_setpoint_ = 55.0f;
     float  ch_sp_min_ = 0, ch_sp_max_ = 80;
     float  dhw_sp_min_ = 0, dhw_sp_max_ = 65;

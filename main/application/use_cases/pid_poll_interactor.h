@@ -8,13 +8,14 @@ class IHeatingStateStore;
 class IBoilerHardware;
 class ITimeSource;
 class ILogger;
+class ITemperatureSource;
 
 /// PID controller tick — evaluates PID once per dt_sec.
 /// Reads room temperature from sensor, computes PID output, writes CH setpoint.
 class PidPollInteractor : public IControlTask {
 public:
     PidPollInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
-                      ITimeSource& time, ILogger& log);
+                      ITimeSource& time, ILogger& log, ITemperatureSource* temps = nullptr);
 
     void execute() override;
 
@@ -28,6 +29,7 @@ private:
     IBoilerHardware&    boiler_;
     ITimeSource&        time_;
     ILogger&            log_;
+    ITemperatureSource* temps_ = nullptr;
 
     PidAlgoCfg   pid_cfg_{};
     PidAlgoState pid_state_{};

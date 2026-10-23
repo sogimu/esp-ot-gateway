@@ -14,6 +14,7 @@
 #include "infrastructure/driven/ot_hardware_adapter.h"
 #include "infrastructure/driven/boiler_opentherm_adapter.h"
 #include "infrastructure/driven/temperature_sensor_adapter.h"
+#include "infrastructure/driven/temperature_source_adapter.h"
 #include "infrastructure/driven/web_presenter_adapter.h"
 #include "infrastructure/driven/nvs_config_store.h"  // blob types (NvsHistBlob, etc.)
 #include "infrastructure/driven/time_settings_nvs_store.h"
@@ -104,6 +105,9 @@ extern "C" void app_main(void)
 
     ca_state.load_settings();
 
+    // Corrected-temperature source — all temperature readers go through this.
+    TemperatureSourceAdapter ca_temps(ca_state);
+
     // ── Phase 3: Network ─────────────────────────────────
 
     Esp32WifiAdapter   wifi_hw;
@@ -116,18 +120,18 @@ extern "C" void app_main(void)
     ca_log.set_time_source(&ca_time);  // EventLog теперь знает источник времени
 
     // ── Phase 4: Use cases ───────────────────────────────
-    BoilerPollInteractor  boiler_poll(ca_boiler, ca_state, ca_log, ca_time);
+    BoilerPollInteractor  boiler_poll(ca_boiler, ca_state, ca_log, ca_time, &ca_temps);
     SensorsPollInteractor sensors_poll(ca_sensors, ca_state);
-    PidPollInteractor     pid_poll(ca_state, ca_boiler, ca_time, ca_log);
+    PidPollInteractor     pid_poll(ca_state, ca_boiler, ca_time, ca_log, &ca_temps);
 
     // ── Phase 5: Application services ────────────────────
     ModulationStatsService mod_stats(ca_state, stores.heating_stats);
     BurnCycleService       burn_cycle_service(ca_state, ca_time, stores.burn_stats);
-    GasFlowService         gas_flow(ca_state, ca_time, stores.heating_stats, stores.gas);
+    GasFlowService         gas_flow(ca_state, ca_time, stores.heating_stats, stores.gas, &ca_temps);
     SystemConfigInteractor sys_cfg(ca_state, ca_boiler, stores.time, stores.boiler, ca_log, ca_time,
                                     &boiler_poll, &pid_poll,
                                     &burn_cycle_service, &mod_stats);
-    DHWPredictService      dhw_predict(ca_state, stores.predict, ca_time);
+    DHWPredictService      dhw_predict(ca_state, stores.predict, ca_time, &ca_temps);
     dhw_predict.load_history();
 
     // Gas correction interactor — после gas_flow (нужен для integral_m3)
@@ -147,6 +151,7 @@ extern "C" void app_main(void)
     WebPresenterAdapter ca_web(ca_state, ca_log, ca_time,
                                mod_stats, burn_cycle_service,
                                gas_flow, gas_corr, total_uptime_base_sec);
+    ca_web.set_temps(&ca_temps);
     FreeRtosMqttQueue        ca_mqtt_queue;
     MqttSocketAdapter        ca_mqtt(ca_mqtt_queue, ca_time);
     MqttRendererAdapter ca_mqtt_renderer(ca_web);

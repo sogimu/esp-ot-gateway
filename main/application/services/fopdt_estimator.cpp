@@ -1,10 +1,11 @@
 #include "application/services/fopdt_estimator.h"
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/itime_source.h"
+#include "application/ports/driven/itemperatures_source.h"
 #include <cmath>
 
-FopdtEstimator::FopdtEstimator(IHeatingStateStore& state, ITimeSource& time)
-    : state_(state), time_(time) {
+FopdtEstimator::FopdtEstimator(IHeatingStateStore& state, ITimeSource& time, ITemperatureSource* temps)
+    : state_(state), time_(time), temps_(temps) {
     prev_ms_ = static_cast<uint32_t>(time_.monotonic_ms());
 }
 
@@ -23,8 +24,8 @@ void FopdtEstimator::execute() {
     float target = state_.get_pid_target_room();
     bool flame = state_.is_flame_on();
     bool dhw = state_.is_dhw_active();
-    float outside = state_.get_outside_temp();
     state_.unlock_shared();
+    float outside = temps_ ? temps_->outside() : state_.get_outside_temp();
 
     uint32_t now = static_cast<uint32_t>(time_.monotonic_ms());
     float dt = (prev_ms_ > 0) ? (now - prev_ms_) / 1000.0f : 0;

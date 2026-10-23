@@ -171,6 +171,36 @@ void BoilerNvsStore::load_boiler_config(IHeatingStateStore& s)
         }
     }
 
+    // Temperature correction offsets blob
+    {
+        NvsTempOffsetBlob off;
+        memset(&off, 0, sizeof(off));
+        bool loaded = false;
+        sz = 0;
+        if (nvs_get_blob(h, "temp_off", nullptr, &sz) == ESP_OK) {
+            if (sz == sizeof(off)) {
+                if (nvs_get_blob(h, "temp_off", &off, &sz) == ESP_OK) loaded = true;
+            } else if (sz == 24) {
+                // Legacy 6-float layout (rc<16): first 3 floats are t1/t2/outside.
+                float legacy[6] = {};
+                size_t lsz = sizeof(legacy);
+                if (nvs_get_blob(h, "temp_off", legacy, &lsz) == ESP_OK && lsz == sizeof(legacy)) {
+                    off.t1_offset = legacy[0];
+                    off.t2_offset = legacy[1];
+                    off.outside_offset = legacy[2];
+                    loaded = true;
+                }
+            }
+        }
+        if (loaded) {
+            s.lock_exclusive();
+            s.set_t1_offset(off.t1_offset);
+            s.set_t2_offset(off.t2_offset);
+            s.set_outside_offset(off.outside_offset);
+            s.unlock_exclusive();
+        }
+    }
+
     nvs_close(h);
 }
 
@@ -244,6 +274,15 @@ void BoilerNvsStore::save_boiler_config(const IHeatingStateStore& s)
         eff.t2 = s.get_eff_t2(); eff.v2 = s.get_eff_v2();
         eff.t3 = s.get_eff_t3(); eff.v3 = s.get_eff_v3();
         nvs_set_blob(h, "eff", &eff, sizeof(eff));
+    }
+
+    // Temperature correction offsets
+    {
+        NvsTempOffsetBlob off;
+        off.t1_offset = s.get_t1_offset();
+        off.t2_offset = s.get_t2_offset();
+        off.outside_offset = s.get_outside_offset();
+        nvs_set_blob(h, "temp_off", &off, sizeof(off));
     }
 
     nvs_set_u8(h, "cfg_ver", CFG_VER);

@@ -7,12 +7,14 @@ class IBoilerHardware;
 class IHeatingStateStore;
 class ILogger;
 class ITimeSource;
+class ITemperatureSource;
 
 /// Full OpenTherm poll cycle: handshake → DHW hysteresis → status → extra_step → connectivity.
 /// Replaces OpenthermEndpoint::poll_cycle() when activated.
 class BoilerPollInteractor : public IControlTask {
 public:
-    BoilerPollInteractor(IBoilerHardware& boiler, IHeatingStateStore& state, ILogger& log, ITimeSource& time);
+    BoilerPollInteractor(IBoilerHardware& boiler, IHeatingStateStore& state, ILogger& log,
+                         ITimeSource& time, ITemperatureSource* temps = nullptr);
 
     void execute() override;
 
@@ -29,6 +31,7 @@ private:
     IHeatingStateStore& state_;
     ILogger&           log_;
     ITimeSource&       time_;
+    ITemperatureSource* temps_ = nullptr;
 
     // Poll state
     int  poll_step_ = 0;

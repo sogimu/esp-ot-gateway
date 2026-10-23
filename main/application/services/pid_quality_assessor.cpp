@@ -1,9 +1,10 @@
 #include "application/services/pid_quality_assessor.h"
 #include "application/ports/driven/iheating_state_store.h"
+#include "application/ports/driven/itemperatures_source.h"
 #include <cmath>
 
-PidQualityAssessor::PidQualityAssessor(IHeatingStateStore& state)
-    : state_(state)
+PidQualityAssessor::PidQualityAssessor(IHeatingStateStore& state, ITemperatureSource* temps)
+    : state_(state), temps_(temps)
 {
     // ring_ is value-initialized (zeroed) automatically
 }
@@ -17,12 +18,13 @@ void PidQualityAssessor::capture_sample()
     bool  flame_on    = state_.is_flame_on();
     bool  dhw_active  = state_.is_dhw_active();
     bool  cycle_locked = state_.get_pid_cycle_locked();
-    float outside_temp = state_.get_outside_temp();
     float pid_output   = state_.get_pid_output();
     float ch_sp_min    = state_.get_ch_sp_min();
     float ch_sp_max    = state_.get_ch_sp_max();
 
     state_.unlock_shared();
+
+    float outside_temp = temps_ ? temps_->outside() : state_.get_outside_temp();
 
     bool clamped = (pid_output <= ch_sp_min) || (pid_output >= ch_sp_max);
 
