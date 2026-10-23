@@ -1,7 +1,8 @@
 # temperature-correction Specification
 
-## ADDED Requirements
-
+## Purpose
+Пользовательские аддитивные сдвиги (±0.1 °C) для температур T1/T2/уличной, применяемые через единую абстракцию чтения `ITemperatureSource`.
+## Requirements
 ### Requirement: Temperature offsets are accepted by the control API
 
 The system SHALL accept the offset fields `t1_offset`, `t2_offset`, `outside_offset` in `POST /api/control`, clamp each to `[-10.0, +10.0]` °C, round each to `0.1` °C, and persist them in NVS so they survive a reboot. Fields absent from the request SHALL leave the corresponding stored offset unchanged.
@@ -52,7 +53,7 @@ All application logic SHALL obtain temperatures through `ITemperatureSource`, wh
 
 ### Requirement: Correction panel has an Apply action
 
-The temperature-correction panel SHALL be located at the bottom of the Control ("Управление") tab and SHALL provide a single Apply button that submits all three offsets in one request and reports the outcome, following the same visual pattern as the boiler-model panel (`.btn` class plus a message span).
+The temperature-correction panel SHALL be located in the Control ("Управление") tab, before the boiler shutdown button, and SHALL provide a single Apply button that submits all three offsets in one request and reports the outcome, following the same visual pattern as the boiler-model panel (`.btn` class plus a message span).
 
 #### Scenario: Successful apply
 
@@ -77,3 +78,4 @@ The correction input fields SHALL use the same inline number-input styling as th
 
 - **WHEN** the user applies the offset changes and the server accepts them
 - **THEN** the dirty state is cleared and subsequent polls may refresh the fields from the stored values
+

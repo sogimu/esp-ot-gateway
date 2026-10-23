@@ -21,7 +21,7 @@
 
 ## 4. Веб-интерфейс
 
-- [x] 4.1 Добавить панель «Коррекция температур» внизу вкладки «Управление» (`web_page.h`): 3 поля (T1/T2/Уличная) + кнопка Apply + span `#temp_msg` в `.info-row`/`.info-label`/`.info-val`
+- [x] 4.1 Добавить панель «Коррекция температур» во вкладке «Управление» перед кнопкой «Выключить котёл» (`web_page.h`): 3 поля (T1/T2/Уличная) + кнопка Apply + span `#temp_msg` в `.info-row`/`.info-label`/`.info-val`
 - [x] 4.2 Стилизовать поля ввода единообразно с `mf_*` (inline `input type='number'`, `width:60px`, `background:#1a1a2e`, `color:#4fc3f7`, `border:1px solid #0f3460`, `border-radius:4px`, `step='0.1'`, `min='-10'`, `max='10'`, `.tip`-подсказки)
 - [x] 4.3 Реализовать `setTempCorrDirty(on)` с флагом `dirtyFields.temp` и подсветкой фона (`#2a1a2e`/`#1a1a2e`), `oninput='setTempCorrDirty(true)'` на каждом поле
 - [x] 4.4 Добавить защиту от поллинга: в `pollStats()` обновлять поля только при `!dirtyFields.temp`

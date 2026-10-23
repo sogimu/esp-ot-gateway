@@ -64,7 +64,7 @@ public:
 
 Поля `POST /api/control`: `t1_offset`, `t2_offset`, `outside_offset`.
 
-Панель «Коррекция температур» расположена внизу вкладки «Управление» и полностью повторяет паттерн панели «Модель котла» (`mf_*`):
+Панель «Коррекция температур» расположена во вкладке «Управление» перед кнопкой «Выключить котёл» и полностью повторяет паттерн панели «Модель котла» (`mf_*`):
 
 - Три поля ввода — те же inline `input type='number'` со стилем `width:60px;background:#1a1a2e;color:#4fc3f7;border:1px solid #0f3460;border-radius:4px;padding:2px 4px;text-align:center;font-size:.9em`, внутри `.info-row` / `.info-label` / `.info-val`, с `.tip`-подсказками. У каждого поля `step='0.1'`, диапазон `min='-10' max='10'`, `oninput='setTempCorrDirty(true)'`.
 - Единый dirty-флаг панели `dirtyFields.temp` через `setTempCorrDirty(on)`, который подсвечивает все три поля (`background` `#2a1a2e` при dirty, `#1a1a2e` при чистом) — по образцу `setModelDirty`.
