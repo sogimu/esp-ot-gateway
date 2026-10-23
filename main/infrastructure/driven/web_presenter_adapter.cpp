@@ -322,6 +322,8 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         "\"gas_temp_offset\":%.1f,"
         "\"ch_pmin\":%.1f,\"ch_pmax\":%.1f,"
         "\"dhw_pmin\":%.1f,\"dhw_pmax\":%.1f,"
+        "\"t1_offset\":%.1f,\"t2_offset\":%.1f,\"outside_offset\":%.1f,"
+        "\"ch_temp_offset\":%.1f,\"return_temp_offset\":%.1f,\"dhw_temp_offset\":%.1f,"
         "\"eff_t1\":%.0f,\"eff_v1\":%.2f,"
         "\"eff_t2\":%.0f,\"eff_v2\":%.2f,"
         "\"eff_t3\":%.0f,\"eff_v3\":%.2f,"
@@ -350,6 +352,9 @@ int WebPresenterAdapter::render_stats(char* buf, size_t size)
         (double)state_->get_gas_temp_offset(),
         (double)state_->get_ch_pmin(), (double)state_->get_ch_pmax(),
         (double)state_->get_dhw_pmin(), (double)state_->get_dhw_pmax(),
+        (double)state_->get_t1_offset(), (double)state_->get_t2_offset(),
+        (double)state_->get_outside_offset(), (double)state_->get_ch_temp_offset(),
+        (double)state_->get_return_temp_offset(), (double)state_->get_dhw_temp_offset(),
         (double)state_->get_eff_t1(), (double)state_->get_eff_v1(),
         (double)state_->get_eff_t2(), (double)state_->get_eff_v2(),
         (double)state_->get_eff_t3(), (double)state_->get_eff_v3(),
