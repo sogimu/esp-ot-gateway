@@ -7,6 +7,7 @@
 class IHeatingStateStore;
 class IPredictStore;
 class ITimeSource;
+class ITemperatureSource;
 
 /// DHW heating time prediction using Kalman2D filter.
 /// Tracks temperature rise rate during DHW sessions and predicts
@@ -16,7 +17,8 @@ class ITimeSource;
 /// Reads from state_ (lock_shared), writes prediction to state_ (lock_exclusive).
 class DHWPredictService : public IControlTask {
 public:
-    DHWPredictService(IHeatingStateStore& state, IPredictStore& store, ITimeSource& time);
+    DHWPredictService(IHeatingStateStore& state, IPredictStore& store, ITimeSource& time,
+                      ITemperatureSource* temps = nullptr);
 
     void execute() override;
 
@@ -27,6 +29,7 @@ private:
     IHeatingStateStore&  state_;
     IPredictStore&       store_;
     ITimeSource&         time_;
+    ITemperatureSource*  temps_ = nullptr;
 
     // Kalman filter state
     Kalman2D kalman_;

@@ -35,6 +35,7 @@ public:
     void set_ch_setpoint(float) override;
     void set_dhw_setpoint(float) override;
     void set_dhw_hysteresis(float) override;
+    void set_temperature_offsets(float t1, float t2, float outside) override;
     void set_schedule(const CH_Schedule&) override;
     void set_pid_schedule(const PID_Schedule&) override;
     void set_dhw_schedule(const DHW_Schedule&) override;
@@ -69,4 +70,5 @@ private:
     void save_and_log(const char* msg, ...);
     float clamp_ch(float sp);
     float clamp_dhw(float sp);
+    float clamp_offset(float v);
 };

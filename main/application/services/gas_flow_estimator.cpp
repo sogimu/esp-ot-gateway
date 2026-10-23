@@ -3,14 +3,15 @@
 #include "application/ports/driven/itime_source.h"
 #include "application/ports/driven/iheating_stats_store.h"
 #include "application/ports/driven/igas_correction_store.h"
+#include "application/ports/driven/itemperatures_source.h"
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
 
 GasFlowService::GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store,
-                                 IGasCorrectionStore& gas_store)
-    : state_(state), time_(time), store_(store), gas_store_(gas_store)
+                                 IGasCorrectionStore& gas_store, ITemperatureSource* temps)
+    : state_(state), time_(time), store_(store), gas_store_(gas_store), temps_(temps)
 {
 }
 
@@ -82,12 +83,12 @@ void GasFlowService::execute()
 
     state_.lock_shared();
     float mod_raw = state_.get_modulation();
-    float t_ret   = state_.get_return_temp();
-    float t_flow  = state_.get_ch_temp();
     float gas_cal = state_.get_gas_calorific();
-    float t_out   = state_.get_outside_temp();
     bool dhw      = state_.is_dhw_active();
     state_.unlock_shared();
+    float t_ret   = temps_ ? temps_->ch_return() : state_.get_return_temp();
+    float t_flow  = temps_ ? temps_->ch_flow()   : state_.get_ch_temp();
+    float t_out   = temps_ ? temps_->outside()   : state_.get_outside_temp();
 
     dhw_active_ = dhw;
 

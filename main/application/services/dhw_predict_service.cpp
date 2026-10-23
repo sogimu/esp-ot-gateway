@@ -2,6 +2,7 @@
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/ipredict_store.h"
 #include "application/ports/driven/itime_source.h"
+#include "application/ports/driven/itemperatures_source.h"
 #include <cmath>
 #include <cstring>
 
@@ -19,8 +20,9 @@ static constexpr float MIN_RATE    = 0.002f;
 static constexpr float MIN_VAR     = 1e-6f;
 static constexpr float MIN_UNCERT  = 15.0f;
 
-DHWPredictService::DHWPredictService(IHeatingStateStore& state, IPredictStore& store, ITimeSource& time)
-    : state_(state), store_(store), time_(time)
+DHWPredictService::DHWPredictService(IHeatingStateStore& state, IPredictStore& store, ITimeSource& time,
+                                     ITemperatureSource* temps)
+    : state_(state), store_(store), time_(time), temps_(temps)
 {
     kalman_.reset(0, DEF_RATE_PRIOR);
 }
@@ -176,8 +178,8 @@ void DHWPredictService::execute()
     state_.lock_shared();
     bool flame      = state_.is_flame_on();
     bool dhw_active = state_.is_dhw_active();
-    float dhw_temp  = state_.get_dhw_temp();
     state_.unlock_shared();
+    float dhw_temp  = temps_ ? temps_->dhw() : state_.get_dhw_temp();
 
     bool heating_dhw = flame && dhw_active;
 

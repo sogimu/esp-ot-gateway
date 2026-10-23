@@ -3,6 +3,7 @@
 #include "application/ports/driven/iboiler_hardware.h"
 #include "application/ports/driven/itime_source.h"
 #include "application/ports/driven/ilogger.h"
+#include "application/ports/driven/itemperatures_source.h"
 #include "domain/value_objects/ch_schedule.h"
 #include "domain/value_objects/ch_mode.h"
 #include <cmath>
@@ -14,8 +15,8 @@ static constexpr float  FALLBACK_SP       = 40.0f;
 static constexpr float  MIN_SETPOINT      = 25.0f;
 
 PidPollInteractor::PidPollInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
-                                       ITimeSource& time, ILogger& log)
-    : state_(state), boiler_(boiler), time_(time), log_(log)
+                                       ITimeSource& time, ILogger& log, ITemperatureSource* temps)
+    : state_(state), boiler_(boiler), time_(time), log_(log), temps_(temps)
 {
     if (is_pid_mode(state_.get_ch_mode()))
         enable();
@@ -97,9 +98,11 @@ void PidPollInteractor::execute()
     // Read room temp — from sensor 0 (T1) or 1 (T2) depending on config
     int sensor_id = state_.get_pid_room_sensor();
     state_.lock_shared();
-    float room = (sensor_id == 0) ? state_.get_t1_temp() : state_.get_t2_temp();
     bool flame = state_.is_flame_on();
     state_.unlock_shared();
+    float room = (sensor_id == 0)
+        ? (temps_ ? temps_->t1() : state_.get_t1_temp())
+        : (temps_ ? temps_->t2() : state_.get_t2_temp());
 
     bool room_valid = (room > -100.0f);
 
@@ -220,9 +223,11 @@ void PidPollInteractor::compute_pid()
 {
     int sensor_id = state_.get_pid_room_sensor();
     state_.lock_shared();
-    float room = (sensor_id == 0) ? state_.get_t1_temp() : state_.get_t2_temp();
     bool dhw = state_.is_dhw_active();
     state_.unlock_shared();
+    float room = (sensor_id == 0)
+        ? (temps_ ? temps_->t1() : state_.get_t1_temp())
+        : (temps_ ? temps_->t2() : state_.get_t2_temp());
 
     float target = state_.get_pid_target_room();
     int dt = state_.get_pid_dt_sec();

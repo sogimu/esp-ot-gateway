@@ -9,6 +9,7 @@ class IHeatingStateStore;
 class ITimeSource;
 class IHeatingStatsStore;
 class IGasCorrectionStore;
+class ITemperatureSource;
 
 /// Estimates gas consumption from modulation % and return temperature.
 /// Uses Kalman1D filters on raw inputs and a physical model for flow rate.
@@ -31,7 +32,7 @@ public:
     };
 
     GasFlowService(IHeatingStateStore& state, ITimeSource& time, IHeatingStatsStore& store,
-                   IGasCorrectionStore& gas_store);
+                   IGasCorrectionStore& gas_store, ITemperatureSource* temps = nullptr);
 
     void load_integral();  // restore integral_m3 from NVS
 
@@ -75,6 +76,7 @@ private:
     ITimeSource&         time_;
     IHeatingStatsStore&  store_;
     IGasCorrectionStore& gas_store_;
+    ITemperatureSource*  temps_ = nullptr;
 
     Kalman1D kalman_mod_{0, 0.1f, 1.0f};
     Kalman1D kalman_ret_{0, 0.05f, 0.3f};

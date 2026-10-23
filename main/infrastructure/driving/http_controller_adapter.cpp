@@ -112,7 +112,7 @@ void HttpControllerAdapter::stop() { if (server_) { httpd_stop(server_); server_
 
 esp_err_t HttpControllerAdapter::handler_root(httpd_req_t* req) {
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     return httpd_resp_send(req, (const char*)WEB_PAGE_GZ, WEB_PAGE_GZ_LEN);
 }
@@ -150,6 +150,14 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
         f = json_get_float(body, "\"dhw_hysteresis\""); if (f > -1e37f) self->cfg_->set_dhw_hysteresis(f);
         f = json_get_float(body, "\"tz_offset\"");
         if (f > -1e37f) { int tz = (int)f; if (tz >= -12 && tz <= 14) self->cfg_->set_timezone(tz); }
+        {
+            float t1o  = json_get_float(body, "\"t1_offset\"");
+            float t2o  = json_get_float(body, "\"t2_offset\"");
+            float oo   = json_get_float(body, "\"outside_offset\"");
+            if (t1o > -1e37f || t2o > -1e37f || oo > -1e37f) {
+                self->cfg_->set_temperature_offsets(t1o, t2o, oo);
+            }
+        }
     }
     if (self->pid_) {
         float kp = json_get_float(body, "\"pid_kp\"");

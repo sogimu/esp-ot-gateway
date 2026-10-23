@@ -44,6 +44,12 @@ struct __attribute__((packed)) NvsEfficiencyBlob {
 };
 static_assert(sizeof(NvsEfficiencyBlob) == 24, "NvsEfficiencyBlob size mismatch");
 
+// ── Temperature correction offsets blob (on-disk format) ─────
+struct __attribute__((packed)) NvsTempOffsetBlob {
+    float t1_offset, t2_offset, outside_offset;
+};
+static_assert(sizeof(NvsTempOffsetBlob) == 12, "NvsTempOffsetBlob size mismatch");
+
 struct __attribute__((packed)) NvsCorrLogEntry {
     uint32_t timestamp; float actual_reading, estimated_total, difference, prev_k_calib, new_k_calib;
 };

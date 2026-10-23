@@ -3,6 +3,7 @@
 #include "application/ports/driven/iheating_state_store.h"
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/itime_source.h"
+#include "application/ports/driven/itemperatures_source.h"
 #include "application/services/dhw_hysteresis_service.h"
 #include "application/services/dhw_schedule_service.h"
 #include "application/services/schedule_service.h"
@@ -60,8 +61,8 @@ static constexpr uint32_t HANDSHAKE_INTERVAL_MS = 3600000;
 static constexpr uint32_t HANDSHAKE_RETRY_MS    = 10000;   // retry failed handshake after 10s
 static constexpr uint32_t CONNECTIVITY_TIMEOUT_MS = 10000;
 
-BoilerPollInteractor::BoilerPollInteractor(IBoilerHardware& boiler, IHeatingStateStore& state, ILogger& log, ITimeSource& time)
-    : boiler_(boiler), state_(state), log_(log), time_(time)
+BoilerPollInteractor::BoilerPollInteractor(IBoilerHardware& boiler, IHeatingStateStore& state, ILogger& log, ITimeSource& time, ITemperatureSource* temps)
+    : boiler_(boiler), state_(state), log_(log), time_(time), temps_(temps)
 {
 }
 
@@ -228,10 +229,10 @@ void BoilerPollInteractor::do_dhw_hysteresis()
 {
     state_.lock_shared();
     bool  dhw_enabled = state_.is_dhw_enabled();
-    float dhw_temp    = state_.get_dhw_temp();
     float dhw_setpoint = state_.get_dhw_setpoint();
     float hysteresis   = state_.get_dhw_hysteresis();
     state_.unlock_shared();
+    float dhw_temp    = temps_ ? temps_->dhw() : state_.get_dhw_temp();
 
     // DHW schedule — gate heating by local hour (fail-safe: allow when unsynced)
     bool dhw_allowed = dhw_enabled;

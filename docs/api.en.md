@@ -59,6 +59,9 @@ The Control tab maps to these fields. GET returns the full state; POST accepts a
 | `dhw_enable` | bool | Бойлер БКН → Разрешение |
 | `dhw_setpoint` | °C, clamped to boiler-reported bounds (35–60 °C on the tested Baxi) | Уставка БКН |
 | `dhw_hysteresis` | °C (e.g. 2.0) | Гистерезис БКН |
+| `t1_offset` | °C, −10…+10 | T1 sensor (DS18B20) correction |
+| `t2_offset` | °C, −10…+10 | T2 sensor (DS18B20) correction |
+| `outside_offset` | °C, −10…+10 | Outside temperature correction |
 
 The red **"Выключить котёл"** button is the emergency stop — `TODO(verify): its endpoint/field (e.g. POST /api/control {"boiler_off":true})`.
 
@@ -75,6 +78,8 @@ curl -s -X POST http://192.168.0.37/api/control \
 ```
 
 Out-of-range values are clamped to the boiler-reported bounds (CH — `ID 49`, DHW — `ID 48`), which are the single source of truth for every entry point (HTTP, MQTT, schedule); malformed JSON is rejected and logged to the event journal.
+
+The `*_offset` fields set an additive offset (°C) for the corresponding temperature: corrected value = sensor reading + offset. Each offset is clamped to **−10…+10 °C** and rounded to **0.1 °C**. The correction is applied across the whole gateway logic (PID, gas-flow estimate, DHW prediction, FOPDT/PID quality) through a single temperature-reading abstraction; the values shown in the web UI and `/api/status` are already corrected. Fields absent from the request leave the stored value unchanged.
 
 ## `GET/POST /api/schedule` — the 24-hour grid
 

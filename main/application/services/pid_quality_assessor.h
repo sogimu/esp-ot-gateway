@@ -4,12 +4,13 @@
 #include "domain/value_objects/pid_quality_metrics.h"
 
 class IHeatingStateStore;
+class ITemperatureSource;
 
 class PidQualityAssessor : public IControlTask {
 public:
     static constexpr int RING_SIZE = 1440;  // 24h x 60min
 
-    explicit PidQualityAssessor(IHeatingStateStore& state);
+    PidQualityAssessor(IHeatingStateStore& state, ITemperatureSource* temps = nullptr);
 
     void execute() override;
     void reset();
@@ -24,6 +25,7 @@ private:
     void recompute_scores();
 
     IHeatingStateStore& state_;
+    ITemperatureSource* temps_ = nullptr;
     PidQualitySample ring_[RING_SIZE];
     int ring_head_ = 0;
     int ring_count_ = 0;
