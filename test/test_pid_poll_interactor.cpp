@@ -143,21 +143,21 @@ TEST_CASE("PidPoll: target_room из конфига", "[pid][config][params]") {
     time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_target_room() == Approx(25.0f));
 }
-TEST_CASE("PidPoll: Kp из конфига — больший Kp даёт больший выход", "[pid][config][params]") {
+TEST_CASE("PidPoll: Kp из конфига — больший Kp даёт больший P-вклад", "[pid][config][params]") {
     FakeHeatingStateStore s1; FakeBoilerHardware b1; FakeTimeSource t1; PidPollTestLogger l1;
     s1.set_ch_mode(CHMode::PID_Static); s1.set_t1_temp(10.0f);
     s1.set_pid_config(4.0f, 0.0f, 0.0f, 60, 0, 22.0f, 300);
     s1.set_ch_sp_min(20.0f); s1.set_ch_sp_max(80.0f);
     PidPollInteractor p1(s1, b1, t1, l1);
     t1.advance_sec(1); p1.execute(); t1.advance_sec(60); p1.execute();
-    float out_hi = s1.get_pid_output();
+    float p_hi = s1.get_pid_p();
     FakeHeatingStateStore s2; FakeBoilerHardware b2; FakeTimeSource t2; PidPollTestLogger l2;
     s2.set_ch_mode(CHMode::PID_Static); s2.set_t1_temp(10.0f);
     s2.set_pid_config(1.0f, 0.0f, 0.0f, 60, 0, 22.0f, 300);
     s2.set_ch_sp_min(20.0f); s2.set_ch_sp_max(80.0f);
     PidPollInteractor p2(s2, b2, t2, l2);
     t2.advance_sec(1); p2.execute(); t2.advance_sec(60); p2.execute();
-    REQUIRE(out_hi > s2.get_pid_output());
+    REQUIRE(p_hi > s2.get_pid_p());
 }
 TEST_CASE("PidPoll: датчик T2 из конфига", "[pid][config][params]") {
     FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
@@ -361,10 +361,10 @@ TEST_CASE("PidPoll: PID выключает нагрев при достижен�
 
 // ═══ Чистый PI: интеграл уменьшается, границы подачи соблюдаются ═══
 
-TEST_CASE("PidPoll: интеграл уменьшается, когда комната выше цели", "[pid][antiwindup][regression]") {
+TEST_CASE("PidPoll: уставка снижается, когда комната выше цели", "[pid][antiwindup][regression]") {
     FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
     state.set_ch_mode(CHMode::PID_Static);
-    state.set_t1_temp(21.0f);
+    state.set_t1_temp(22.0f);
     state.set_pid_config(2.5f, 0.015f, 0.1f, 60, 0, 22.5f, 300);
     state.set_pid_hysteresis(0.2f);
     state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
@@ -372,16 +372,15 @@ TEST_CASE("PidPoll: интеграл уменьшается, когда комн
 
     PidPollInteractor pid(state, boiler, time, log);
     time.advance_sec(1); pid.execute();
-    time.advance_sec(60); pid.execute();
-    time.advance_sec(60); pid.execute();
-    float i_warm = state.get_pid_i();
-    REQUIRE(i_warm > 25.0f);
+    for (int i = 0; i < 5; i++) { time.advance_sec(60); pid.execute(); }
+    float out_warm = state.get_pid_output();
+    REQUIRE(out_warm > 25.0f);
+    REQUIRE(state.get_pid_i() > 0.0f);
 
-    // Комната выше цели, но выход ещё не у минимума — интеграл должен уменьшаться
+    // Комната выше цели — уставка должна снизиться к минимуму
     state.set_t1_temp(22.8f);
-    time.advance_sec(60); pid.execute();
-    time.advance_sec(60); pid.execute();
-    REQUIRE(state.get_pid_i() < i_warm);
+    for (int i = 0; i < 3; i++) { time.advance_sec(60); pid.execute(); }
+    REQUIRE(state.get_pid_output() < out_warm);
 }
 
 TEST_CASE("PidPoll: выход PI не выходит за pid_sp_min/pid_sp_max", "[pid][limits]") {
@@ -416,7 +415,7 @@ TEST_CASE("PidPoll: CH включается, когда выход PI выше �
 
     REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
     REQUIRE(state.get_pid_output() > 25.0f);
-    REQUIRE(state.get_pid_i() > 20.0f);
+    REQUIRE(state.get_pid_i() > 0.0f);
 }
 
 // ═══ Конец ГВС не должен взводить цикловую блокировку CH ═══
@@ -469,4 +468,24 @@ TEST_CASE("PidPoll: изменения Kp/Ki применяются на лет�
     float p2 = state.get_pid_p();
 
     REQUIRE(p2 > p1);
+}
+
+TEST_CASE("PidPoll: комнатный предохранитель выключает CH при перегреве", "[pid][guard]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(22.0f);  // ниже цели — CH включится
+    state.set_pid_config(2.5f, 0.015f, 0.1f, 60, 0, 22.5f, 300);
+    state.set_pid_hysteresis(0.2f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(25.0f, 40.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute();
+    for (int i = 0; i < 5; i++) { time.advance_sec(60); pid.execute(); }
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+
+    // Комната выше цели на 0.4 (> 0.3) — предохранитель гасит CH
+    state.set_t1_temp(22.9f);
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
 }

@@ -11,6 +11,10 @@
 
 static constexpr float  MAX_SAFE_ROOM     = 30.0f;
 static constexpr float  UNWIND_GAIN       = 3.0f;   // faster integral unwind when the room is above target
+static constexpr float  TRIM_MAX          = 5.0f;   // PI correction authority around the base
+static constexpr float  BASE_TAU_SEC      = 1200.0f;// learned base time constant
+static constexpr float  ROOM_GUARD        = 0.3f;   // room overshoot guard (above target)
+static constexpr float  ROOM_GUARD_HYST   = 0.15f;  // release margin
 
 PidPollInteractor::PidPollInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                                        ITimeSource& time, ILogger& log, ITemperatureSource* temps)
@@ -129,7 +133,7 @@ void PidPollInteractor::execute()
 
     // Overheat protection — update state only; BoilerPollInteractor writes OT
     if (room_valid && room > MAX_SAFE_ROOM) {
-        float sp_min = pid_cfg_.out_min;
+        float sp_min = sp_lo_;
         state_.lock_exclusive();
         state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), cycle_locked_, 0, false);
         state_.set_ch_setpoint(sp_min);
@@ -144,7 +148,7 @@ void PidPollInteractor::execute()
 
     // Cycle locked — hold min setpoint
     if (cycle_locked_) {
-        float sp_min = pid_cfg_.out_min;
+        float sp_min = sp_lo_;
         state_.lock_exclusive();
         state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), true, lockout, false);
         state_.set_ch_setpoint(sp_min);
@@ -168,19 +172,22 @@ void PidPollInteractor::execute()
 
     float target = state_.get_pid_target_room();
 
-    // Pure PI: the output IS the flow setpoint, bounded by pid_sp_min/pid_sp_max.
-    // Use the actual elapsed time for integration (robust to poll delays).
+    // Per-cycle bumpless: when CH was off, the trim starts fresh; the learned
+    // base keeps the operating point.
+    if (!ch_prev) pid_state_.integral = 0.0f;
+
+    // Feed-forward base + bounded PI trim, using the actual elapsed time.
     int elapsed_sec = static_cast<int>(elapsed / 1000);
     if (elapsed_sec < 1) elapsed_sec = 1;
     if (elapsed_sec > 300) elapsed_sec = 300;
     compute_pid(elapsed_sec);
 
     float output = state_.get_pid_output();
-    float sp_min = pid_cfg_.out_min;
+    float sp_min = sp_lo_;
     float deadband = state_.get_pid_hysteresis();
     if (deadband < 0.1f) deadband = 0.1f;  // a zero deadband would keep CH always on
 
-    // CH on/off derived from the PI output (small deadband against chatter).
+    // CH on/off derived from the setpoint (small deadband against chatter).
     bool ch_on;
     if (output >= sp_min + deadband) {
         ch_on = true;
@@ -188,6 +195,26 @@ void PidPollInteractor::execute()
         ch_on = false;
     } else {
         ch_on = state_.get_pid_ch_enabled_by_pid();
+    }
+
+    // Room overshoot guard: stop heating once the room is above the target.
+    if (room > target + ROOM_GUARD) {
+        room_guard_off_ = true;
+    } else if (room < target + ROOM_GUARD - ROOM_GUARD_HYST) {
+        room_guard_off_ = false;
+    }
+    if (room_guard_off_) ch_on = false;
+
+    // Learn the base: transfer part of the integral into the base while the
+    // room is stable at target, keeping the setpoint continuous.
+    if (ch_on && fabsf(target - room) < 0.2f) {
+        float transfer = pid_state_.integral *
+                         (static_cast<float>(elapsed_sec) / BASE_TAU_SEC);
+        float new_base = base_ + transfer;
+        if (new_base < sp_lo_) new_base = sp_lo_;
+        if (new_base > sp_hi_) new_base = sp_hi_;
+        pid_state_.integral -= (new_base - base_);
+        base_ = new_base;
     }
 
     state_.lock_exclusive();
@@ -200,10 +227,10 @@ void PidPollInteractor::execute()
     state_.unlock_exclusive();
 
     log_.event(ILogger::MODE,
-        "PID: SP=%.0f°C цель=%.1f°C комн=%.1f°C CH=%s (P=%.1f I=%.1f)",
+        "PID: SP=%.0f°C цель=%.1f°C комн=%.1f°C CH=%s (P=%.1f I=%.1f база=%.1f)",
         (double)output, (double)target, (double)room,
         ch_on ? "вкл" : "выкл",
-        (double)state_.get_pid_p(), (double)state_.get_pid_i());
+        (double)state_.get_pid_p(), (double)state_.get_pid_i(), (double)base_);
 
     last_compute_ms_ = now;
 }
@@ -221,6 +248,8 @@ void PidPollInteractor::load_config()
     if (hi < phys_min) hi = phys_min;
     if (hi > phys_max) hi = phys_max;
     if (hi < lo + 1.0f) hi = lo + 1.0f;
+    sp_lo_ = lo;
+    sp_hi_ = hi;
 
     // Reload gains every tick so runtime changes from the web/API apply at once.
     pid_cfg_.kp = state_.get_pid_kp();
@@ -229,15 +258,16 @@ void PidPollInteractor::load_config()
 
     if (!pid_inited_) {
         pid_init(&pid_state_);
-        // Bumpless start: resume from the last auto operating point if known,
-        // otherwise start at the minimum flow setpoint (no dead zone).
-        float seed = lo;
-        if (last_auto_output_ > lo && last_auto_output_ <= hi) seed = last_auto_output_;
-        pid_state_.integral = seed;
+        // Bumpless start: resume the base from the last auto setpoint if known,
+        // otherwise start from the minimum; the trim starts at zero.
+        float seed = sp_lo_;
+        if (last_auto_output_ > sp_lo_ && last_auto_output_ <= sp_hi_) seed = last_auto_output_;
+        base_ = seed;
+        pid_state_.integral = 0.0f;
         pid_inited_ = true;
     }
-    pid_cfg_.out_min = lo;
-    pid_cfg_.out_max = hi;
+    if (base_ < sp_lo_) base_ = sp_lo_;
+    if (base_ > sp_hi_) base_ = sp_hi_;
 }
 
 void PidPollInteractor::compute_pid(int dt_sec)
@@ -255,8 +285,17 @@ void PidPollInteractor::compute_pid(int dt_sec)
     if (dt < 1) dt = 1;
     if (dt > 300) dt = 300;
 
+    // The PI trim is bounded around the learned base and by the SP range.
+    float trim_lo = sp_lo_ - base_;
+    float trim_hi = sp_hi_ - base_;
+    if (trim_lo < -TRIM_MAX) trim_lo = -TRIM_MAX;
+    if (trim_hi >  TRIM_MAX) trim_hi =  TRIM_MAX;
+    if (trim_hi <= trim_lo) trim_hi = trim_lo + 0.1f;
+    pid_cfg_.out_min = trim_lo;
+    pid_cfg_.out_max = trim_hi;
+
     // Freeze integral during DHW. When the room is above target, unwind it
-    // faster so the setpoint does not linger high and cause overshoot.
+    // faster so the trim does not linger high and cause overshoot.
     float saved_ki = pid_cfg_.ki;
     if (dhw) {
         pid_cfg_.ki = 0.0f;
@@ -264,21 +303,23 @@ void PidPollInteractor::compute_pid(int dt_sec)
         pid_cfg_.ki = saved_ki * UNWIND_GAIN;
     }
 
-    float out = pid_step(&pid_cfg_, &pid_state_, target, room, dt);
+    float trim = pid_step(&pid_cfg_, &pid_state_, target, room, dt);
     pid_cfg_.ki = saved_ki;
-    last_auto_output_ = out;
 
-    if (out <= pid_cfg_.out_min || out >= pid_cfg_.out_max) {
+    float sp = base_ + trim;
+    if (sp < sp_lo_) sp = sp_lo_;
+    if (sp > sp_hi_) sp = sp_hi_;
+    last_auto_output_ = sp;
+
+    if (sp <= sp_lo_ || sp >= sp_hi_) {
         if (!clamped_logged_) {
             float error = target - room;
             float p_term = pid_cfg_.kp * error;
-            float raw = p_term + pid_state_.integral + pid_state_.d_filt;
             log_.event(ILogger::MODE,
-                "PID: расч.%.1f вне [%.0f..%.0f]°C (цель=%.1f комн=%.1f Δ=%.1f Kp=%.1f P=%.1f I=%.1f dt=%d)",
-                (double)raw, (double)pid_cfg_.out_min, (double)pid_cfg_.out_max,
+                "PID: SP %.1f упёрлась в [%.0f..%.0f]°C (база=%.1f цель=%.1f комн=%.1f Δ=%.1f P=%.1f I=%.1f dt=%d)",
+                (double)sp, (double)sp_lo_, (double)sp_hi_, (double)base_,
                 (double)target, (double)room, (double)error,
-                (double)pid_cfg_.kp, (double)p_term, (double)pid_state_.integral,
-                dt);
+                (double)p_term, (double)pid_state_.integral, dt);
             clamped_logged_ = true;
         }
     } else {
@@ -290,7 +331,7 @@ void PidPollInteractor::compute_pid(int dt_sec)
     float d_term = pid_state_.d_filt;
 
     state_.lock_exclusive();
-    state_.set_pid_state(state_.get_pid_enabled(), true, out,
+    state_.set_pid_state(state_.get_pid_enabled(), true, sp,
                           p_term, i_term, d_term,
                           room, target,
                           state_.get_pid_cycle_locked(),

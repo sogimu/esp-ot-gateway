@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-23
+goal: Feed-forward база (выученная) + PI-поправка, per-cycle bumpless и
+  комнатный предохранитель
