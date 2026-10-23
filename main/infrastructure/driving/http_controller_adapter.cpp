@@ -112,7 +112,7 @@ void HttpControllerAdapter::stop() { if (server_) { httpd_stop(server_); server_
 
 esp_err_t HttpControllerAdapter::handler_root(httpd_req_t* req) {
     httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
-    httpd_resp_set_hdr(req, "Cache-Control", "no-cache");
+    httpd_resp_set_hdr(req, "Cache-Control", "no-cache, no-store, must-revalidate");
     httpd_resp_set_type(req, "text/html; charset=utf-8");
     return httpd_resp_send(req, (const char*)WEB_PAGE_GZ, WEB_PAGE_GZ_LEN);
 }

@@ -6,6 +6,8 @@
 #include "application/ports/driven/ilogger.h"
 #include "application/ports/driven/iboiler_config_store.h"
 #include "infrastructure/driven/temperature_source_adapter.h"
+#include "infrastructure/driven/web_presenter_adapter.h"
+#include "infrastructure/driving/json_helpers.h"
 #include "domain/value_objects/ch_schedule.h"
 #include "fakes/fake_heating_state_store.h"
 #include "fakes/fake_configuration_store.h"
@@ -13,6 +15,7 @@
 #include "fakes/fake_time_source.h"
 #include <cstdio>
 #include <cstdarg>
+#include <cstring>
 
 using Catch::Approx;
 
@@ -95,6 +98,39 @@ TEST_CASE("Temperature offsets: rounded to 0.1 °C", "[tempcorr]") {
     REQUIRE(f.state.get_t1_offset() == Approx(1.2f));
     REQUIRE(f.state.get_t2_offset() == Approx(-3.8f));
     REQUIRE(f.state.get_outside_offset() == Approx(0.1f));
+}
+
+TEST_CASE("HTTP body offsets are parsed and applied to T1", "[tempcorr]") {
+    TempCorrFixture f;
+    f.state.set_t1_temp(21.0f);
+
+    // What the web panel sends when only T1 is edited (others empty → null).
+    const char* body = "{\"t1_offset\":2.5,\"t2_offset\":null,\"outside_offset\":null}";
+    float t1o = json_get_float(body, "\"t1_offset\"");
+    float t2o = json_get_float(body, "\"t2_offset\"");
+    float oo  = json_get_float(body, "\"outside_offset\"");
+    if (t1o > -1e37f || t2o > -1e37f || oo > -1e37f)
+        f.sys.set_temperature_offsets(t1o, t2o, oo);
+
+    REQUIRE(f.state.get_t1_offset() == Approx(2.5f));
+    TemperatureSourceAdapter temps(f.state);
+    REQUIRE(temps.t1() == Approx(23.5f));
+}
+
+TEST_CASE("render_status reports corrected T1", "[tempcorr]") {
+    FakeHeatingStateStore state;
+    state.reset_to_defaults();
+    state.set_t1_temp(21.0f);
+    state.set_t1_offset(2.5f);
+
+    TemperatureSourceAdapter temps(state);
+    WebPresenterAdapter presenter;
+    presenter.set_state(&state);
+    presenter.set_temps(&temps);
+
+    char buf[2048];
+    presenter.render_status(buf, sizeof(buf));
+    REQUIRE(std::strstr(buf, "\"t1_temp\":23.5") != nullptr);
 }
 
 TEST_CASE("Temperature offsets: absent fields left unchanged", "[tempcorr]") {
