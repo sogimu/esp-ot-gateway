@@ -41,7 +41,6 @@ private:
     float    last_auto_output_ = 0.0f;
     float    sp_lo_ = 25.0f, sp_hi_ = 40.0f;   // effective flow setpoint bounds
     float    base_ = 25.0f;                    // learned feed-forward base
-    bool     room_guard_off_ = false;
     bool     cycle_locked_ = false;
     bool     lockout_logged_ = false;
     bool     overheat_logged_ = false;

@@ -6,14 +6,14 @@
 
 - **Feed-forward база + PI-поправка**: `SP = clamp(base + clamp(P+I+D, −trim_max…+trim_max), sp_min, sp_max)`. База — выученная (медленный перенос интеграла в базу при стабильной комнате у цели).
 - **Выученная база (bumpless)**: при включении PID база стартует с последней рабочей уставки (RAM); на каждом включении CH поправка (интеграл) сбрасывается в 0, база сохраняет рабочую точку.
-- **Комнатный предохранитель**: при `комната > цель + 0.3` CH принудительно выключается (с гистерезисом 0.15), не дожидаясь снижения SP до минимума.
+- **Вкл/выкл CH по комнатному гистерезису**: поле `pid_hysteresis` — off при `цель + hyst`, on при `цель − hyst`; отдельного дедбенда по уставке подачи нет.
 - Диагностика: база выводится в лог PID.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `pid-control`: feed-forward база (выученная), per-cycle bumpless, комнатный предохранитель.
+- `pid-control`: feed-forward база (выученная), per-cycle bumpless, вкл/выкл по комнатному гистерезису.
 
 ### Modified Capabilities
 
@@ -21,5 +21,5 @@
 
 ## Impact
 
-- `main/application/use_cases/pid_poll_interactor.{h,cpp}` — структура feed-forward, обучение базы, предохранитель.
+- `main/application/use_cases/pid_poll_interactor.{h,cpp}` — структура feed-forward, обучение базы, вкл/выкл по комнатному гистерезису.
 - `test/test_pid_poll_interactor.cpp` — обновить тесты под новую структуру.
