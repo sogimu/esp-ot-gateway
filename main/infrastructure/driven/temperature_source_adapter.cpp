@@ -28,7 +28,7 @@ float TemperatureSourceAdapter::outside()
 float TemperatureSourceAdapter::ch_flow()
 {
     store_.lock_shared();
-    float v = store_.get_ch_temp() + store_.get_ch_temp_offset();
+    float v = store_.get_ch_temp();
     store_.unlock_shared();
     return v;
 }
@@ -36,7 +36,7 @@ float TemperatureSourceAdapter::ch_flow()
 float TemperatureSourceAdapter::ch_return()
 {
     store_.lock_shared();
-    float v = store_.get_return_temp() + store_.get_return_temp_offset();
+    float v = store_.get_return_temp();
     store_.unlock_shared();
     return v;
 }
@@ -44,7 +44,7 @@ float TemperatureSourceAdapter::ch_return()
 float TemperatureSourceAdapter::dhw()
 {
     store_.lock_shared();
-    float v = store_.get_dhw_temp() + store_.get_dhw_temp_offset();
+    float v = store_.get_dhw_temp();
     store_.unlock_shared();
     return v;
 }

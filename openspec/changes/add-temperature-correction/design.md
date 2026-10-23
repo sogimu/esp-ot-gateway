@@ -9,7 +9,7 @@
 ## Goals / Non-Goals
 
 **Goals:**
-- Пользовательский аддитивный сдвиг (°C) для каждой из шести температур, переживающий перезагрузку.
+- Пользовательский аддитивный сдвиг (°C) для T1, T2 и уличной температуры, переживающий перезагрузку. Температуры котла CH supply/CH return/DHW не корректируются.
 - Единственная абстракция чтения температуры, сквозь которую идут все потребители, — сырые значения из `IHeatingStateStore` в прикладной логике больше не читаются.
 
 **Non-Goals:**
@@ -22,22 +22,22 @@
 
 ### D1. Коррекция на стороне чтения — порт `ITemperatureSource`
 
-Вводим порт `ITemperatureSource` (driven) с шестью геттерами, возвращающими **уже скорректированные** температуры:
+Вводим порт `ITemperatureSource` (driven) с шестью геттерами — единая точка чтения температур. Сдвиг применяется только к `t1`, `t2`, `outside`; `ch_flow`, `ch_return`, `dhw` возвращаются как есть:
 
 ```cpp
 class ITemperatureSource {
 public:
-    virtual float t1()          const = 0;  // DS18B20 T1 (corr)
-    virtual float t2()          const = 0;  // DS18B20 T2 (corr)
-    virtual float outside()     const = 0;  // boiler outside (corr)
-    virtual float ch_flow()     const = 0;  // boiler CH supply (corr)
-    virtual float ch_return()   const = 0;  // boiler CH return (corr)
-    virtual float dhw()         const = 0;  // boiler DHW (corr)
+    virtual float t1()          = 0;  // DS18B20 T1 (raw + offset)
+    virtual float t2()          = 0;  // DS18B20 T2 (raw + offset)
+    virtual float outside()     = 0;  // boiler outside (raw + offset)
+    virtual float ch_flow()     = 0;  // boiler CH supply (raw)
+    virtual float ch_return()   = 0;  // boiler CH return (raw)
+    virtual float dhw()         = 0;  // boiler DHW (raw)
     virtual ~ITemperatureSource() = default;
 };
 ```
 
-Адаптер `TemperatureSourceAdapter` (infrastructure/driven) держит ссылку на `IHeatingStateStore`, берёт под `lock_shared()` сырое значение и сдвиг и возвращает `raw + offset`.
+Адаптер `TemperatureSourceAdapter` (infrastructure/driven) держит ссылку на `IHeatingStateStore`, берёт под `lock_shared()` сырое значение (и сдвиг для трёх корректируемых температур).
 
 - Писатели (`SensorsPollInteractor`, `BoilerPollInteractor`) продолжают писать **сырые** значения в store — сырое значение остаётся доступным для диагностики.
 - Все потребители переходят на `ITemperatureSource`; прямые вызовы `state_.get_*_temp()` в прикладной логике удаляются.
@@ -46,9 +46,9 @@ public:
 
 ### D2. Сдвиги живут в `IHeatingStateStore` и NVS
 
-Добавляем в `IHeatingStateStore` шесть пар `set_*_offset(float)` / `get_*_offset()` (`t1`, `t2`, `outside`, `ch_temp`, `return_temp`, `dhw_temp`). Это согласуется с существующим паттерном (конфиг котла `gas_temp_offset`, `ch_pmin` и т.п. уже хранится в store).
+Добавляем в `IHeatingStateStore` три пары `set_*_offset(float)` / `get_*_offset()` (`t1`, `t2`, `outside`). Это согласуется с существующим паттерном (конфиг котла `gas_temp_offset`, `ch_pmin` и т.п. уже хранится в store).
 
-Персистенция — новый packed-blob `NvsTempOffsetBlob` (6 × float) в namespace `config` под ключом `temp_off`, читается/пишется в `BoilerNvsStore::load_boiler_config` / `save_boiler_config` рядом с `boiler`/`eff` blobs. Отдельный blob выбран, чтобы не трогать миграцию `NvsCalibBlob` (проверку `sz == 40` / `sz == sizeof(NvsCalibBlob)`).
+Персистенция — новый packed-blob `NvsTempOffsetBlob` (3 × float) в namespace `config` под ключом `temp_off`, читается/пишется в `BoilerNvsStore::load_boiler_config` / `save_boiler_config` рядом с `boiler`/`eff` blobs. Отдельный blob выбран, чтобы не трогать миграцию `NvsCalibBlob` (проверку `sz == 40` / `sz == sizeof(NvsCalibBlob)`).
 
 *Альтернатива:* отдельный `ITemperatureCorrectionStore` + NVS-store — отвергнуто ради минимума новых классов; store уже является точкой синхронизации конфигурации.
 
@@ -62,14 +62,14 @@ public:
 
 ### D5. Имена полей API и веб-панель (единообразная)
 
-Поля `POST /api/control`: `t1_offset`, `t2_offset`, `outside_offset`, `ch_temp_offset`, `return_temp_offset`, `dhw_temp_offset`.
+Поля `POST /api/control`: `t1_offset`, `t2_offset`, `outside_offset`.
 
-Веб-панель «Коррекция температур» полностью повторяет паттерн панели «Модель котла» (`mf_*`):
+Панель «Коррекция температур» расположена внизу вкладки «Управление» и полностью повторяет паттерн панели «Модель котла» (`mf_*`):
 
-- Поля ввода — те же inline `input type='number'` со стилем `width:60px;background:#1a1a2e;color:#4fc3f7;border:1px solid #0f3460;border-radius:4px;padding:2px 4px;text-align:center;font-size:.9em`, внутри `.info-row` / `.info-label` / `.info-val`, с `.tip`-подсказками. У каждого поля `step='0.1'`, диапазон `min='-10' max='10'`, `oninput='setTempCorrDirty(true)'`.
-- Единый dirty-флаг панели `dirtyFields.temp` через `setTempCorrDirty(on)`, который подсвечивает все шесть полей (`background` `#2a1a2e` при dirty, `#1a1a2e` при чистом) — по образцу `setModelDirty`.
+- Три поля ввода — те же inline `input type='number'` со стилем `width:60px;background:#1a1a2e;color:#4fc3f7;border:1px solid #0f3460;border-radius:4px;padding:2px 4px;text-align:center;font-size:.9em`, внутри `.info-row` / `.info-label` / `.info-val`, с `.tip`-подсказками. У каждого поля `step='0.1'`, диапазон `min='-10' max='10'`, `oninput='setTempCorrDirty(true)'`.
+- Единый dirty-флаг панели `dirtyFields.temp` через `setTempCorrDirty(on)`, который подсвечивает все три поля (`background` `#2a1a2e` при dirty, `#1a1a2e` при чистом) — по образцу `setModelDirty`.
 - Кнопка Apply (`.btn`) + span сообщения (`#temp_msg`); при успехе вызывает `setTempCorrDirty(false)`, при ошибке показывает сообщение.
-- Защита от поллинга: в `poll()` значения полей обновляются только при `!dirtyFields.temp` (аналог `!dirtyFields.model` для `mf_*`).
+- Защита от поллинга: в `pollStats()` значения полей обновляются только при `!dirtyFields.temp` (аналог `!dirtyFields.model` для `mf_*`).
 
 ## Risks / Trade-offs
 

@@ -15,7 +15,6 @@ public:
         ch_temp_ = 0; dhw_temp_ = 0; return_temp_ = 0; outside_temp_ = 0; modulation_ = 0;
         t1_temp_ = -127.0f; t2_temp_ = -127.0f;
         t1_offset_ = 0; t2_offset_ = 0; outside_offset_ = 0;
-        ch_temp_offset_ = 0; return_temp_offset_ = 0; dhw_temp_offset_ = 0;
         ch_setpoint_ = 30.0f; dhw_setpoint_ = 55.0f;
         ch_sp_min_ = 0; ch_sp_max_ = 80; dhw_sp_min_ = 0; dhw_sp_max_ = 65;
         ch_enable_ = false; dhw_enable_ = false;
@@ -88,15 +87,9 @@ public:
     void set_t1_offset(float v) override { t1_offset_ = v; }
     void set_t2_offset(float v) override { t2_offset_ = v; }
     void set_outside_offset(float v) override { outside_offset_ = v; }
-    void set_ch_temp_offset(float v) override { ch_temp_offset_ = v; }
-    void set_return_temp_offset(float v) override { return_temp_offset_ = v; }
-    void set_dhw_temp_offset(float v) override { dhw_temp_offset_ = v; }
-    float get_t1_offset()          const override { return t1_offset_; }
-    float get_t2_offset()          const override { return t2_offset_; }
-    float get_outside_offset()     const override { return outside_offset_; }
-    float get_ch_temp_offset()     const override { return ch_temp_offset_; }
-    float get_return_temp_offset() const override { return return_temp_offset_; }
-    float get_dhw_temp_offset()    const override { return dhw_temp_offset_; }
+    float get_t1_offset()      const override { return t1_offset_; }
+    float get_t2_offset()      const override { return t2_offset_; }
+    float get_outside_offset() const override { return outside_offset_; }
 
     // Setpoints & bounds
     void set_ch_setpoint(float v) override { ch_setpoint_ = v; }
@@ -281,7 +274,6 @@ public:
     float  ch_temp_ = 0, dhw_temp_ = 0, return_temp_ = 0, outside_temp_ = 0, modulation_ = 0;
     float  t1_temp_ = -127.0f, t2_temp_ = -127.0f;
     float  t1_offset_ = 0, t2_offset_ = 0, outside_offset_ = 0;
-    float  ch_temp_offset_ = 0, return_temp_offset_ = 0, dhw_temp_offset_ = 0;
     float  ch_setpoint_ = 30.0f, dhw_setpoint_ = 55.0f;
     float  ch_sp_min_ = 0, ch_sp_max_ = 80;
     float  dhw_sp_min_ = 0, dhw_sp_max_ = 65;

@@ -122,16 +122,12 @@ void SystemConfigInteractor::set_dhw_hysteresis(float v)
     save_and_log("Гистерезис ГВС: %.1f C", (double)v);
 }
 
-void SystemConfigInteractor::set_temperature_offsets(float t1, float t2, float outside,
-                                                     float ch_temp, float return_temp, float dhw_temp)
+void SystemConfigInteractor::set_temperature_offsets(float t1, float t2, float outside)
 {
     state_.lock_exclusive();
-    if (t1 > -1e37f)         state_.set_t1_offset(clamp_offset(t1));
-    if (t2 > -1e37f)         state_.set_t2_offset(clamp_offset(t2));
-    if (outside > -1e37f)    state_.set_outside_offset(clamp_offset(outside));
-    if (ch_temp > -1e37f)    state_.set_ch_temp_offset(clamp_offset(ch_temp));
-    if (return_temp > -1e37f) state_.set_return_temp_offset(clamp_offset(return_temp));
-    if (dhw_temp > -1e37f)   state_.set_dhw_temp_offset(clamp_offset(dhw_temp));
+    if (t1 > -1e37f)      state_.set_t1_offset(clamp_offset(t1));
+    if (t2 > -1e37f)      state_.set_t2_offset(clamp_offset(t2));
+    if (outside > -1e37f) state_.set_outside_offset(clamp_offset(outside));
     state_.unlock_exclusive();
     save_and_log("Коррекция температур обновлена");
 }

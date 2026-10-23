@@ -35,7 +35,7 @@ struct SpySystemConfig : public IConfigureSystem {
     void set_ch_setpoint(float v) override { ch_setpoint_ = v; ch_setpoint_set_ = true; }
     void set_dhw_setpoint(float v) override { dhw_setpoint_ = v; dhw_setpoint_set_ = true; }
     void set_dhw_hysteresis(float) override {}
-    void set_temperature_offsets(float, float, float, float, float, float) override {}
+    void set_temperature_offsets(float, float, float) override {}
     void set_schedule(const CH_Schedule&) override {}
     void set_pid_schedule(const PID_Schedule&) override {}
     void set_dhw_schedule(const DHW_Schedule&) override {}

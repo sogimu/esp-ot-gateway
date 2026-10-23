@@ -50,16 +50,10 @@ public:
     virtual void set_t1_offset(float v) = 0;
     virtual void set_t2_offset(float v) = 0;
     virtual void set_outside_offset(float v) = 0;
-    virtual void set_ch_temp_offset(float v) = 0;
-    virtual void set_return_temp_offset(float v) = 0;
-    virtual void set_dhw_temp_offset(float v) = 0;
 
-    virtual float get_t1_offset()          const = 0;
-    virtual float get_t2_offset()          const = 0;
-    virtual float get_outside_offset()     const = 0;
-    virtual float get_ch_temp_offset()     const = 0;
-    virtual float get_return_temp_offset() const = 0;
-    virtual float get_dhw_temp_offset()    const = 0;
+    virtual float get_t1_offset()      const = 0;
+    virtual float get_t2_offset()      const = 0;
+    virtual float get_outside_offset() const = 0;
 
     // ── Setpoints & bounds ─────────────────────────────
     virtual void set_ch_setpoint(float v) = 0;

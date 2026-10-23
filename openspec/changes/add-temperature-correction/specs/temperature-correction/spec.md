@@ -4,7 +4,7 @@
 
 ### Requirement: Temperature offsets are accepted by the control API
 
-The system SHALL accept the offset fields `t1_offset`, `t2_offset`, `outside_offset`, `ch_temp_offset`, `return_temp_offset`, `dhw_temp_offset` in `POST /api/control`, clamp each to `[-10.0, +10.0]` °C, round each to `0.1` °C, and persist them in NVS so they survive a reboot. Fields absent from the request SHALL leave the corresponding stored offset unchanged.
+The system SHALL accept the offset fields `t1_offset`, `t2_offset`, `outside_offset` in `POST /api/control`, clamp each to `[-10.0, +10.0]` °C, round each to `0.1` °C, and persist them in NVS so they survive a reboot. Fields absent from the request SHALL leave the corresponding stored offset unchanged.
 
 #### Scenario: Offset is applied and persisted
 
@@ -24,11 +24,11 @@ The system SHALL accept the offset fields `t1_offset`, `t2_offset`, `outside_off
 #### Scenario: Absent fields are left unchanged
 
 - **WHEN** the request contains only `outside_offset`
-- **THEN** the stored offsets for the other five temperatures are not modified
+- **THEN** the stored offsets for the other two temperatures are not modified
 
 ### Requirement: Corrected temperature is read only through an abstraction
 
-All application logic SHALL obtain temperatures through `ITemperatureSource`, which returns `raw + offset` for each temperature. Direct reads of raw temperature getters (`get_t1_temp`, `get_t2_temp`, `get_ch_temp`, `get_return_temp`, `get_dhw_temp`, `get_outside_temp`) from `IHeatingStateStore` SHALL NOT be used by application logic (they remain available only for the writers and the source adapter).
+All application logic SHALL obtain temperatures through `ITemperatureSource`, which returns `raw + offset` for T1/T2/outside and the raw value for CH supply/CH return/DHW (these three are not user-correctable). Direct reads of raw temperature getters (`get_t1_temp`, `get_t2_temp`, `get_ch_temp`, `get_return_temp`, `get_dhw_temp`, `get_outside_temp`) from `IHeatingStateStore` SHALL NOT be used by application logic (they remain available only for the writers and the source adapter).
 
 #### Scenario: Offset shifts the corrected reading
 
@@ -40,6 +40,11 @@ All application logic SHALL obtain temperatures through `ITemperatureSource`, wh
 - **WHEN** an offset is `0`
 - **THEN** the corrected reading equals the raw reading
 
+#### Scenario: CH/DHW temperatures are not corrected
+
+- **WHEN** CH supply, CH return or DHW temperature is read through `ITemperatureSource`
+- **THEN** the returned value equals the raw boiler reading (no offset is applied)
+
 #### Scenario: Consumers read corrected values
 
 - **WHEN** the PID room sensor and the gas model need a temperature
@@ -47,7 +52,7 @@ All application logic SHALL obtain temperatures through `ITemperatureSource`, wh
 
 ### Requirement: Correction panel has an Apply action
 
-The temperature-correction panel SHALL provide a single Apply button that submits all six offsets in one request and reports the outcome, following the same visual pattern as the boiler-model panel (`.btn` class plus a message span).
+The temperature-correction panel SHALL be located at the bottom of the Control ("Управление") tab and SHALL provide a single Apply button that submits all three offsets in one request and reports the outcome, following the same visual pattern as the boiler-model panel (`.btn` class plus a message span).
 
 #### Scenario: Successful apply
 

@@ -154,12 +154,8 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
             float t1o  = json_get_float(body, "\"t1_offset\"");
             float t2o  = json_get_float(body, "\"t2_offset\"");
             float oo   = json_get_float(body, "\"outside_offset\"");
-            float cto  = json_get_float(body, "\"ch_temp_offset\"");
-            float rto  = json_get_float(body, "\"return_temp_offset\"");
-            float dto  = json_get_float(body, "\"dhw_temp_offset\"");
-            if (t1o > -1e37f || t2o > -1e37f || oo > -1e37f ||
-                cto > -1e37f || rto > -1e37f || dto > -1e37f) {
-                self->cfg_->set_temperature_offsets(t1o, t2o, oo, cto, rto, dto);
+            if (t1o > -1e37f || t2o > -1e37f || oo > -1e37f) {
+                self->cfg_->set_temperature_offsets(t1o, t2o, oo);
             }
         }
     }

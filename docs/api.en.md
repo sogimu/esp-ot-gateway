@@ -62,9 +62,6 @@ The Control tab maps to these fields. GET returns the full state; POST accepts a
 | `t1_offset` | °C, −10…+10 | T1 sensor (DS18B20) correction |
 | `t2_offset` | °C, −10…+10 | T2 sensor (DS18B20) correction |
 | `outside_offset` | °C, −10…+10 | Outside temperature correction |
-| `ch_temp_offset` | °C, −10…+10 | CH flow temperature correction |
-| `return_temp_offset` | °C, −10…+10 | CH return temperature correction |
-| `dhw_temp_offset` | °C, −10…+10 | DHW tank temperature correction |
 
 The red **"Выключить котёл"** button is the emergency stop — `TODO(verify): its endpoint/field (e.g. POST /api/control {"boiler_off":true})`.
 

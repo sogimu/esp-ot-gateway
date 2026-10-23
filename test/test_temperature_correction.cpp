@@ -64,30 +64,37 @@ TEST_CASE("TemperatureSourceAdapter: zero offset returns raw", "[tempcorr]") {
     REQUIRE(temps.t2() == Approx(18.25f));
 }
 
+TEST_CASE("TemperatureSourceAdapter: CH/DHW temperatures are not corrected", "[tempcorr]") {
+    FakeHeatingStateStore state;
+    state.reset_to_defaults();
+    state.set_ch_temp(45.0f);
+    state.set_return_temp(35.0f);
+    state.set_dhw_temp(55.0f);
+
+    TemperatureSourceAdapter temps(state);
+    REQUIRE(temps.ch_flow() == Approx(45.0f));
+    REQUIRE(temps.ch_return() == Approx(35.0f));
+    REQUIRE(temps.dhw() == Approx(55.0f));
+}
+
 TEST_CASE("Temperature offsets: clamped to ±10", "[tempcorr]") {
     TempCorrFixture f;
 
-    f.sys.set_temperature_offsets(25.0f, -25.0f, 5.0f, -3.0f, 0.0f, 1.0f);
+    f.sys.set_temperature_offsets(25.0f, -25.0f, 5.0f);
 
     REQUIRE(f.state.get_t1_offset() == Approx(10.0f));
     REQUIRE(f.state.get_t2_offset() == Approx(-10.0f));
     REQUIRE(f.state.get_outside_offset() == Approx(5.0f));
-    REQUIRE(f.state.get_ch_temp_offset() == Approx(-3.0f));
-    REQUIRE(f.state.get_return_temp_offset() == Approx(0.0f));
-    REQUIRE(f.state.get_dhw_temp_offset() == Approx(1.0f));
 }
 
 TEST_CASE("Temperature offsets: rounded to 0.1 °C", "[tempcorr]") {
     TempCorrFixture f;
 
-    f.sys.set_temperature_offsets(1.234f, -3.789f, 0.05f, -0.05f, 2.5f, 7.0f);
+    f.sys.set_temperature_offsets(1.234f, -3.789f, 0.05f);
 
     REQUIRE(f.state.get_t1_offset() == Approx(1.2f));
     REQUIRE(f.state.get_t2_offset() == Approx(-3.8f));
     REQUIRE(f.state.get_outside_offset() == Approx(0.1f));
-    REQUIRE(f.state.get_ch_temp_offset() == Approx(-0.1f));
-    REQUIRE(f.state.get_return_temp_offset() == Approx(2.5f));
-    REQUIRE(f.state.get_dhw_temp_offset() == Approx(7.0f));
 }
 
 TEST_CASE("Temperature offsets: absent fields left unchanged", "[tempcorr]") {
@@ -96,10 +103,9 @@ TEST_CASE("Temperature offsets: absent fields left unchanged", "[tempcorr]") {
     f.state.set_t2_offset(-1.0f);
 
     const float NA = -1e38f;
-    f.sys.set_temperature_offsets(NA, NA, 1.5f, NA, NA, NA);
+    f.sys.set_temperature_offsets(NA, NA, 1.5f);
 
     REQUIRE(f.state.get_t1_offset() == Approx(2.0f));
     REQUIRE(f.state.get_t2_offset() == Approx(-1.0f));
     REQUIRE(f.state.get_outside_offset() == Approx(1.5f));
-    REQUIRE(f.state.get_ch_temp_offset() == Approx(0.0f));
 }
