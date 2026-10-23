@@ -4,7 +4,7 @@
 
 ### Requirement: Temperature offsets are accepted by the control API
 
-The system SHALL accept the offset fields `t1_offset`, `t2_offset`, `outside_offset`, `ch_temp_offset`, `return_temp_offset`, `dhw_temp_offset` in `POST /api/control`, clamp each to `[-10.0, +10.0]` °C, and persist them in NVS so they survive a reboot. Fields absent from the request SHALL leave the corresponding stored offset unchanged.
+The system SHALL accept the offset fields `t1_offset`, `t2_offset`, `outside_offset`, `ch_temp_offset`, `return_temp_offset`, `dhw_temp_offset` in `POST /api/control`, clamp each to `[-10.0, +10.0]` °C, round each to `0.1` °C, and persist them in NVS so they survive a reboot. Fields absent from the request SHALL leave the corresponding stored offset unchanged.
 
 #### Scenario: Offset is applied and persisted
 
@@ -15,6 +15,11 @@ The system SHALL accept the offset fields `t1_offset`, `t2_offset`, `outside_off
 
 - **WHEN** the request contains `t2_offset: 25.0`
 - **THEN** the stored `t2` offset is clamped to `10.0`
+
+#### Scenario: Offset is rounded to 0.1 °C
+
+- **WHEN** the request contains `t1_offset: 1.23`
+- **THEN** the stored `t1` offset becomes `1.2`
 
 #### Scenario: Absent fields are left unchanged
 

@@ -13,6 +13,7 @@
 #include "application/ports/driven/itime_source.h"
 #include <cstdio>
 #include <cstdarg>
+#include <cmath>
 
 SystemConfigInteractor::SystemConfigInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                                                  ITimeSettingsStore& config, IBoilerConfigStore& boiler_cfg,
@@ -260,5 +261,5 @@ float SystemConfigInteractor::clamp_offset(float v)
 {
     if (v < -10.0f) v = -10.0f;
     if (v > 10.0f)  v = 10.0f;
-    return v;
+    return std::roundf(v * 10.0f) / 10.0f;  // точность 0.1 °C
 }

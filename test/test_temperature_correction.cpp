@@ -77,6 +77,19 @@ TEST_CASE("Temperature offsets: clamped to ±10", "[tempcorr]") {
     REQUIRE(f.state.get_dhw_temp_offset() == Approx(1.0f));
 }
 
+TEST_CASE("Temperature offsets: rounded to 0.1 °C", "[tempcorr]") {
+    TempCorrFixture f;
+
+    f.sys.set_temperature_offsets(1.234f, -3.789f, 0.05f, -0.05f, 2.5f, 7.0f);
+
+    REQUIRE(f.state.get_t1_offset() == Approx(1.2f));
+    REQUIRE(f.state.get_t2_offset() == Approx(-3.8f));
+    REQUIRE(f.state.get_outside_offset() == Approx(0.1f));
+    REQUIRE(f.state.get_ch_temp_offset() == Approx(-0.1f));
+    REQUIRE(f.state.get_return_temp_offset() == Approx(2.5f));
+    REQUIRE(f.state.get_dhw_temp_offset() == Approx(7.0f));
+}
+
 TEST_CASE("Temperature offsets: absent fields left unchanged", "[tempcorr]") {
     TempCorrFixture f;
     f.state.set_t1_offset(2.0f);
