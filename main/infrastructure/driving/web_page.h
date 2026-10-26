@@ -1126,7 +1126,7 @@ static const char WEB_PAGE[] =
 "if(d.ch_mode==1){"
 "var sensor_name='T'+(d.pid_room_sensor?2:1);"
 "if(d.pid_active){"
-"var st=sensor_name+' \u043a\u043e\u043c\u043d. '+fmt1(d.pid_room_temp)+'\u00b0C, \u0446\u0435\u043b\u044c '+fmt1(d.pid_target_room)+'\u00b0C, \u0432\u044b\u0445\u043e\u0434 '+Math.round(d.pid_output)+'\u00b0C';"
+"var st=sensor_name+' \u043a\u043e\u043c\u043d. '+fmt1(d.pid_room_temp)+'\u00b0C, \u0446\u0435\u043b\u044c '+fmt1(d.pid_target_room)+'\u00b0C, \u0432\u044b\u0445\u043e\u0434 '+Math.round(d.pid_output)+'\u00b0C (\u0431\u0430\u0437\u0430 '+Math.round(d.pid_base)+'\u00b0C)';"
 "if(d.pid_cycle_locked){st+=', \u0411\u041b\u041e\u041a '+d.pid_remaining_lockout+'\u0441';}"
 "else if(!d.pid_ch_enabled){st+=', CH \u043e\u0442\u043a\u043b (\u043c\u0438\u043d. \u043f\u043e\u0434\u0430\u0447\u0430)';}"
 "else{st+=', CH \u0440\u0430\u0437\u0440\u0435\u0448\u0451\u043d';}"

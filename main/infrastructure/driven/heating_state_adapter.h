@@ -49,6 +49,7 @@ public:
     float get_dhw_temp()    const override;
     float get_return_temp() const override;
     float get_outside_temp() const override;
+    bool  is_outside_valid() const override;
     float get_modulation()  const override;
     float get_t1_temp()     const override;
     float get_t2_temp()     const override;
@@ -127,9 +128,11 @@ public:
     void set_pid_hysteresis(float v) override;
     void set_pid_flow_limits(float min_sp, float max_sp) override;
     void set_wc_curve(float sp_cold, float sp_warm) override;
+    void set_pid_base(float v) override;
     bool  get_pid_enabled()            const override;
     bool  get_pid_active()             const override;
     float get_pid_output()             const override;
+    float get_pid_base()               const override;
     float get_pid_p()                  const override;
     float get_pid_i()                  const override;
     float get_pid_d()                  const override;
@@ -236,6 +239,7 @@ private:
         bool   connected_ = false;
         bool   fault_ = false, flame_ = false, ch_active_ = false, dhw_active_ = false;
         float  ch_temp_ = 0, dhw_temp_ = 0, return_temp_ = 0, outside_temp_ = 0;
+        bool   outside_valid_ = false;
         float  modulation_ = 0;
         float  t1_temp_ = -127.0f, t2_temp_ = -127.0f;
         float  t1_offset_ = 0, t2_offset_ = 0, outside_offset_ = 0;
@@ -255,7 +259,7 @@ private:
         float    dhw_pred_rate_cps_ = 0;
         // PID
         bool   pid_enabled_ = false, pid_active_ = false;
-        float  pid_output_ = 0, pid_p_ = 0, pid_i_ = 0, pid_d_ = 0;
+        float  pid_output_ = 0, pid_base_ = 0, pid_p_ = 0, pid_i_ = 0, pid_d_ = 0;
         float  pid_room_temp_ = 0, pid_target_room_ = 0;
         bool   pid_cycle_locked_ = false;
         int    pid_remaining_lockout_ = 0;

@@ -6,7 +6,6 @@
 #include "application/ports/driven/itemperatures_source.h"
 #include "domain/value_objects/ch_schedule.h"
 #include "domain/value_objects/ch_mode.h"
-#include <cmath>
 #include <cstdio>
 
 static constexpr float  MAX_SAFE_ROOM     = 30.0f;
@@ -172,7 +171,7 @@ void PidPollInteractor::execute()
 
     float target = state_.get_pid_target_room();
 
-    // Per-cycle bumpless: when CH was off, the trim starts fresh; the learned
+    // Per-cycle bumpless: when CH was off, the trim starts fresh; the weather
     // base keeps the operating point.
     if (!ch_prev) pid_state_.integral = 0.0f;
 
@@ -261,17 +260,19 @@ void PidPollInteractor::compute_pid(int dt_sec)
 
     // Weather-compensated feed-forward base from the outside temperature.
     float tout = temps_ ? temps_->outside() : state_.get_outside_temp();
+    bool  tout_valid = state_.is_outside_valid();
+    float wc_cold = state_.get_wc_sp_cold();
+    float wc_warm = state_.get_wc_sp_warm();
     float base;
-    if (!(tout > -60.0f && tout < 60.0f)) {
-        base = WC_FALLBACK;                       // NaN or out of range
+    if (!tout_valid || !(tout > -60.0f && tout < 60.0f)) {
+        base = WC_FALLBACK;                       // never read, NaN or out of range
     } else if (tout <= WC_OUT_COLD) {
-        base = state_.get_wc_sp_cold();
+        base = wc_cold;
     } else if (tout >= WC_OUT_WARM) {
-        base = state_.get_wc_sp_warm();
+        base = wc_warm;
     } else {
         float f = (tout - WC_OUT_COLD) / (WC_OUT_WARM - WC_OUT_COLD);
-        base = state_.get_wc_sp_cold()
-             + (state_.get_wc_sp_warm() - state_.get_wc_sp_cold()) * f;
+        base = wc_cold + (wc_warm - wc_cold) * f;
     }
     if (base < sp_lo_) base = sp_lo_;
     if (base > sp_hi_) base = sp_hi_;
@@ -322,6 +323,7 @@ void PidPollInteractor::compute_pid(int dt_sec)
     float d_term = pid_state_.d_filt;
 
     state_.lock_exclusive();
+    state_.set_pid_base(base_);
     state_.set_pid_state(state_.get_pid_enabled(), true, sp,
                           p_term, i_term, d_term,
                           room, target,

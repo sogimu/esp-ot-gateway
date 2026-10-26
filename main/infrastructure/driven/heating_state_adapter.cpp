@@ -39,7 +39,7 @@ bool HeatingStateAdapter::is_dhw_active() const { return state_.dhw_active_; }
 void HeatingStateAdapter::set_ch_temp(float v) { state_.ch_temp_ = v; }
 void HeatingStateAdapter::set_dhw_temp(float v) { state_.dhw_temp_ = v; }
 void HeatingStateAdapter::set_return_temp(float v) { state_.return_temp_ = v; }
-void HeatingStateAdapter::set_outside_temp(float v) { state_.outside_temp_ = v; }
+void HeatingStateAdapter::set_outside_temp(float v) { state_.outside_temp_ = v; state_.outside_valid_ = true; }
 void HeatingStateAdapter::set_modulation(float v) { state_.modulation_ = v; }
 void HeatingStateAdapter::set_t1_temp(float v) { state_.t1_temp_ = v; }
 void HeatingStateAdapter::set_t2_temp(float v) { state_.t2_temp_ = v; }
@@ -47,6 +47,7 @@ float HeatingStateAdapter::get_ch_temp()     const { return state_.ch_temp_; }
 float HeatingStateAdapter::get_dhw_temp()    const { return state_.dhw_temp_; }
 float HeatingStateAdapter::get_return_temp() const { return state_.return_temp_; }
 float HeatingStateAdapter::get_outside_temp() const { return state_.outside_temp_; }
+bool  HeatingStateAdapter::is_outside_valid() const { return state_.outside_valid_; }
 float HeatingStateAdapter::get_modulation()  const { return state_.modulation_; }
 float HeatingStateAdapter::get_t1_temp()     const { return state_.t1_temp_; }
 float HeatingStateAdapter::get_t2_temp()     const { return state_.t2_temp_; }
@@ -182,11 +183,13 @@ void HeatingStateAdapter::set_pid_flow_limits(float min_sp, float max_sp) {
 void HeatingStateAdapter::set_wc_curve(float sp_cold, float sp_warm) {
     state_.wc_sp_cold_ = sp_cold; state_.wc_sp_warm_ = sp_warm;
 }
+void HeatingStateAdapter::set_pid_base(float v) { state_.pid_base_ = v; }
 
 #define IMPL_PID_GET(type, name) type HeatingStateAdapter::get_pid_##name() const { return state_.pid_##name##_; }
 IMPL_PID_GET(bool, enabled)
 IMPL_PID_GET(bool, active)
 IMPL_PID_GET(float, output)
+IMPL_PID_GET(float, base)
 IMPL_PID_GET(float, p)
 IMPL_PID_GET(float, i)
 IMPL_PID_GET(float, d)

@@ -119,7 +119,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"dhw_hyst_on\":%.1f,"
         "\"time_synced\":%d,"
 "\"sntp_server0\":\"%s\",\"sntp_server1\":\"%s\","
-        "\"pid_enabled\":%d,\"pid_active\":%d,\"pid_output\":%.0f,"
+        "\"pid_enabled\":%d,\"pid_active\":%d,\"pid_output\":%.0f,\"pid_base\":%.1f,"
         "\"pid_p\":%.1f,\"pid_i\":%.1f,\"pid_d\":%.1f,"
         "\"pid_room_temp\":%.1f,\"pid_target_room\":%.1f,"
         "\"pid_cycle_locked\":%d,\"pid_remaining_lockout\":%d,\"pid_ch_enabled\":%d,"
@@ -163,6 +163,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         state_->get_sntp_server0(), state_->get_sntp_server1(),
         state_->get_pid_enabled() ? 1 : 0, state_->get_pid_active() ? 1 : 0,
         (double)state_->get_pid_output(),
+        (double)state_->get_pid_base(),
         (double)state_->get_pid_p(), (double)state_->get_pid_i(), (double)state_->get_pid_d(),
         (double)state_->get_pid_room_temp(), (double)state_->get_pid_target_room(),
         state_->get_pid_cycle_locked() ? 1 : 0, state_->get_pid_remaining_lockout(),

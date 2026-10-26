@@ -42,6 +42,7 @@ public:
     virtual float get_dhw_temp()    const = 0;
     virtual float get_return_temp() const = 0;
     virtual float get_outside_temp() const = 0;
+    virtual bool  is_outside_valid() const = 0;
     virtual float get_modulation()  const = 0;
     virtual float get_t1_temp()     const = 0;
     virtual float get_t2_temp()     const = 0;
@@ -122,10 +123,12 @@ public:
     virtual void set_pid_hysteresis(float v) = 0;
     virtual void set_pid_flow_limits(float min_sp, float max_sp) = 0;
     virtual void set_wc_curve(float sp_cold, float sp_warm) = 0;
+    virtual void set_pid_base(float v) = 0;
 
     virtual bool  get_pid_enabled()            const = 0;
     virtual bool  get_pid_active()             const = 0;
     virtual float get_pid_output()             const = 0;
+    virtual float get_pid_base()               const = 0;
     virtual float get_pid_p()                  const = 0;
     virtual float get_pid_i()                  const = 0;
     virtual float get_pid_d()                  const = 0;

@@ -229,11 +229,18 @@ void SystemConfigInteractor::set_pid_flow_limits(float min_sp, float max_sp)
 
 void SystemConfigInteractor::set_wc_curve(float sp_cold, float sp_warm)
 {
+    constexpr float WC_MIN = 20.0f, WC_MAX = 80.0f;
     // Partial update: a value < -1e37f means "keep the current value".
     state_.lock_shared();
     if (sp_cold <= -1e37f) sp_cold = state_.get_wc_sp_cold();
     if (sp_warm <= -1e37f) sp_warm = state_.get_wc_sp_warm();
     state_.unlock_shared();
+    if (sp_cold < WC_MIN) sp_cold = WC_MIN;
+    if (sp_cold > WC_MAX) sp_cold = WC_MAX;
+    if (sp_warm < WC_MIN) sp_warm = WC_MIN;
+    if (sp_warm > WC_MAX) sp_warm = WC_MAX;
+    // Keep the curve monotonic: colder outside must not lower the flow.
+    if (sp_cold < sp_warm) { float t = sp_cold; sp_cold = sp_warm; sp_warm = t; }
     state_.lock_exclusive();
     state_.set_wc_curve(sp_cold, sp_warm);
     state_.unlock_exclusive();

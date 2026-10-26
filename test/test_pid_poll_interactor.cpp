@@ -539,3 +539,23 @@ TEST_CASE("PidPoll: fallback 26 C при недостоверной улице",
 
     REQUIRE(state.get_pid_output() == Approx(26.0f).margin(0.2f));
 }
+
+TEST_CASE("PidPoll: fallback 26 C пока улица не прочитана", "[pid][weather]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(22.5f);
+    state.set_pid_config(2.5f, 0.0f, 0.0f, 60, 0, 22.5f, 300);
+    state.set_pid_hysteresis(0.1f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(40.0f);
+    state.set_pid_flow_limits(25.0f, 40.0f);
+    state.set_wc_curve(30.0f, 25.0f);
+    // Outside temperature was never read: the default 0 C must not be used.
+
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+
+    REQUIRE(state.is_outside_valid() == false);
+    REQUIRE(state.get_pid_output() == Approx(26.0f).margin(0.2f));
+    REQUIRE(state.get_pid_base() == Approx(26.0f).margin(0.2f));
+}
