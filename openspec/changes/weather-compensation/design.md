@@ -18,7 +18,7 @@
 
 - Точки кривой: `WC_OUT_COLD = −20`, `WC_OUT_WARM = +15` — константы; настраиваются только `wc_sp_cold` / `wc_sp_warm`.
 - `base = wc_sp_cold + (wc_sp_warm − wc_sp_cold) · (Tout − WC_OUT_COLD)/(WC_OUT_WARM − WC_OUT_COLD)`, затем `clamp(sp_lo, sp_hi)`.
-- Валидность улицы: `isfinite(tout) && tout > −60 && tout < 60`. Иначе `base = 26`.
+- Валидность улицы: `is_outside_valid() && tout > −60 && tout < 60` (флаг сбрасывается, пока улица ни разу не прочитана). Иначе `base = 26`.
 - `trim` остаётся ограниченным `±TRIM_MAX` и дополнительно `[sp_lo − base, sp_hi − base]`; anti-windup в `pid_step` по этим границам.
 - `UNWIND_GAIN = 3` (быстрое рассасывание при комнате выше цели) оставляем.
 

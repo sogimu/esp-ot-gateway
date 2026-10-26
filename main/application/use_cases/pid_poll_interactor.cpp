@@ -183,8 +183,8 @@ void PidPollInteractor::execute()
 
     float output = state_.get_pid_output();
 
-    // CH on/off is a room thermostat with hysteresis; the PI only sets the
-    // flow setpoint while CH is enabled.
+    // CH on/off is a room thermostat with hysteresis; the PI keeps computing
+    // the flow setpoint, and CH itself is gated by the enable bit.
     float hyst = state_.get_pid_hysteresis();
     if (hyst < 0.1f) hyst = 0.1f;
     bool ch_on;

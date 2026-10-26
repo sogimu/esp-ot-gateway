@@ -7,7 +7,7 @@
 **Goals:**
 - Блокировка по решению CH, пламя не влияет.
 - Фактический `dt`.
-- Bumpless-старт по последней рабочей уставке (RAM).
+- Старт поправки с нуля; база подачи — по погодной кривой (см. `weather-compensation`).
 - Быстрое снижение уставки при комнате выше цели.
 
 **Non-Goals:**
@@ -19,7 +19,7 @@
 - Убрать `prev_flame_`, `last_flame_off_ms_`, `last_dhw_active_ms_`, `DHW_GRACE_MS`. Ввести `prev_ch_state_`, `last_ch_off_ms_`.
 - Блокировка: при `prev_ch_state_ && !pid_ch_enabled` → `last_ch_off_ms_ = now`; пока `now − last_ch_off_ms_ < lockout` и CH был выключен — держать off. `lockout = 0` → отключено.
 - `compute_pid(int dt_sec)` принимает фактический интервал (clamp 1..300).
-- `last_auto_output_` обновляется при каждом расчёте; `load_config` сеет интеграл из него (если валидно), иначе из `lo`.
+- `load_config` инициализирует интеграл в 0; база вычисляется по погодной кривой в `compute_pid` (перенос базы удалён в `weather-compensation`).
 - Асимметрия: при `error < 0` временно `ki *= 3`. DHW по-прежнему замораживает интеграл (`ki = 0`).
 
 ## Risks / Trade-offs

@@ -1899,5 +1899,4 @@ static const char WEB_PAGE[] =
 "fetch('/api/ota/rollback',{method:'POST'}).then(function(r){return r.json()}).then(function(d){if(msg)msg.textContent=d.ok?'Перезагрузка…':'Ошибка отката';})['catch'](function(){});"
 "}"
 "</script>"
-"</div>"
 "</body></html>";
