@@ -182,7 +182,6 @@ void PidPollInteractor::execute()
     compute_pid(elapsed_sec);
 
     float output = state_.get_pid_output();
-    float sp_min = sp_lo_;
 
     // CH on/off is a room thermostat with hysteresis; the PI only sets the
     // flow setpoint while CH is enabled.
@@ -201,9 +200,10 @@ void PidPollInteractor::execute()
     state_.set_pid_state(enabled, true, output,
                           state_.get_pid_p(), state_.get_pid_i(), state_.get_pid_d(),
                           room, target, false, 0, ch_on);
-    // When CH is off, park the setpoint at the minimum.
-    // CH enable bit is gated in BoilerPollInteractor::build_master_byte() by pid_ch_enabled.
-    state_.set_ch_setpoint(ch_on ? output : sp_min);
+    // Keep the computed setpoint even when CH is off: the CH enable bit (gated
+    // in BoilerPollInteractor by pid_ch_enabled) already stops heating, and the
+    // setpoint is ready for a bumpless restart.
+    state_.set_ch_setpoint(output);
     state_.unlock_exclusive();
 
     log_.event(ILogger::MODE,

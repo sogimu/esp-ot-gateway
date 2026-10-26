@@ -346,6 +346,7 @@ TEST_CASE("PidPoll: PID выключает нагрев при достижен�
     state.set_t1_temp(18.0f);
     state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
     state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(20.0f, 40.0f);
 
     PidPollInteractor pid(state, boiler, time, log);
 
@@ -357,7 +358,9 @@ TEST_CASE("PidPoll: PID выключает нагрев при достижен�
     time.advance_sec(60); pid.execute();
 
     REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
-    REQUIRE(state.get_ch_setpoint() == Approx(25.0f));
+    // The setpoint is not parked at the minimum: CH is stopped by the enable bit.
+    REQUIRE(state.get_ch_setpoint() == Approx(state.get_pid_output()));
+    REQUIRE(state.get_ch_setpoint() < 25.0f);
 }
 
 // ═══ Чистый PI: интеграл уменьшается, границы подачи соблюдаются ═══
