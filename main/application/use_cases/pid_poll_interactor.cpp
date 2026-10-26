@@ -12,7 +12,9 @@
 static constexpr float  MAX_SAFE_ROOM     = 30.0f;
 static constexpr float  UNWIND_GAIN       = 3.0f;   // faster integral unwind when the room is above target
 static constexpr float  TRIM_MAX          = 5.0f;   // PI correction authority around the base
-static constexpr float  BASE_TAU_SEC      = 1200.0f;// learned base time constant
+static constexpr float  WC_OUT_COLD       = -20.0f; // heating curve: cold outside point
+static constexpr float  WC_OUT_WARM       = 15.0f;  // heating curve: warm outside point
+static constexpr float  WC_FALLBACK       = 26.0f;  // base when the outside temperature is invalid
 
 PidPollInteractor::PidPollInteractor(IHeatingStateStore& state, IBoilerHardware& boiler,
                                        ITimeSource& time, ILogger& log, ITemperatureSource* temps)
@@ -100,7 +102,6 @@ void PidPollInteractor::execute()
     float room = (sensor_id == 0)
         ? (temps_ ? temps_->t1() : state_.get_t1_temp())
         : (temps_ ? temps_->t2() : state_.get_t2_temp());
-    bool dhw = state_.is_dhw_active();
 
     bool room_valid = (room > -100.0f);
 
@@ -197,23 +198,6 @@ void PidPollInteractor::execute()
         ch_on = state_.get_pid_ch_enabled_by_pid();
     }
 
-    // Learn the base: transfer part of the integral into the base near the
-    // target (but not while the room is above it, to avoid absorbing the
-    // overshoot), or while the trim is saturated high (base too low). Skip DHW.
-    float err = target - room;
-    float trim_now = pid_cfg_.kp * err + pid_state_.integral;
-    bool learn = (err > -0.1f && err < 0.3f) ||
-                 (trim_now >= pid_cfg_.out_max - 0.05f);
-    if (ch_on && !dhw && learn) {
-        float transfer = pid_state_.integral *
-                         (static_cast<float>(elapsed_sec) / BASE_TAU_SEC);
-        float new_base = base_ + transfer;
-        if (new_base < sp_lo_) new_base = sp_lo_;
-        if (new_base > sp_hi_) new_base = sp_hi_;
-        pid_state_.integral -= (new_base - base_);
-        base_ = new_base;
-    }
-
     state_.lock_exclusive();
     state_.set_pid_state(enabled, true, output,
                           state_.get_pid_p(), state_.get_pid_i(), state_.get_pid_d(),
@@ -255,15 +239,9 @@ void PidPollInteractor::load_config()
 
     if (!pid_inited_) {
         pid_init(&pid_state_);
-        pid_state_.integral = 0.0f;   // trim starts fresh; the base keeps the operating point
+        pid_state_.integral = 0.0f;   // trim starts fresh; the base comes from the weather curve
         pid_inited_ = true;
     }
-    if (!base_inited_) {
-        base_ = sp_lo_;
-        base_inited_ = true;
-    }
-    if (base_ < sp_lo_) base_ = sp_lo_;
-    if (base_ > sp_hi_) base_ = sp_hi_;
 }
 
 void PidPollInteractor::compute_pid(int dt_sec)
@@ -281,7 +259,25 @@ void PidPollInteractor::compute_pid(int dt_sec)
     if (dt < 1) dt = 1;
     if (dt > 300) dt = 300;
 
-    // The PI trim is bounded around the learned base and by the SP range.
+    // Weather-compensated feed-forward base from the outside temperature.
+    float tout = temps_ ? temps_->outside() : state_.get_outside_temp();
+    float base;
+    if (!(tout > -60.0f && tout < 60.0f)) {
+        base = WC_FALLBACK;                       // NaN or out of range
+    } else if (tout <= WC_OUT_COLD) {
+        base = state_.get_wc_sp_cold();
+    } else if (tout >= WC_OUT_WARM) {
+        base = state_.get_wc_sp_warm();
+    } else {
+        float f = (tout - WC_OUT_COLD) / (WC_OUT_WARM - WC_OUT_COLD);
+        base = state_.get_wc_sp_cold()
+             + (state_.get_wc_sp_warm() - state_.get_wc_sp_cold()) * f;
+    }
+    if (base < sp_lo_) base = sp_lo_;
+    if (base > sp_hi_) base = sp_hi_;
+    base_ = base;
+
+    // The PI trim is bounded around the weather base and by the SP range.
     float trim_lo = sp_lo_ - base_;
     float trim_hi = sp_hi_ - base_;
     if (trim_lo < -TRIM_MAX) trim_lo = -TRIM_MAX;

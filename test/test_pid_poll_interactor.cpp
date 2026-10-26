@@ -9,6 +9,7 @@
 #include "fakes/fake_time_source.h"
 #include <cstring>
 #include <cstdarg>
+#include <cmath>
 
 using Catch::Approx;
 
@@ -488,4 +489,53 @@ TEST_CASE("PidPoll: комнатный предохранитель выключ
     state.set_t1_temp(22.9f);
     time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+}
+
+// ═══ Погодная база по уличной температуре ═══
+
+TEST_CASE("PidPoll: погодная база интерполируется по улице", "[pid][weather]") {
+    struct Case { float tout; float expect; };
+    const Case cases[] = {
+        {-30.0f, 30.0f},      // ниже -20 → wc_sp_cold
+        {-20.0f, 30.0f},
+        {  0.0f, 27.143f},    // середина: 30 + (25-30)*20/35
+        { 15.0f, 25.0f},      // wc_sp_warm
+        { 30.0f, 25.0f},      // выше +15 → wc_sp_warm
+    };
+    for (const auto& c : cases) {
+        FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+        state.set_ch_mode(CHMode::PID_Static);
+        state.set_t1_temp(22.5f);  // комната = цель → trim = 0
+        state.set_pid_config(2.5f, 0.0f, 0.0f, 60, 0, 22.5f, 300);
+        state.set_pid_hysteresis(0.1f);
+        state.set_ch_sp_min(25.0f); state.set_ch_sp_max(40.0f);
+        state.set_pid_flow_limits(25.0f, 40.0f);
+        state.set_wc_curve(30.0f, 25.0f);
+        state.set_outside_temp(c.tout);
+
+        PidPollInteractor pid(state, boiler, time, log);
+        time.advance_sec(1); pid.execute();
+        time.advance_sec(60); pid.execute();
+
+        INFO("tout=" << c.tout << " out=" << state.get_pid_output());
+        REQUIRE(state.get_pid_output() == Approx(c.expect).margin(0.2f));
+    }
+}
+
+TEST_CASE("PidPoll: fallback 26 C при недостоверной улице", "[pid][weather]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(22.5f);
+    state.set_pid_config(2.5f, 0.0f, 0.0f, 60, 0, 22.5f, 300);
+    state.set_pid_hysteresis(0.1f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(40.0f);
+    state.set_pid_flow_limits(25.0f, 40.0f);
+    state.set_wc_curve(30.0f, 25.0f);
+    state.set_outside_temp(std::nanf(""));
+
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+
+    REQUIRE(state.get_pid_output() == Approx(26.0f).margin(0.2f));
 }

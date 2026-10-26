@@ -227,6 +227,19 @@ void SystemConfigInteractor::set_pid_flow_limits(float min_sp, float max_sp)
     save_and_log("Границы подачи PID: %.0f..%.0f C", (double)min_sp, (double)max_sp);
 }
 
+void SystemConfigInteractor::set_wc_curve(float sp_cold, float sp_warm)
+{
+    // Partial update: a value < -1e37f means "keep the current value".
+    state_.lock_shared();
+    if (sp_cold <= -1e37f) sp_cold = state_.get_wc_sp_cold();
+    if (sp_warm <= -1e37f) sp_warm = state_.get_wc_sp_warm();
+    state_.unlock_shared();
+    state_.lock_exclusive();
+    state_.set_wc_curve(sp_cold, sp_warm);
+    state_.unlock_exclusive();
+    save_and_log("Погодная кривая: -20C -> %.0f, +15C -> %.0f", (double)sp_cold, (double)sp_warm);
+}
+
 // IFaultReset — fault reset is handled by BoilerPollInteractor::do_status()
 // (pending_fault_reset_ flag sent as LB bit 0 in STATUS frame)
 void SystemConfigInteractor::reset()

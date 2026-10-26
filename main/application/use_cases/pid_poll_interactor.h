@@ -39,8 +39,7 @@ private:
     bool     prev_ch_state_ = false;
     uint32_t last_ch_off_ms_ = 0;
     float    sp_lo_ = 25.0f, sp_hi_ = 40.0f;   // effective flow setpoint bounds
-    float    base_ = 25.0f;                    // learned feed-forward base
-    bool     base_inited_ = false;             // base survives mode switches
+    float    base_ = 25.0f;                    // weather-compensated feed-forward base (recomputed each tick)
     bool     cycle_locked_ = false;
     bool     lockout_logged_ = false;
     bool     overheat_logged_ = false;

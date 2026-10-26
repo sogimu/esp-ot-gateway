@@ -126,6 +126,7 @@ public:
                          int room_sensor, float target_room, int lockout_sec) override;
     void set_pid_hysteresis(float v) override;
     void set_pid_flow_limits(float min_sp, float max_sp) override;
+    void set_wc_curve(float sp_cold, float sp_warm) override;
     bool  get_pid_enabled()            const override;
     bool  get_pid_active()             const override;
     float get_pid_output()             const override;
@@ -146,6 +147,8 @@ public:
     float get_pid_hysteresis()         const override;
     float get_pid_sp_min()             const override;
     float get_pid_sp_max()             const override;
+    float get_wc_sp_cold()             const override;
+    float get_wc_sp_warm()             const override;
 
     // CH mode
     void set_ch_mode(CHMode v) override;
@@ -261,6 +264,7 @@ private:
         int    pid_dt_sec_ = 60, pid_room_sensor_ = 0, pid_lockout_sec_ = 300;
         float  pid_hysteresis_ = 0.5f;
         float  pid_sp_min_ = 25.0f, pid_sp_max_ = 40.0f;
+        float  wc_sp_cold_ = 30.0f, wc_sp_warm_ = 25.0f;
         CHMode ch_mode_ = CHMode::Manual_Static;
         DHWMode dhw_mode_ = DHWMode::Static;
         bool   dhw_heat_allowed_ = false;

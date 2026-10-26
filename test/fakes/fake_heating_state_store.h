@@ -30,6 +30,7 @@ public:
         pid_kp_ = 2.0f; pid_ki_ = 0.01f; pid_kd_ = 0;
         pid_dt_sec_ = 60; pid_room_sensor_ = 0; pid_lockout_sec_ = 300; pid_hysteresis_ = 0.5f;
         pid_sp_min_ = 25.0f; pid_sp_max_ = 40.0f;
+        wc_sp_cold_ = 30.0f; wc_sp_warm_ = 25.0f;
         ch_mode_ = CHMode::Manual_Static;
         dhw_mode_ = DHWMode::Static;
         dhw_heat_allowed_ = false;
@@ -169,6 +170,7 @@ public:
     }
     void set_pid_hysteresis(float v) override { pid_hysteresis_ = v; }
     void set_pid_flow_limits(float min_sp, float max_sp) override { pid_sp_min_ = min_sp; pid_sp_max_ = max_sp; }
+    void set_wc_curve(float sp_cold, float sp_warm) override { wc_sp_cold_ = sp_cold; wc_sp_warm_ = sp_warm; }
     #define FAKE_PID_GET(type, name) type get_pid_##name() const override { return pid_##name##_; }
     FAKE_PID_GET(bool, enabled) FAKE_PID_GET(bool, active) FAKE_PID_GET(float, output)
     FAKE_PID_GET(float, p) FAKE_PID_GET(float, i) FAKE_PID_GET(float, d)
@@ -180,6 +182,8 @@ public:
     FAKE_PID_GET(float, hysteresis)
     FAKE_PID_GET(float, sp_min)
     FAKE_PID_GET(float, sp_max)
+    float get_wc_sp_cold() const override { return wc_sp_cold_; }
+    float get_wc_sp_warm() const override { return wc_sp_warm_; }
 
     // CH mode
     void set_ch_mode(CHMode v) override { ch_mode_ = v; }
@@ -302,6 +306,7 @@ public:
     int    pid_dt_sec_ = 60, pid_room_sensor_ = 0, pid_lockout_sec_ = 300;
     float  pid_hysteresis_ = 0.5f;
     float  pid_sp_min_ = 25.0f, pid_sp_max_ = 40.0f;
+    float  wc_sp_cold_ = 30.0f, wc_sp_warm_ = 25.0f;
     CHMode ch_mode_ = CHMode::Manual_Static;
     DHWMode dhw_mode_ = DHWMode::Static;
     bool   dhw_heat_allowed_ = false;

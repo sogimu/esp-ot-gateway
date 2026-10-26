@@ -121,6 +121,7 @@ public:
                                  int room_sensor, float target_room, int lockout_sec) = 0;
     virtual void set_pid_hysteresis(float v) = 0;
     virtual void set_pid_flow_limits(float min_sp, float max_sp) = 0;
+    virtual void set_wc_curve(float sp_cold, float sp_warm) = 0;
 
     virtual bool  get_pid_enabled()            const = 0;
     virtual bool  get_pid_active()             const = 0;
@@ -142,6 +143,8 @@ public:
     virtual float get_pid_hysteresis()         const = 0;
     virtual float get_pid_sp_min()             const = 0;
     virtual float get_pid_sp_max()             const = 0;
+    virtual float get_wc_sp_cold()             const = 0;
+    virtual float get_wc_sp_warm()             const = 0;
 
     // ── CH mode ────────────────────────────────────────
     virtual void set_ch_mode(CHMode v) = 0;

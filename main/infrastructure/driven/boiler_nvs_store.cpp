@@ -65,6 +65,7 @@ void BoilerNvsStore::load_boiler_config(IHeatingStateStore& s)
     int32_t pid_dt=60, pid_lockout=300;
     uint8_t pid_sns=0; int16_t pid_trg=220; uint8_t pid_hys_u8=5;
     int16_t pid_sp_mn=250, pid_sp_mx=400;
+    int16_t wc_spc=300, wc_spw=250;
     if (nvs_get_i32(h, "pid_kp", &i32) == ESP_OK) pid_kp = i32 / 1000.0f;
     if (nvs_get_i32(h, "pid_ki", &i32) == ESP_OK) pid_ki = i32 / 100000.0f;
     if (nvs_get_i32(h, "pid_kd", &i32) == ESP_OK) pid_kd = i32 / 1000.0f;
@@ -75,11 +76,14 @@ void BoilerNvsStore::load_boiler_config(IHeatingStateStore& s)
     nvs_get_u8(h, "pid_hys", &pid_hys_u8);
     nvs_get_i16(h, "pid_spmn", &pid_sp_mn);
     nvs_get_i16(h, "pid_spmx", &pid_sp_mx);
+    nvs_get_i16(h, "wc_spc", &wc_spc);
+    nvs_get_i16(h, "wc_spw", &wc_spw);
     s.lock_exclusive();
     s.set_pid_config(pid_kp, pid_ki, pid_kd, (int)pid_dt, (int)pid_sns,
                      pid_trg / 10.0f, (int)pid_lockout);
     s.set_pid_hysteresis(pid_hys_u8 / 10.0f);
     s.set_pid_flow_limits(pid_sp_mn / 10.0f, pid_sp_mx / 10.0f);
+    s.set_wc_curve(wc_spc / 10.0f, wc_spw / 10.0f);
 
     // CH schedule — двухшаговый запрос размера (D10)
     {
@@ -231,6 +235,8 @@ void BoilerNvsStore::save_boiler_config(const IHeatingStateStore& s)
     nvs_set_u8(h,  "pid_hys", (uint8_t)(s.get_pid_hysteresis() * 10.0f + 0.5f));
     nvs_set_i16(h, "pid_spmn", (int16_t)(s.get_pid_sp_min() * 10.0f + 0.5f));
     nvs_set_i16(h, "pid_spmx", (int16_t)(s.get_pid_sp_max() * 10.0f + 0.5f));
+    nvs_set_i16(h, "wc_spc", (int16_t)(s.get_wc_sp_cold() * 10.0f + 0.5f));
+    nvs_set_i16(h, "wc_spw", (int16_t)(s.get_wc_sp_warm() * 10.0f + 0.5f));
 
     // CH schedule
     {
