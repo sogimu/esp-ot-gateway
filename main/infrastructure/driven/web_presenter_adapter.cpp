@@ -121,7 +121,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
 "\"sntp_server0\":\"%s\",\"sntp_server1\":\"%s\","
         "\"pid_enabled\":%d,\"pid_active\":%d,\"pid_output\":%.0f,\"pid_base\":%.1f,"
         "\"pid_p\":%.1f,\"pid_i\":%.1f,\"pid_d\":%.1f,"
-        "\"pid_room_temp\":%.1f,\"pid_target_room\":%.1f,"
+        "\"pid_room_temp\":%.2f,\"pid_target_room\":%.1f,"
         "\"pid_cycle_locked\":%d,\"pid_remaining_lockout\":%d,\"pid_ch_enabled\":%d,"
         "\"pid_kp\":%.1f,\"pid_ki\":%.4f,\"pid_kd\":%.1f,"
         "\"pid_dt_sec\":%d,\"pid_room_sensor\":%d,\"pid_lockout_sec\":%d,"

@@ -363,6 +363,32 @@ TEST_CASE("PidPoll: PID выключает нагрев при достижен�
     REQUIRE(state.get_ch_setpoint() < 25.0f);
 }
 
+TEST_CASE("PidPoll: границы комнатного гистерезиса включающие", "[pid][hysteresis]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(18.0f);
+    state.set_pid_config(2.0f, 0.0f, 0.0f, 60, 0, 22.0f, 300);
+    state.set_pid_hysteresis(0.1f);
+    state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(20.0f, 40.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+
+    // Exactly at target + hysteresis: must turn CH off (inclusive boundary).
+    state.set_t1_temp(22.1f);
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+
+    // Exactly at target - hysteresis: must turn CH back on; lockout off.
+    state.set_pid_config(2.0f, 0.0f, 0.0f, 60, 0, 22.0f, 0);
+    state.set_t1_temp(21.9f);
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+}
+
 // ═══ Чистый PI: интеграл уменьшается, границы подачи соблюдаются ═══
 
 TEST_CASE("PidPoll: уставка снижается, когда комната выше цели", "[pid][antiwindup][regression]") {

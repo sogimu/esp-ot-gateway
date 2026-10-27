@@ -188,9 +188,9 @@ void PidPollInteractor::execute()
     float hyst = state_.get_pid_hysteresis();
     if (hyst < 0.1f) hyst = 0.1f;
     bool ch_on;
-    if (room > target + hyst) {
+    if (room >= target + hyst) {
         ch_on = false;
-    } else if (room < target - hyst) {
+    } else if (room <= target - hyst) {
         ch_on = true;
     } else {
         ch_on = state_.get_pid_ch_enabled_by_pid();
@@ -207,7 +207,7 @@ void PidPollInteractor::execute()
     state_.unlock_exclusive();
 
     log_.event(ILogger::MODE,
-        "PID: SP=%.0f°C цель=%.1f°C комн=%.1f°C CH=%s (P=%.1f I=%.1f база=%.1f)",
+        "PID: SP=%.0f°C цель=%.1f°C комн=%.2f°C CH=%s (P=%.1f I=%.1f база=%.1f)",
         (double)output, (double)target, (double)room,
         ch_on ? "вкл" : "выкл",
         (double)state_.get_pid_p(), (double)state_.get_pid_i(), (double)base_);
@@ -308,7 +308,7 @@ void PidPollInteractor::compute_pid(int dt_sec)
             float error = target - room;
             float p_term = pid_cfg_.kp * error;
             log_.event(ILogger::MODE,
-                "PID: SP %.1f упёрлась в [%.0f..%.0f]°C (база=%.1f цель=%.1f комн=%.1f Δ=%.1f P=%.1f I=%.1f dt=%d)",
+                "PID: SP %.1f упёрлась в [%.0f..%.0f]°C (база=%.1f цель=%.1f комн=%.2f Δ=%.1f P=%.1f I=%.1f dt=%d)",
                 (double)sp, (double)sp_lo_, (double)sp_hi_, (double)base_,
                 (double)target, (double)room, (double)error,
                 (double)p_term, (double)pid_state_.integral, dt);
