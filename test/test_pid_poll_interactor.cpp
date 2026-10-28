@@ -78,6 +78,33 @@ TEST_CASE("PidPoll: enable→disable→enable цикл корректно обн
     pid.disable(); REQUIRE(!state.get_pid_enabled());
     pid.enable();  REQUIRE(state.get_pid_enabled());
 }
+TEST_CASE("PidPoll: смена режима сохраняет цель комнаты", "[pid][lifecycle][mode]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static); state.set_t1_temp(20.0f);
+    state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.5f, 300);
+    state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_target_room() == Approx(22.5f));
+    pid.disable();
+    REQUIRE(state.get_pid_target_room() == Approx(22.5f));
+    pid.enable();
+    REQUIRE(state.get_pid_target_room() == Approx(22.5f));
+}
+TEST_CASE("PidPoll: выключенный poll сохраняет цель и комнатную температуру", "[pid][poll][disabled]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static); state.set_t1_temp(21.8f);
+    state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.5f, 300);
+    state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute(); time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_target_room() == Approx(22.5f));
+    REQUIRE(state.get_pid_room_temp() == Approx(21.8f));
+    pid.disable();
+    time.advance_sec(1); pid.execute();
+    REQUIRE(state.get_pid_target_room() == Approx(22.5f));
+    REQUIRE(state.get_pid_room_temp() == Approx(21.8f));
+}
 
 // ═══ poll() enabled / disabled ═══
 

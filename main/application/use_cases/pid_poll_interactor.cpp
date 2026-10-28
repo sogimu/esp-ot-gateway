@@ -49,6 +49,8 @@ void PidPollInteractor::enable()
 void PidPollInteractor::disable()
 {
     bool was_enabled = state_.get_pid_enabled();
+    float room = state_.get_pid_room_temp();
+    float target = state_.get_pid_target_room();
     prev_ch_state_ = false;
     cycle_locked_ = false;
     lockout_logged_ = false;
@@ -57,7 +59,7 @@ void PidPollInteractor::disable()
     last_ch_off_ms_ = 0;
     pid_inited_ = false;
     state_.lock_exclusive();
-    state_.set_pid_state(false, false, 0, 0, 0, 0, 0, 0, false, 0, false);
+    state_.set_pid_state(false, false, 0, 0, 0, 0, room, target, false, 0, false);
     state_.unlock_exclusive();
     if (was_enabled)
         log_.event(ILogger::MODE, "PID выключен");
@@ -73,8 +75,10 @@ void PidPollInteractor::execute()
 
     bool enabled = state_.get_pid_enabled();
     if (!enabled) {
+        float room = state_.get_pid_room_temp();
+        float target = state_.get_pid_target_room();
         state_.lock_exclusive();
-        state_.set_pid_state(false, false, 0, 0, 0, 0, 0, 0, false, 0, false);
+        state_.set_pid_state(false, false, 0, 0, 0, 0, room, target, false, 0, false);
         state_.unlock_exclusive();
         return;
     }
