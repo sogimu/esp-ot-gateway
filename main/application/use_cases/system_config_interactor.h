@@ -47,6 +47,8 @@ public:
     void set_pid_parameters(float kp, float ki, float kd, int dt_sec,
                              int room_sensor, float target_room, int lockout_sec) override;
     void set_pid_hysteresis(float) override;
+    void set_pid_flow_limits(float min_sp, float max_sp) override;
+    void set_wc_curve(float sp_cold, float sp_warm) override;
 
     // IFaultReset
     void reset() override;

@@ -15,7 +15,7 @@ Most gas boilers spend their lives being switched on and off by a dumb relay the
 
 **esp-ot-gateway** is open-source ESP32 firmware that unlocks all of it:
 
-- 🔥 **Smooth, modulating heating** — PID room-temperature control instead of on/off cycling: stable room temperature, fewer burner starts, less wear
+- 🔥 **Heating by room temperature** — adaptive (PID) mode picks the flow setpoint from a weather-curve base (flow at −20 °C / +15 °C outside) plus a room correction, within limits you set (low for underfloor heating). This holds the temperature you want: steadier warmth, fewer burner starts and less wear
 - 💰 **Know your gas bill before it arrives** — live gas flow estimation (m³/h), daily/weekly consumption, calibration against your real gas meter
 - 🏠 **Home Assistant out of the box** — MQTT autodiscovery publishes 29 entities: just point it at your broker and your boiler appears in HA
 - 📱 **Control from any device** — a fast, dark-theme web dashboard served straight from the ESP32; no app, no account
@@ -130,7 +130,7 @@ Eight tabs, served straight from the ESP32 (see the screenshots above):
 - **Journal** — 256-entry event log with category filters (system / user / hardware / modes / boot); SNTP sync, MQTT connections and DHW heat-up sessions are all traceable
 - **Statistics** — burner modulation percentiles (p1–p99), sampled only while the burner is firing over a rolling recent-history window (1% resolution), plus burn/pause cycle analysis and burner runtime hours — great for spotting an oversized boiler or short-cycling
 - **Virtual gas meter** — instant flow (m³/h), cumulative volume, 1h/3h/12h/24h/7d averages, an estimation-error indicator, and a **reconciliation journal**: enter your physical meter reading and a Kalman-smoothed calibration coefficient K keeps the estimate honest (it survives reboots)
-- **Control** — heating enable; mode **Manual** or **Adaptive (PID)**, plus a submode **Static** or **Scheduled** — so the 24-hour grid can drive either fixed flow setpoints or PID room targets; DHW tank (indirect cylinder) enable, setpoint and hysteresis; a big red boiler-off button
+- **Control** — heating enable; mode **Manual** (fixed flow setpoint) or **Adaptive** (you set a room temperature and the gateway picks the flow setpoint from a weather-curve base plus a room correction to hold it; adjustable response, **flow at −20 °C** and **flow at +15 °C**, and **min./max. flow** — typically 25–40 °C for underfloor heating), plus a submode **Static** or **Scheduled** — so the 24-hour grid can drive either fixed flow setpoints or room targets; DHW tank (indirect cylinder) enable, setpoint and hysteresis; a big red boiler-off button
 - **Info** — OEM/ASF fault codes, boiler-reported setpoint bounds, boiler firmware & OpenTherm versions, NTP servers and timezone, uptime
 - **WiFi** — connection status and RSSI, switch-to-AP button, network settings reset
 - **Firmware Update** — over-the-air updates: available versions, download, progress, manual rollback

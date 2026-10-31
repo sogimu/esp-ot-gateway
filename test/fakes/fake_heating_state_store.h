@@ -12,7 +12,7 @@ public:
 
     void reset_to_defaults() {
         connected_ = false; fault_ = false; flame_ = false; ch_active_ = false; dhw_active_ = false;
-        ch_temp_ = 0; dhw_temp_ = 0; return_temp_ = 0; outside_temp_ = 0; modulation_ = 0;
+        ch_temp_ = 0; dhw_temp_ = 0; return_temp_ = 0; outside_temp_ = 0; outside_valid_ = false; modulation_ = 0;
         t1_temp_ = -127.0f; t2_temp_ = -127.0f;
         t1_offset_ = 0; t2_offset_ = 0; outside_offset_ = 0;
         ch_setpoint_ = 30.0f; dhw_setpoint_ = 55.0f;
@@ -29,6 +29,8 @@ public:
         pid_remaining_lockout_ = 0; pid_ch_enabled_ = false;
         pid_kp_ = 2.0f; pid_ki_ = 0.01f; pid_kd_ = 0;
         pid_dt_sec_ = 60; pid_room_sensor_ = 0; pid_lockout_sec_ = 300; pid_hysteresis_ = 0.5f;
+        pid_sp_min_ = 25.0f; pid_sp_max_ = 40.0f;
+        wc_sp_cold_ = 30.0f; wc_sp_warm_ = 25.0f;
         ch_mode_ = CHMode::Manual_Static;
         dhw_mode_ = DHWMode::Static;
         dhw_heat_allowed_ = false;
@@ -71,7 +73,7 @@ public:
     void set_ch_temp(float v) override { ch_temp_ = v; }
     void set_dhw_temp(float v) override { dhw_temp_ = v; }
     void set_return_temp(float v) override { return_temp_ = v; }
-    void set_outside_temp(float v) override { outside_temp_ = v; }
+    void set_outside_temp(float v) override { outside_temp_ = v; outside_valid_ = true; }
     void set_modulation(float v) override { modulation_ = v; }
     void set_t1_temp(float v) override { t1_temp_ = v; }
     void set_t2_temp(float v) override { t2_temp_ = v; }
@@ -79,6 +81,7 @@ public:
     float get_dhw_temp()    const override { return dhw_temp_; }
     float get_return_temp() const override { return return_temp_; }
     float get_outside_temp() const override { return outside_temp_; }
+    bool  is_outside_valid() const override { return outside_valid_; }
     float get_modulation()  const override { return modulation_; }
     float get_t1_temp()     const override { return t1_temp_; }
     float get_t2_temp()     const override { return t2_temp_; }
@@ -167,8 +170,12 @@ public:
         pid_target_room_ = tr; pid_lockout_sec_ = lo;
     }
     void set_pid_hysteresis(float v) override { pid_hysteresis_ = v; }
+    void set_pid_flow_limits(float min_sp, float max_sp) override { pid_sp_min_ = min_sp; pid_sp_max_ = max_sp; }
+    void set_wc_curve(float sp_cold, float sp_warm) override { wc_sp_cold_ = sp_cold; wc_sp_warm_ = sp_warm; }
+    void set_pid_base(float v) override { pid_base_ = v; }
     #define FAKE_PID_GET(type, name) type get_pid_##name() const override { return pid_##name##_; }
     FAKE_PID_GET(bool, enabled) FAKE_PID_GET(bool, active) FAKE_PID_GET(float, output)
+    FAKE_PID_GET(float, base)
     FAKE_PID_GET(float, p) FAKE_PID_GET(float, i) FAKE_PID_GET(float, d)
     FAKE_PID_GET(float, room_temp) FAKE_PID_GET(float, target_room)
     FAKE_PID_GET(bool, cycle_locked) FAKE_PID_GET(int, remaining_lockout)
@@ -176,6 +183,10 @@ public:
     FAKE_PID_GET(int, dt_sec) FAKE_PID_GET(int, room_sensor) FAKE_PID_GET(int, lockout_sec)
     bool get_pid_ch_enabled_by_pid() const override { return pid_ch_enabled_; }
     FAKE_PID_GET(float, hysteresis)
+    FAKE_PID_GET(float, sp_min)
+    FAKE_PID_GET(float, sp_max)
+    float get_wc_sp_cold() const override { return wc_sp_cold_; }
+    float get_wc_sp_warm() const override { return wc_sp_warm_; }
 
     // CH mode
     void set_ch_mode(CHMode v) override { ch_mode_ = v; }
@@ -272,6 +283,7 @@ public:
     // ── Public fields for direct test inspection ─────────
     bool   connected_ = false, fault_ = false, flame_ = false, ch_active_ = false, dhw_active_ = false;
     float  ch_temp_ = 0, dhw_temp_ = 0, return_temp_ = 0, outside_temp_ = 0, modulation_ = 0;
+    bool   outside_valid_ = false;
     float  t1_temp_ = -127.0f, t2_temp_ = -127.0f;
     float  t1_offset_ = 0, t2_offset_ = 0, outside_offset_ = 0;
     float  ch_setpoint_ = 30.0f, dhw_setpoint_ = 55.0f;
@@ -289,7 +301,7 @@ public:
     int      dhw_pred_remaining_ = 0, dhw_pred_uncertainty_ = 0, dhw_pred_elapsed_ = 0;
     float    dhw_pred_rate_ = 0;
     bool   pid_enabled_ = false, pid_active_ = false;
-    float  pid_output_ = 0, pid_p_ = 0, pid_i_ = 0, pid_d_ = 0;
+    float  pid_output_ = 0, pid_base_ = 0, pid_p_ = 0, pid_i_ = 0, pid_d_ = 0;
     float  pid_room_temp_ = 0, pid_target_room_ = 0;
     bool   pid_cycle_locked_ = false;
     int    pid_remaining_lockout_ = 0;
@@ -297,6 +309,8 @@ public:
     float  pid_kp_ = 2.0f, pid_ki_ = 0.01f, pid_kd_ = 0;
     int    pid_dt_sec_ = 60, pid_room_sensor_ = 0, pid_lockout_sec_ = 300;
     float  pid_hysteresis_ = 0.5f;
+    float  pid_sp_min_ = 25.0f, pid_sp_max_ = 40.0f;
+    float  wc_sp_cold_ = 30.0f, wc_sp_warm_ = 25.0f;
     CHMode ch_mode_ = CHMode::Manual_Static;
     DHWMode dhw_mode_ = DHWMode::Static;
     bool   dhw_heat_allowed_ = false;

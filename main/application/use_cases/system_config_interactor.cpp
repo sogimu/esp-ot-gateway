@@ -47,6 +47,10 @@ void SystemConfigInteractor::save_and_log(const char* msg, ...)
 // IConfigureSystem
 void SystemConfigInteractor::set_ch_mode(CHMode mode)
 {
+    state_.lock_shared();
+    CHMode prev = state_.get_ch_mode();
+    state_.unlock_shared();
+
     state_.lock_exclusive();
     state_.set_ch_mode(mode);
     state_.unlock_exclusive();
@@ -60,7 +64,9 @@ void SystemConfigInteractor::set_ch_mode(CHMode mode)
     }
     save_and_log("Режим CH: %s", mode_name);
 
-    if (pid_poll_) {
+    // Re-arm the PID only when the mode actually changed. Otherwise a config
+    // apply (e.g. a gain change) would reset the PID state and the learned base.
+    if (pid_poll_ && mode != prev) {
         if (is_pid_mode(mode))
             pid_poll_->enable();
         else
@@ -205,6 +211,40 @@ void SystemConfigInteractor::set_pid_hysteresis(float v)
     state_.set_pid_hysteresis(v);
     state_.unlock_exclusive();
     save_and_log("Гистерезис PID: %.1f C", (double)v);
+}
+
+void SystemConfigInteractor::set_pid_flow_limits(float min_sp, float max_sp)
+{
+    // Partial update: a value < -1e37f means "keep the current bound".
+    state_.lock_shared();
+    if (min_sp <= -1e37f) min_sp = state_.get_pid_sp_min();
+    if (max_sp <= -1e37f) max_sp = state_.get_pid_sp_max();
+    state_.unlock_shared();
+    if (min_sp > max_sp) { float t = min_sp; min_sp = max_sp; max_sp = t; }
+    state_.lock_exclusive();
+    state_.set_pid_flow_limits(min_sp, max_sp);
+    state_.unlock_exclusive();
+    save_and_log("Границы подачи PID: %.0f..%.0f C", (double)min_sp, (double)max_sp);
+}
+
+void SystemConfigInteractor::set_wc_curve(float sp_cold, float sp_warm)
+{
+    constexpr float WC_MIN = 20.0f, WC_MAX = 80.0f;
+    // Partial update: a value < -1e37f means "keep the current value".
+    state_.lock_shared();
+    if (sp_cold <= -1e37f) sp_cold = state_.get_wc_sp_cold();
+    if (sp_warm <= -1e37f) sp_warm = state_.get_wc_sp_warm();
+    state_.unlock_shared();
+    if (sp_cold < WC_MIN) sp_cold = WC_MIN;
+    if (sp_cold > WC_MAX) sp_cold = WC_MAX;
+    if (sp_warm < WC_MIN) sp_warm = WC_MIN;
+    if (sp_warm > WC_MAX) sp_warm = WC_MAX;
+    // Keep the curve monotonic: colder outside must not lower the flow.
+    if (sp_cold < sp_warm) { float t = sp_cold; sp_cold = sp_warm; sp_warm = t; }
+    state_.lock_exclusive();
+    state_.set_wc_curve(sp_cold, sp_warm);
+    state_.unlock_exclusive();
+    save_and_log("Погодная кривая: -20C -> %.0f, +15C -> %.0f", (double)sp_cold, (double)sp_warm);
 }
 
 // IFaultReset — fault reset is handled by BoilerPollInteractor::do_status()
