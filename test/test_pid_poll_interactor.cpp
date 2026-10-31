@@ -356,6 +356,10 @@ TEST_CASE("PidPoll: блокировка цикла взводится при в
     time.advance_sec(1); pid.execute();
     REQUIRE(state.get_pid_cycle_locked() == true);
     REQUIRE(state.get_ch_setpoint() == Approx(25.0f));
+    REQUIRE(state.get_pid_remaining_lockout() == 5);
+
+    time.advance_sec(2); pid.execute();
+    REQUIRE(state.get_pid_remaining_lockout() == 3);
 
     // По истечении блокировки CH снова включается
     state.set_t1_temp(18.0f);
@@ -483,6 +487,22 @@ TEST_CASE("PidPoll: выход PI не выходит за pid_sp_min/pid_sp_max
 
     REQUIRE(state.get_pid_output() >= 26.0f);
     REQUIRE(state.get_pid_output() <= 32.0f);
+}
+
+TEST_CASE("PidPoll: sp_hi не превышает физический максимум котла", "[pid][limits]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(18.0f);
+    state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.5f, 300);
+    state.set_pid_hysteresis(0.2f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(80.0f, 80.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+
+    REQUIRE(state.get_pid_output() <= 80.0f);
 }
 
 TEST_CASE("PidPoll: CH включается, когда выход PI выше минимума", "[pid][limits]") {

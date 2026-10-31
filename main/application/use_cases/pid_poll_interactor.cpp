@@ -124,6 +124,15 @@ void PidPollInteractor::execute()
         cycle_locked_ = false;
     }
 
+    int remaining = 0;
+    if (cycle_locked_ && lockout > 0 && last_ch_off_ms_ > 0) {
+        uint32_t total_ms = static_cast<uint32_t>(lockout) * 1000u;
+        uint32_t elapsed_ms = now - last_ch_off_ms_;
+        if (elapsed_ms < total_ms) {
+            remaining = static_cast<int>((total_ms - elapsed_ms + 999u) / 1000u);
+        }
+    }
+
     // Keep the displayed lockout flag in sync when it expires before the next tick.
     if (state_.get_pid_cycle_locked() && !cycle_locked_) {
         state_.lock_exclusive();
@@ -138,11 +147,11 @@ void PidPollInteractor::execute()
     if (room_valid && room > MAX_SAFE_ROOM) {
         float sp_min = sp_lo_;
         state_.lock_exclusive();
-        state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), cycle_locked_, 0, false);
+        state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), cycle_locked_, remaining, false);
         state_.set_ch_setpoint(sp_min);
         state_.unlock_exclusive();
         if (!overheat_logged_) {
-            log_.event(ILogger::MODE, "PID: ПЕРЕГРЕВ %.1f>%.0f, SP %.0f", (double)room, (double)MAX_SAFE_ROOM, (double)sp_min);
+            log_.event(ILogger::MODE, "PID: ПЕРЕГРЕВ %.1f>%.0f, SP %.1f", (double)room, (double)MAX_SAFE_ROOM, (double)sp_min);
             overheat_logged_ = true;
         }
         return;
@@ -153,11 +162,11 @@ void PidPollInteractor::execute()
     if (cycle_locked_) {
         float sp_min = sp_lo_;
         state_.lock_exclusive();
-        state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), true, lockout, false);
+        state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), true, remaining, false);
         state_.set_ch_setpoint(sp_min);
         state_.unlock_exclusive();
         if (!lockout_logged_) {
-            log_.event(ILogger::MODE, "PID: блокировка цикла, SP %.0f", (double)sp_min);
+            log_.event(ILogger::MODE, "PID: блокировка цикла, SP %.1f", (double)sp_min);
             lockout_logged_ = true;
         }
         return;
@@ -211,7 +220,7 @@ void PidPollInteractor::execute()
     state_.unlock_exclusive();
 
     log_.event(ILogger::MODE,
-        "PID: SP=%.0f°C цель=%.1f°C комн=%.2f°C CH=%s (P=%.1f I=%.1f база=%.1f)",
+        "PID: SP=%.1f°C цель=%.1f°C комн=%.2f°C CH=%s (P=%.1f I=%.1f база=%.1f)",
         (double)output, (double)target, (double)room,
         ch_on ? "вкл" : "выкл",
         (double)state_.get_pid_p(), (double)state_.get_pid_i(), (double)base_);
@@ -232,6 +241,8 @@ void PidPollInteractor::load_config()
     if (hi < phys_min) hi = phys_min;
     if (hi > phys_max) hi = phys_max;
     if (hi < lo + 1.0f) hi = lo + 1.0f;
+    if (hi > phys_max) hi = phys_max;
+    if (lo > hi) lo = hi;
     sp_lo_ = lo;
     sp_hi_ = hi;
 
