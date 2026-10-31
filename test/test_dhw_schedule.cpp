@@ -209,3 +209,20 @@ TEST_CASE("render_status: exposes dhw_heat_allowed=0 from state", "[dhw][schedul
     std::string json(buf, len);
     REQUIRE(json.find("\"dhw_heat_allowed\":0") != std::string::npos);
 }
+
+TEST_CASE("render_status: ch_setpoint и pid_output с точностью 0.1", "[pid][render]") {
+    FakeHeatingStateStore state;
+    state.reset_to_defaults();
+    state.set_ch_setpoint(27.5f);
+    state.set_pid_state(true, true, 27.5f, 0.5f, 0.4f, 0.0f, 22.44f, 22.5f, false, 0, true);
+
+    WebPresenterAdapter presenter;
+    presenter.set_state(&state);
+
+    char buf[4096];
+    int len = presenter.render_status(buf, sizeof(buf));
+    REQUIRE(len > 0);
+    std::string json(buf, len);
+    REQUIRE(json.find("\"ch_setpoint\":27.5") != std::string::npos);
+    REQUIRE(json.find("\"pid_output\":27.5") != std::string::npos);
+}
