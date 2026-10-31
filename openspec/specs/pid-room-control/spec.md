@@ -20,4 +20,3 @@ The system SHALL not zero the last measured room temperature when the PID is dis
 #### Scenario: Disable preserves the room temperature
 - **WHEN** the PID is disabled after measuring 21.8 °C
 - **THEN** the last measured room temperature remains 21.8 °C
-
