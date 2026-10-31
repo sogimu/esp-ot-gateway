@@ -440,6 +440,34 @@ TEST_CASE("PidPoll: уставка снижается, когда комната
     REQUIRE(state.get_pid_output() < out_warm);
 }
 
+TEST_CASE("PidPoll: смена базы подтягивает интеграл к новой границе", "[pid][antiwindup][regression]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(22.0f);
+    state.set_pid_config(2.5f, 0.015f, 0.0f, 60, 0, 22.5f, 300);
+    state.set_pid_hysteresis(0.2f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(25.0f, 33.0f);
+    state.set_wc_curve(35.0f, 26.0f);
+    state.set_outside_temp(6.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+    time.advance_sec(1); pid.execute();
+    for (int i = 0; i < 10; i++) { time.advance_sec(60); pid.execute(); }
+    REQUIRE(state.get_pid_output() == Approx(33.0f).margin(0.1f));
+    REQUIRE(state.get_pid_i() > 3.0f);
+
+    state.set_outside_temp(-4.0f);
+    time.advance_sec(60); pid.execute();
+    INFO("integral after base rise: " << state.get_pid_i());
+    REQUIRE(state.get_pid_i() < 2.2f);
+
+    state.set_t1_temp(22.8f);
+    time.advance_sec(60); pid.execute();
+    INFO("output after room overshoot: " << state.get_pid_output());
+    REQUIRE(state.get_pid_output() < 32.0f);
+}
+
 TEST_CASE("PidPoll: выход PI не выходит за pid_sp_min/pid_sp_max", "[pid][limits]") {
     FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
     state.set_ch_mode(CHMode::PID_Static);
