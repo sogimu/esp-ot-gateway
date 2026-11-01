@@ -256,7 +256,7 @@ GasCorrTestLogger log;
     REQUIRE(config.meter_save_called_ == false);
 }
 
-TEST_CASE("GasCorrection: rejects when actual_consumed < 0.01", "[gas][orchestration][reject]")
+TEST_CASE("GasCorrection: rejects when actual_consumed < 0.5", "[gas][orchestration][reject]")
 {
     FakeHeatingStateStore state;
     FakeConfigurationStore config;
@@ -271,7 +271,7 @@ GasCorrTestLogger log;
     GasFlowService gas_flow_svc(state, time, hss, gcs);
     gas_flow_svc.set_integral(0.1f);  // integral > 0 but actual_consumed too small
     GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
-    bool ok = gas.add_meter_correction(100.005f);  // actual_consumed = 0.005 < 0.01
+    bool ok = gas.add_meter_correction(100.4f);  // actual_consumed = 0.4 < 0.5
 
     REQUIRE(ok == false);
     REQUIRE(strstr(log.last_msg_, "Расход") != nullptr);
@@ -291,9 +291,9 @@ GasCorrTestLogger log;
     FakeHeatingStatsStore hss;
     FakeGasCorrectionStore gcs;
     GasFlowService gas_flow_svc(state, time, hss, gcs);
-    gas_flow_svc.set_integral(0.002f);  // integral only 4% of actual_consumed
+    gas_flow_svc.set_integral(0.05f);  // integral only 5% of actual_consumed
     GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
-    bool ok = gas.add_meter_correction(100.050f);  // actual=0.05, integral=0.002 (< 10%)
+    bool ok = gas.add_meter_correction(101.0f);  // actual=1.0, integral=0.05 (< 10%)
 
     REQUIRE(ok == false);
     REQUIRE(strstr(log.last_msg_, "Интеграл") != nullptr);
@@ -323,6 +323,57 @@ GasCorrTestLogger log;
 
     REQUIRE(ok == true);
     REQUIRE(config.meter_save_called_ == true);
+}
+
+TEST_CASE("GasCorrection: repeated overestimation lowers K below 0.5", "[gas][orchestration][calib]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+    GasCorrTestLogger log;
+    FakeTimeSource time;
+
+    state.set_gas_meter_base(100.0f);
+    state.set_k_calib(0.7f);
+
+    FakeHeatingStatsStore hss;
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow_svc(state, time, hss, gcs);
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
+    gas.init();
+
+    gas_flow_svc.set_integral(10.0f);
+    REQUIRE(gas.add_meter_correction(106.0f));
+    REQUIRE(state.get_k_calib() > 0.5f);
+
+    gas_flow_svc.set_integral(10.0f);
+    REQUIRE(gas.add_meter_correction(112.0f));
+    REQUIRE(state.get_k_calib() < 0.5f);
+}
+
+TEST_CASE("GasCorrection: manual K syncs Kalman filter", "[gas][orchestration][calib]")
+{
+    FakeHeatingStateStore state;
+    FakeConfigurationStore config;
+    FakeGasStore gas_store;
+    gas_store.cfg = &config;
+    GasCorrTestLogger log;
+    FakeTimeSource time;
+
+    state.set_gas_meter_base(100.0f);
+    state.set_k_calib(1.0f);
+
+    FakeHeatingStatsStore hss;
+    FakeGasCorrectionStore gcs;
+    GasFlowService gas_flow_svc(state, time, hss, gcs);
+    GasCorrectionInteractor gas(state, gas_store, log, &time, &gas_flow_svc);
+    gas.init();
+    gas.set_k_calib(0.4f);
+
+    gas_flow_svc.set_integral(10.0f);
+    REQUIRE(gas.add_meter_correction(110.0f));
+    REQUIRE(state.get_k_calib() == Approx(0.4f).margin(0.02f));
 }
 
 // ── Multiple corrections / ring buffer ──────────────────────────────
