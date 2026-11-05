@@ -42,6 +42,7 @@ Everything the Status tab shows `TODO(verify: exact field names)`:
 | Hydraulics | 3-way valve position (`heating` / `dhw`), pump |
 | Links | controller link, OpenTherm link, SNTP synced, MQTT connected |
 | DHW | readiness prediction (`ready_in_s`, uncertainty), last heat-up duration |
+| PID | `pid_output` (calculated flow), `pid_base` (weather-curve base), `pid_p`/`pid_i`/`pid_d`, `pid_room_temp`, `pid_target_room`, `pid_ch_enabled`, `pid_cycle_locked`, `pid_remaining_lockout` |
 
 ## `GET/POST /api/control`
 
@@ -50,12 +51,17 @@ The Control tab maps to these fields. GET returns the full state; POST accepts a
 | Field | Type / values | UI element |
 |---|---|---|
 | `ch_enable` | bool | Отопление → Разрешение |
-| `ch_mode` | `manual` \| `pid` `TODO(verify values)` | Режим: Ручной / Адаптивный (PID) |
-| `ch_submode` | `static` \| `schedule` `TODO(verify values)` | Подрежим: Статичный / По расписанию |
-| `ch_setpoint` | °C, clamped to boiler-reported bounds (Info tab; 25–80 °C on the tested Baxi) | Уставка CH (manual + static) |
-| `pid.sensor` | `t1` \| `t2` | room sensor feeding the PID |
-| `pid.target` | °C | room target (PID + static) |
-| `pid.kp` / `pid.ki` / `pid.kd` | number `TODO(verify)` | PID gains |
+| `ch_mode` | 0 \| 1 \| 2 \| 3 | Mode: 0 — Manual/Static, 1 — Adaptive/Static, 2 — Manual/Scheduled, 3 — Adaptive/Scheduled |
+| `ch_setpoint` | °C, clamped to boiler-reported bounds (Info tab; 25–80 °C on the tested Baxi) | CH setpoint (manual + static) |
+| `pid_room_sensor` | 0 \| 1 (`t1` / `t2`) | room sensor feeding the PID |
+| `pid_target_room` | °C | room target (PID + static) |
+| `pid_kp` / `pid_ki` / `pid_kd` | number | PID gains |
+| `pid_dt_sec` | s | PID calculation interval |
+| `pid_hysteresis` | °C | room-temperature CH on/off hysteresis |
+| `pid_cycle_lockout` | s (0 = off) | CH re-enable lockout after switch-off |
+| `pid_sp_min` / `pid_sp_max` | °C | flow setpoint bounds |
+| `wc_sp_cold` | °C (20–80) | flow at −20 °C outside (weather curve) |
+| `wc_sp_warm` | °C (20–80) | flow at +15 °C outside |
 | `dhw_enable` | bool | Бойлер БКН → Разрешение |
 | `dhw_setpoint` | °C, clamped to boiler-reported bounds (35–60 °C on the tested Baxi) | Уставка БКН |
 | `dhw_hysteresis` | °C (e.g. 2.0) | Гистерезис БКН |
@@ -63,18 +69,20 @@ The Control tab maps to these fields. GET returns the full state; POST accepts a
 | `t2_offset` | °C, −10…+10 | T2 sensor (DS18B20) correction |
 | `outside_offset` | °C, −10…+10 | Outside temperature correction |
 
-The red **"Выключить котёл"** button is the emergency stop — `TODO(verify): its endpoint/field (e.g. POST /api/control {"boiler_off":true})`.
+In adaptive mode the flow setpoint = **weather-curve base + PI correction** (at most ±5 °C). The base is linearly interpolated between `wc_sp_cold` (−20 °C outside) and `wc_sp_warm` (+15 °C), then clamped to `pid_sp_min`/`pid_sp_max`. If the outside temperature has not been read yet or is invalid (outside −60…+60 °C), the base is 26 °C. The curve is normalized on save: values are clamped to 20–80 °C, and `wc_sp_cold` cannot be lower than `wc_sp_warm` (they are swapped otherwise).
+
+The red **"Выключить котёл"** button is the emergency stop — `POST /api/control {"ch_enable":0,"dhw_enable":0}`.
 
 ```bash
 # Manual static: heating on, flow setpoint 35 °C
 curl -s -X POST http://192.168.0.37/api/control \
   -H 'Content-Type: application/json' \
-  -d '{"ch_enable":true,"ch_mode":"manual","ch_submode":"static","ch_setpoint":35}'
+  -d '{"ch_enable":true,"ch_mode":0,"ch_setpoint":35}'
 
 # Adaptive (PID) with the 24-hour schedule driving the room target
 curl -s -X POST http://192.168.0.37/api/control \
   -H 'Content-Type: application/json' \
-  -d '{"ch_enable":true,"ch_mode":"pid","ch_submode":"schedule"}'
+  -d '{"ch_enable":true,"ch_mode":3}'
 ```
 
 Out-of-range values are clamped to the boiler-reported bounds (CH — `ID 49`, DHW — `ID 48`), which are the single source of truth for every entry point (HTTP, MQTT, schedule); malformed JSON is rejected and logged to the event journal.
@@ -83,7 +91,7 @@ The `*_offset` fields set an additive offset (°C) for the corresponding tempera
 
 ## `GET/POST /api/schedule` — the 24-hour grid
 
-Mode and submode are orthogonal: the grid is used whenever `ch_submode = schedule`, and its meaning follows the mode:
+Mode and submode are orthogonal: the grid is used when `ch_mode` = 2 or 3, and its meaning follows the mode:
 
 - **Manual + schedule** — each hourly value is the **CH flow setpoint** for that hour;
 - **PID + schedule** — each hourly value is the **PID room-temperature target** for that hour, and the PID keeps modulating the boiler to hold it.

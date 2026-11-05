@@ -60,6 +60,70 @@ TEST_CASE("PidAlgorithm: integral windup prevention at saturation", "[pid]")
     }
 }
 
+TEST_CASE("PidAlgorithm: exact clamp caps integral at upper limit", "[pid][antiwindup]")
+{
+    PidAlgoCfg cfg = {2.0f, 0.1f, 0.0f, 0.0f, 12.0f};
+    PidAlgoState state;
+    pid_init(&state);
+
+    float out = pid_step(&cfg, &state, 20.0f, 15.0f, 60);
+    INFO("upper clamp: output=" << out << " integral=" << state.integral);
+    CHECK(out == Approx(12.0f).margin(0.01f));
+    CHECK(state.integral == Approx(2.0f).margin(0.01f));
+
+    out = pid_step(&cfg, &state, 20.0f, 20.0f, 60);
+    INFO("after error clears: output=" << out << " integral=" << state.integral);
+    CHECK(out == Approx(2.0f).margin(0.01f));
+    CHECK(out < 12.0f);
+}
+
+TEST_CASE("PidAlgorithm: exact clamp caps integral at lower limit", "[pid][antiwindup]")
+{
+    PidAlgoCfg cfg = {2.0f, 0.1f, 0.0f, 5.0f, 20.0f};
+    PidAlgoState state;
+    pid_init(&state);
+
+    float out = pid_step(&cfg, &state, 15.0f, 20.0f, 60);
+    INFO("lower clamp: output=" << out << " integral=" << state.integral);
+    CHECK(out == Approx(5.0f).margin(0.01f));
+    CHECK(state.integral == Approx(15.0f).margin(0.01f));
+
+    out = pid_step(&cfg, &state, 15.0f, 15.0f, 60);
+    INFO("after error clears: output=" << out << " integral=" << state.integral);
+    CHECK(out == Approx(15.0f).margin(0.01f));
+    CHECK(out > 5.0f);
+}
+
+TEST_CASE("PidAlgorithm: clamp leaves unsaturated integral unchanged", "[pid][antiwindup]")
+{
+    PidAlgoCfg cfg = {1.0f, 0.1f, 0.0f, 0.0f, 100.0f};
+    PidAlgoState state;
+    pid_init(&state);
+
+    float out = pid_step(&cfg, &state, 30.0f, 28.0f, 60);
+    INFO("unsaturated: output=" << out << " integral=" << state.integral);
+    CHECK(out == Approx(14.0f).margin(0.01f));
+    CHECK(state.integral == Approx(12.0f).margin(0.01f));
+}
+
+TEST_CASE("PidAlgorithm: clamp follows a shrinking output limit", "[pid][antiwindup]")
+{
+    PidAlgoCfg cfg = {2.0f, 0.1f, 0.0f, 0.0f, 100.0f};
+    PidAlgoState state;
+    pid_init(&state);
+
+    for (int i = 0; i < 4; i++) {
+        pid_step(&cfg, &state, 20.0f, 15.0f, 60);
+    }
+    REQUIRE(state.integral == Approx(90.0f).margin(0.01f));
+
+    cfg.out_max = 50.0f;
+    float out = pid_step(&cfg, &state, 20.0f, 15.0f, 60);
+    INFO("after limit shrink: output=" << out << " integral=" << state.integral);
+    CHECK(out == Approx(50.0f).margin(0.01f));
+    CHECK(state.integral == Approx(40.0f).margin(0.01f));
+}
+
 TEST_CASE("PidAlgorithm: P-only response to step change", "[pid]")
 {
     // Pure proportional: output ∝ error

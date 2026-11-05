@@ -595,3 +595,79 @@ TEST_CASE("GasDaily: blob sizes lock the on-flash format", "[gas][daily][persist
     REQUIRE(sizeof(GasTodayBlob) == 224);
     REQUIRE(sizeof(GasHistoryBlob) == 1232);
 }
+
+TEST_CASE("GasDaily: views scale raw accumulation by current k_calib", "[gas_daily][calib]")
+{
+    Harness h;
+    h.warmup();
+    h.boiler_on();
+    h.tick();
+    h.tick();
+
+    float raw_day = h.svc.daily_accumulator_;
+    REQUIRE(raw_day > 0);
+    h.svc.set_k_calib(0.5f);
+
+    GasFlowService::DailyView dv[GasFlowService::DAILY_SLOTS];
+    int dn = h.svc.get_daily_view(dv, GasFlowService::DAILY_SLOTS);
+    REQUIRE(dn == 1);
+    REQUIRE(dv[0].m3_total == Approx(raw_day * 0.5f));
+
+    GasFlowService::HourlyView hv[2 * GasFlowService::HOURS_PER_DAY];
+    int hn = h.svc.get_hourly_view(hv, 2 * GasFlowService::HOURS_PER_DAY);
+    REQUIRE(hn == GasFlowService::HOURS_PER_DAY);
+    REQUIRE(hv[0].m3_total == Approx(raw_day * 0.5f));
+}
+
+TEST_CASE("GasDaily: duplicate history days are merged and sorted", "[gas_daily][history]")
+{
+    Harness h;
+    GasHistoryBlob blob{};
+    blob.head = 0;
+    blob.count = 3;
+    blob.daily[0] = {20720, 1.0f, 0.5f};
+    blob.daily[1] = {20719, 2.0f, 0.2f};
+    blob.daily[2] = {20720, 0.5f, 0.1f};
+    h.gcs.save_history_gas(&blob);
+
+    h.svc.load_daily();
+
+    GasFlowService::DailyView out[GasFlowService::DAILY_SLOTS];
+    int n = h.svc.get_daily_view(out, GasFlowService::DAILY_SLOTS);
+    REQUIRE(n == 2);
+    REQUIRE(out[0].epoch_day == 20719);
+    REQUIRE(out[0].m3_total == Approx(2.0f));
+    REQUIRE(out[1].epoch_day == 20720);
+    REQUIRE(out[1].m3_total == Approx(1.5f));
+    REQUIRE(out[1].m3_dhw == Approx(0.6f));
+}
+
+TEST_CASE("GasDaily: push_daily merges same epoch day", "[gas_daily][history]")
+{
+    Harness h;
+    h.svc.push_daily(20720, 1.0f, 0.5f);
+    h.svc.push_daily(20720, 0.2f, 0.1f);
+    REQUIRE(h.svc.daily_count_ == 1);
+    REQUIRE(h.svc.daily_[0].m3_total == Approx(1.2f));
+    REQUIRE(h.svc.daily_[0].m3_dhw == Approx(0.6f));
+}
+
+TEST_CASE("GasDaily: legacy calibrated history is migrated to raw", "[gas_daily][history][migration]")
+{
+    Harness h;
+    h.state.set_k_calib(0.5f);
+    h.svc.set_k_calib(0.5f);
+
+    GasHistoryBlob blob{};
+    blob.head = 0;
+    blob.count = 1;
+    blob.daily[0] = {20720, 3.0f, 1.0f};
+    h.gcs.save_history_gas(&blob);
+
+    h.svc.load_daily();
+
+    GasFlowService::DailyView out[GasFlowService::DAILY_SLOTS];
+    int n = h.svc.get_daily_view(out, GasFlowService::DAILY_SLOTS);
+    REQUIRE(n == 1);
+    REQUIRE(out[0].m3_total == Approx(3.0f));
+}

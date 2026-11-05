@@ -102,7 +102,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"connected\":%d,\"fault\":%d,\"ch_active\":%d,\"dhw_active\":%d,\"flame\":%d,"
         "\"ch_temp\":%.1f,\"return_temp\":%.1f,\"dhw_temp\":%.1f,\"outside_temp\":%.1f,"
         "\"modulation\":%.1f,"
-        "\"ch_setpoint\":%.0f,\"dhw_setpoint\":%.0f,"
+        "\"ch_setpoint\":%.1f,\"dhw_setpoint\":%.0f,"
         "\"dhw_sp_min\":%.0f,\"dhw_sp_max\":%.0f,\"ch_sp_min\":%.0f,\"ch_sp_max\":%.0f,"
         "\"ch_enable\":%d,\"ch_mode\":%d,\"dhw_enable\":%d,\"dhw_mode\":%d,\"dhw_heat_allowed\":%d,"
         "\"dhw_pred_active\":%d,\"dhw_pred_remaining\":%d,\"dhw_pred_uncertainty\":%d,"
@@ -119,13 +119,15 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         "\"dhw_hyst_on\":%.1f,"
         "\"time_synced\":%d,"
 "\"sntp_server0\":\"%s\",\"sntp_server1\":\"%s\","
-        "\"pid_enabled\":%d,\"pid_active\":%d,\"pid_output\":%.0f,"
+        "\"pid_enabled\":%d,\"pid_active\":%d,\"pid_output\":%.1f,\"pid_base\":%.1f,"
         "\"pid_p\":%.1f,\"pid_i\":%.1f,\"pid_d\":%.1f,"
-        "\"pid_room_temp\":%.1f,\"pid_target_room\":%.1f,"
+        "\"pid_room_temp\":%.2f,\"pid_target_room\":%.1f,"
         "\"pid_cycle_locked\":%d,\"pid_remaining_lockout\":%d,\"pid_ch_enabled\":%d,"
         "\"pid_kp\":%.1f,\"pid_ki\":%.4f,\"pid_kd\":%.1f,"
         "\"pid_dt_sec\":%d,\"pid_room_sensor\":%d,\"pid_lockout_sec\":%d,"
         "\"pid_hysteresis\":%.1f"
+        ",\"pid_sp_min\":%.0f,\"pid_sp_max\":%.0f"
+        ",\"wc_sp_cold\":%.0f,\"wc_sp_warm\":%.0f"
         "}",
         state_->is_connected() ? 1 : 0,
         state_->has_fault() ? 1 : 0,
@@ -161,6 +163,7 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         state_->get_sntp_server0(), state_->get_sntp_server1(),
         state_->get_pid_enabled() ? 1 : 0, state_->get_pid_active() ? 1 : 0,
         (double)state_->get_pid_output(),
+        (double)state_->get_pid_base(),
         (double)state_->get_pid_p(), (double)state_->get_pid_i(), (double)state_->get_pid_d(),
         (double)state_->get_pid_room_temp(), (double)state_->get_pid_target_room(),
         state_->get_pid_cycle_locked() ? 1 : 0, state_->get_pid_remaining_lockout(),
@@ -168,6 +171,8 @@ int WebPresenterAdapter::render_status(char* buf, size_t size)
         (double)state_->get_pid_kp(), (double)state_->get_pid_ki(), (double)state_->get_pid_kd(),
         state_->get_pid_dt_sec(), state_->get_pid_room_sensor(), state_->get_pid_lockout_sec(),
         (double)state_->get_pid_hysteresis()
+        , (double)state_->get_pid_sp_min(), (double)state_->get_pid_sp_max()
+        , (double)state_->get_wc_sp_cold(), (double)state_->get_wc_sp_warm()
     );
 
     state_->unlock_shared();

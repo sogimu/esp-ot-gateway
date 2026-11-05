@@ -180,6 +180,17 @@ esp_err_t HttpControllerAdapter::handler_control(httpd_req_t* req) {
             self->pid_->set_pid_parameters(kp, ki, kd, dt, sensor, target, lockout);
         }
         if (hyst > -1e37f) self->pid_->set_pid_hysteresis(hyst);
+        float sp_min = json_get_float(body, "\"pid_sp_min\"");
+        float sp_max = json_get_float(body, "\"pid_sp_max\"");
+        if (sp_min > -1e37f || sp_max > -1e37f) {
+            // Missing values stay < -1e37f; the interactor keeps the current bound.
+            self->pid_->set_pid_flow_limits(sp_min, sp_max);
+        }
+        float wc_cold = json_get_float(body, "\"wc_sp_cold\"");
+        float wc_warm = json_get_float(body, "\"wc_sp_warm\"");
+        if (wc_cold > -1e37f || wc_warm > -1e37f) {
+            self->pid_->set_wc_curve(wc_cold, wc_warm);
+        }
     }
     if (self->fault_) { v = json_get_int(body, "\"fault_reset\""); if (v > 0) self->fault_->reset(); }
     if (self->cfg_) {

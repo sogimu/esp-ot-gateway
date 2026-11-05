@@ -42,6 +42,7 @@ public:
     virtual float get_dhw_temp()    const = 0;
     virtual float get_return_temp() const = 0;
     virtual float get_outside_temp() const = 0;
+    virtual bool  is_outside_valid() const = 0;
     virtual float get_modulation()  const = 0;
     virtual float get_t1_temp()     const = 0;
     virtual float get_t2_temp()     const = 0;
@@ -120,10 +121,14 @@ public:
     virtual void set_pid_config(float kp, float ki, float kd, int dt_sec,
                                  int room_sensor, float target_room, int lockout_sec) = 0;
     virtual void set_pid_hysteresis(float v) = 0;
+    virtual void set_pid_flow_limits(float min_sp, float max_sp) = 0;
+    virtual void set_wc_curve(float sp_cold, float sp_warm) = 0;
+    virtual void set_pid_base(float v) = 0;
 
     virtual bool  get_pid_enabled()            const = 0;
     virtual bool  get_pid_active()             const = 0;
     virtual float get_pid_output()             const = 0;
+    virtual float get_pid_base()               const = 0;
     virtual float get_pid_p()                  const = 0;
     virtual float get_pid_i()                  const = 0;
     virtual float get_pid_d()                  const = 0;
@@ -139,6 +144,10 @@ public:
     virtual int   get_pid_room_sensor()        const = 0;
     virtual int   get_pid_lockout_sec()        const = 0;
     virtual float get_pid_hysteresis()         const = 0;
+    virtual float get_pid_sp_min()             const = 0;
+    virtual float get_pid_sp_max()             const = 0;
+    virtual float get_wc_sp_cold()             const = 0;
+    virtual float get_wc_sp_warm()             const = 0;
 
     // ── CH mode ────────────────────────────────────────
     virtual void set_ch_mode(CHMode v) = 0;

@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-22
+goal: "Чистый PI: границы подачи pid_sp_min/pid_sp_max, вкл/выкл CH по выходу PI
+  с deadband, без комнатного гистерезиса"

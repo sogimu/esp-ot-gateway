@@ -9,6 +9,10 @@
 #include <cmath>
 #include <cstring>
 
+static constexpr float MIN_CORRECTION_M3 = 0.5f;
+static constexpr float MIN_RATIO = 0.5f;
+static constexpr float MAX_RATIO = 2.0f;
+
 GasCorrectionInteractor::GasCorrectionInteractor(IHeatingStateStore& state, IGasCorrectionStore& store, ILogger& log,
                                                    ITimeSource* time, GasFlowService* gas_flow)
     : state_(state), store_(store), log_(log), time_(time), gas_flow_(gas_flow)
@@ -34,6 +38,7 @@ void GasCorrectionInteractor::set_k_calib(float v)
     state_.lock_exclusive();
     state_.set_k_calib(v);
     state_.unlock_exclusive();
+    kalman_k_.reset(v);
     if (gas_flow_) gas_flow_->set_k_calib(v);
     store_.save_boiler_config(state_);
     log_.event(ILogger::USER, "K_калиб: %.3f", (double)v);
@@ -84,8 +89,8 @@ bool GasCorrectionInteractor::add_meter_correction(float reading)
     // Reject correction if estimated consumption is too small
     // compared to actual — guards against integral loss from reboots
     float actual_consumed = reading - base;
-    if (actual_consumed < 0.01f) {
-        log_.event(ILogger::USER, "Расход < 0.01 м³: сверка отменена");
+    if (actual_consumed < MIN_CORRECTION_M3) {
+        log_.event(ILogger::USER, "Расход < %.1f м³: сверка отменена", (double)MIN_CORRECTION_M3);
         return false;
     }
     if (integral < actual_consumed * 0.1f) {
@@ -96,10 +101,10 @@ bool GasCorrectionInteractor::add_meter_correction(float reading)
 
     float prev_k = state_.get_k_calib();
     auto m = compute_correction_metrics(base, base, reading, estimated);
-    float raw_k = prev_k * m.k_factor();
-    // Clamp raw correction factor to prevent extreme swings from tiny samples
-    if (raw_k < 0.5f) raw_k = 0.5f;
-    if (raw_k > 2.0f) raw_k = 2.0f;
+    float ratio = m.k_factor();
+    if (ratio < MIN_RATIO) ratio = MIN_RATIO;
+    if (ratio > MAX_RATIO) ratio = MAX_RATIO;
+    float raw_k = prev_k * ratio;
     float new_k = kalman_k_.update(raw_k);
     if (new_k < 0.1f) new_k = 0.1f;
     if (new_k > 10.0f) new_k = 10.0f;

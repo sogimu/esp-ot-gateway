@@ -127,4 +127,5 @@ private:
     float     yesterday_hours_dhw_[HOURS_PER_DAY] = {};
 
     void push_daily(int64_t epoch_day, float m3_total, float m3_dhw);
+    void normalize_daily_history();
 };
