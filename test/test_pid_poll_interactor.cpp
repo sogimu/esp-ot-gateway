@@ -332,34 +332,39 @@ TEST_CASE("PID_Sched: disabled schedule keeps config target", "[pid][sched]") {
 
 // ═══ Блокировка цикла: взводится при выключении CH, не по пламени ═══
 
-TEST_CASE("PidPoll: блокировка цикла взводится при выключении CH", "[pid][lockout][regression]") {
+TEST_CASE("PidPoll: блокировка цикла взводится при выключении CH и не паркует уставку", "[pid][lockout][regression]") {
     FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
     state.set_ch_mode(CHMode::PID_Static);
     state.set_t1_temp(18.0f);  // холодно — CH включится
-    state.set_pid_config(2.5f, 0.01f, 0.0f, 60, 0, 22.5f, 5);  // блокировка 5 с
+    state.set_pid_config(0.0f, 0.0f, 0.0f, 60, 0, 22.5f, 5);  // блокировка 5 с
     state.set_pid_hysteresis(0.1f);
     state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
     state.set_pid_flow_limits(25.0f, 40.0f);
+    state.set_wc_curve(30.0f, 30.0f);
+    state.set_outside_temp(0.0f);
 
     PidPollInteractor pid(state, boiler, time, log);
 
     time.advance_sec(1); pid.execute();
     time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+    REQUIRE(state.get_ch_setpoint() == Approx(30.0f));
 
     // Комната выше цели — PI сам выключает CH
     state.set_t1_temp(25.0f);
     time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+    REQUIRE(state.get_ch_setpoint() == Approx(30.0f));
 
-    // Следующий тик фиксирует переход и взводит блокировку
+    // Следующий тик фиксирует переход и взводит блокировку, уставку не трогает
     time.advance_sec(1); pid.execute();
     REQUIRE(state.get_pid_cycle_locked() == true);
-    REQUIRE(state.get_ch_setpoint() == Approx(25.0f));
+    REQUIRE(state.get_ch_setpoint() == Approx(30.0f));
     REQUIRE(state.get_pid_remaining_lockout() == 5);
 
     time.advance_sec(2); pid.execute();
     REQUIRE(state.get_pid_remaining_lockout() == 3);
+    REQUIRE(state.get_ch_setpoint() == Approx(30.0f));
 
     // По истечении блокировки CH снова включается
     state.set_t1_temp(18.0f);
@@ -367,6 +372,41 @@ TEST_CASE("PidPoll: блокировка цикла взводится при в
     REQUIRE(state.get_pid_cycle_locked() == false);
     time.advance_sec(60); pid.execute();
     REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+    REQUIRE(state.get_ch_setpoint() == Approx(30.0f));
+}
+
+TEST_CASE("PidPoll: блокировка не останавливает расчёт PI", "[pid][lockout][regression]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(18.0f);
+    state.set_pid_config(1.0f, 0.0f, 0.0f, 60, 0, 22.0f, 300);
+    state.set_pid_hysteresis(0.1f);
+    state.set_ch_sp_min(25.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(25.0f, 40.0f);
+    state.set_wc_curve(30.0f, 30.0f);
+    state.set_outside_temp(0.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+
+    state.set_t1_temp(25.0f);
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+
+    time.advance_sec(1); pid.execute();
+    REQUIRE(state.get_pid_cycle_locked() == true);
+    float sp_locked = state.get_ch_setpoint();
+
+    // PI продолжает считать и обновляет уставку, но CH остаётся выключен.
+    state.set_t1_temp(20.0f);
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_cycle_locked() == true);
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+    REQUIRE(state.get_ch_setpoint() == Approx(state.get_pid_output()));
+    REQUIRE(state.get_ch_setpoint() != Approx(sp_locked));
 }
 
 // ═══ Off-путь PID: выключение по гистерезису ═══
@@ -375,9 +415,11 @@ TEST_CASE("PidPoll: PID выключает нагрев при достижен�
     FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
     state.set_ch_mode(CHMode::PID_Static);
     state.set_t1_temp(18.0f);
-    state.set_pid_config(2.0f, 0.01f, 0.0f, 60, 0, 22.0f, 300);
+    state.set_pid_config(0.5f, 0.0f, 0.0f, 60, 0, 22.0f, 300);
     state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
     state.set_pid_flow_limits(20.0f, 40.0f);
+    state.set_wc_curve(30.0f, 30.0f);
+    state.set_outside_temp(0.0f);
 
     PidPollInteractor pid(state, boiler, time, log);
 
@@ -389,9 +431,43 @@ TEST_CASE("PidPoll: PID выключает нагрев при достижен�
     time.advance_sec(60); pid.execute();
 
     REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
-    // The setpoint is not parked at the minimum: CH is stopped by the enable bit.
+    // Уставка не паркуется на минимуме: она остаётся результатом PI.
     REQUIRE(state.get_ch_setpoint() == Approx(state.get_pid_output()));
-    REQUIRE(state.get_ch_setpoint() < 25.0f);
+    REQUIRE(state.get_ch_setpoint() > 25.0f);
+
+    // Блокировка взводится следующим тиком и тоже не трогает уставку.
+    time.advance_sec(1); pid.execute();
+    REQUIRE(state.get_pid_cycle_locked() == true);
+    REQUIRE(state.get_ch_setpoint() == Approx(state.get_pid_output()));
+    REQUIRE(state.get_ch_setpoint() > 25.0f);
+}
+
+TEST_CASE("PidPoll: перегрев гасит только бит CH, уставку не паркует", "[pid][overheat][regression]") {
+    FakeHeatingStateStore state; FakeBoilerHardware boiler; FakeTimeSource time; PidPollTestLogger log;
+    state.set_ch_mode(CHMode::PID_Static);
+    state.set_t1_temp(18.0f);
+    state.set_pid_config(0.0f, 0.0f, 0.0f, 60, 0, 22.0f, 300);
+    state.set_ch_sp_min(20.0f); state.set_ch_sp_max(80.0f);
+    state.set_pid_flow_limits(20.0f, 40.0f);
+    state.set_wc_curve(30.0f, 30.0f);
+    state.set_outside_temp(0.0f);
+
+    PidPollInteractor pid(state, boiler, time, log);
+
+    time.advance_sec(1); pid.execute();
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == true);
+    REQUIRE(state.get_ch_setpoint() == Approx(30.0f));
+
+    state.set_t1_temp(31.0f);
+    time.advance_sec(1); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+    REQUIRE(state.get_ch_setpoint() == Approx(30.0f));
+    REQUIRE(std::strstr(log.last_msg_, "ПЕРЕГРЕВ") != nullptr);
+
+    time.advance_sec(60); pid.execute();
+    REQUIRE(state.get_pid_ch_enabled_by_pid() == false);
+    REQUIRE(state.get_ch_setpoint() == Approx(30.0f));
 }
 
 TEST_CASE("PidPoll: границы комнатного гистерезиса включающие", "[pid][hysteresis]") {

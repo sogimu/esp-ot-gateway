@@ -1,13 +1,13 @@
 ## ADDED Requirements
 
-### Requirement: PID гасит отопление при достижении цели
+### Requirement: PID гасит отопление битом CH при достижении цели
 
-Когда в `PidPollInteractor` гистерезис даёт `ch_on == false` (комната выше `target + hysteresis`), система SHALL опустить уставку CH до `MIN_SETPOINT` (25 °C) и сбросить `pid_ch_enabled` в `false`.
+Когда в `PidPollInteractor` гистерезис даёт `ch_on == false` (комната выше `target + hysteresis`), система SHALL сбросить `pid_ch_enabled` в `false`, не изменяя уставку CH. Уставка CH SHALL оставаться результатом расчёта PI.
 
 #### Scenario: Комната нагрелась выше цели
 
 - **WHEN** комната выше `target + hysteresis`
-- **THEN** уставка CH в состоянии равна `MIN_SETPOINT` (25 °C), а `pid_ch_enabled` равен `false`
+- **THEN** `pid_ch_enabled` равен `false`, а уставка CH остаётся расчётным выходом PID и не подменяется на `MIN_SETPOINT`
 
 #### Scenario: Комната остыла ниже цели
 

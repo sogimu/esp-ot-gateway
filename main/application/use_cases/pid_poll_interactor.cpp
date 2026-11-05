@@ -143,35 +143,37 @@ void PidPollInteractor::execute()
         state_.unlock_exclusive();
     }
 
-    // Overheat protection — update state only; BoilerPollInteractor writes OT
-    if (room_valid && room > MAX_SAFE_ROOM) {
-        float sp_min = sp_lo_;
-        state_.lock_exclusive();
-        state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), cycle_locked_, remaining, false);
-        state_.set_ch_setpoint(sp_min);
-        state_.unlock_exclusive();
-        if (!overheat_logged_) {
-            log_.event(ILogger::MODE, "PID: ПЕРЕГРЕВ %.1f>%.0f, SP %.1f", (double)room, (double)MAX_SAFE_ROOM, (double)sp_min);
-            overheat_logged_ = true;
-        }
-        return;
+    // Overheat and cycle lockout gate only the CH enable bit. The setpoint
+    // stays a product of the PI: BoilerPollInteractor writes it to OT, and
+    // the CH bit (gated by pid_ch_enabled) is the sole on/off control.
+    bool overheat = room_valid && room > MAX_SAFE_ROOM;
+    if (overheat && !overheat_logged_) {
+        log_.event(ILogger::MODE, "PID: ПЕРЕГРЕВ %.1f>%.0f, CH выкл",
+                   (double)room, (double)MAX_SAFE_ROOM);
+        overheat_logged_ = true;
+    } else if (!overheat) {
+        overheat_logged_ = false;
     }
-    overheat_logged_ = false;
 
-    // Cycle locked — hold min setpoint
-    if (cycle_locked_) {
-        float sp_min = sp_lo_;
+    if (!cycle_locked_) lockout_logged_ = false;
+
+    if (cycle_locked_ || overheat) {
+        float hold_output = state_.get_pid_output();
+        float hold_p = state_.get_pid_p();
+        float hold_i = state_.get_pid_i();
+        float hold_d = state_.get_pid_d();
+        float hold_target = state_.get_pid_target_room();
         state_.lock_exclusive();
-        state_.set_pid_state(enabled, true, sp_min, 0, 0, 0, room, state_.get_pid_target_room(), true, remaining, false);
-        state_.set_ch_setpoint(sp_min);
+        state_.set_pid_state(enabled, true, hold_output, hold_p, hold_i, hold_d,
+                             room, hold_target, cycle_locked_, remaining, false);
         state_.unlock_exclusive();
-        if (!lockout_logged_) {
-            log_.event(ILogger::MODE, "PID: блокировка цикла, SP %.1f", (double)sp_min);
+        if (cycle_locked_ && !lockout_logged_) {
+            log_.event(ILogger::MODE,
+                       "PID: блокировка цикла, осталось %d с, SP %.1f",
+                       remaining, (double)hold_output);
             lockout_logged_ = true;
         }
-        return;
     }
-    lockout_logged_ = false;
 
     // Check dt interval
     int dt = state_.get_pid_dt_sec();
@@ -209,13 +211,17 @@ void PidPollInteractor::execute()
         ch_on = state_.get_pid_ch_enabled_by_pid();
     }
 
+    if (cycle_locked_ || overheat) ch_on = false;
+
+    float p_report = state_.get_pid_p();
+    float i_report = state_.get_pid_i();
+    float d_report = state_.get_pid_d();
+
     state_.lock_exclusive();
-    state_.set_pid_state(enabled, true, output,
-                          state_.get_pid_p(), state_.get_pid_i(), state_.get_pid_d(),
-                          room, target, false, 0, ch_on);
-    // Keep the computed setpoint even when CH is off: the CH enable bit (gated
-    // in BoilerPollInteractor by pid_ch_enabled) already stops heating, and the
-    // setpoint is ready for a bumpless restart.
+    state_.set_pid_state(enabled, true, output, p_report, i_report, d_report,
+                          room, target, cycle_locked_, remaining, ch_on);
+    // The PI is the only source of the CH setpoint: it keeps updating even
+    // while CH is off. On/off is controlled solely by the CH enable bit.
     state_.set_ch_setpoint(output);
     state_.unlock_exclusive();
 
@@ -223,7 +229,7 @@ void PidPollInteractor::execute()
         "PID: SP=%.1f°C цель=%.1f°C комн=%.2f°C CH=%s (P=%.1f I=%.1f база=%.1f)",
         (double)output, (double)target, (double)room,
         ch_on ? "вкл" : "выкл",
-        (double)state_.get_pid_p(), (double)state_.get_pid_i(), (double)base_);
+        (double)p_report, (double)i_report, (double)base_);
 
     last_compute_ms_ = now;
 }
